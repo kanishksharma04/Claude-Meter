@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ClaudeMeter — Debug Captures</title>
+    <link rel="stylesheet" href="debug.css" />
+  </head>
+  <body>
+    <header>
+      <h1>ClaudeMeter — Discovery Captures</h1>
+      <p class="subtitle">
+        Every request/response whose URL contains <code>usage</code>, <code>limit</code>,
+        <code>quota</code>, <code>rate</code>, <code>organizations</code>, or <code>billing</code>,
+        captured from an open claude.ai tab. Open claude.ai, trigger the account usage panel
+        yourself, then come back here.
+      </p>
+      <div class="actions">
+        <button id="refreshBtn">Refresh list</button>
+        <button id="clearBtn" class="danger">Clear captures</button>
+        <a href="../options/options.html">&larr; Back to Options</a>
+      </div>
+    </header>
+
+    <main id="captureList">
+      <p class="empty-state">Loading captures…</p>
+    </main>
+
+    <template id="captureTemplate">
+      <article class="capture">
+        <div class="capture-head">
+          <span class="method"></span>
+          <span class="url"></span>
+          <span class="status"></span>
+        </div>
+        <div class="capture-meta">
+          <span class="timestamp"></span>
+          <span class="source"></span>
+          <span class="page-url"></span>
+        </div>
+        <pre class="body"></pre>
+        <button class="copy-btn">Copy as JSON</button>
+      </article>
+    </template>
+
+    <script type="module" src="debug.js"></script>
+  </body>
+</html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ClaudeMeter — Options</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <header>
+      <h1>ClaudeMeter Options</h1>
+      <p class="build-note">
+        Phase 1 (discovery mode) build — full settings (refresh interval, notifications, theme)
+        land once Phase 2 wires up real usage data.
+      </p>
+    </header>
+
+    <section class="card">
+      <h2>Developer / Debug</h2>
+      <label class="row">
+        <span>
+          Developer mode
+          <small>Keeps raw request/response captures for inspection on the debug page.</small>
+        </span>
+        <input type="checkbox" id="developerModeToggle" />
+      </label>
+      <a class="debug-link" href="../debug/debug.html">Open Debug Captures &rarr;</a>
+    </section>
+
+    <section class="card">
+      <h2>Data</h2>
+      <button id="clearDataBtn" class="danger">Clear stored data</button>
+      <p class="hint">Removes all captured requests and any saved usage snapshot.</p>
+    </section>
+
+    <script type="module" src="options.js"></script>
+  </body>
+</html>
