@@ -10,8 +10,8 @@ auto-refresh, notifications, and a full options page.
 
 ## How it works (and its limits)
 
-- Anthropic doesn't publish a documented consumer usage API. This extension calls the
-  same endpoints claude.ai's own frontend uses to render its account usage panel:
+- There's no documented consumer usage API. This extension calls the same endpoints
+  claude.ai's own frontend uses to render its account usage panel:
   - `GET https://claude.ai/api/organizations` — lists your orgs; the one with a
     `"chat"` capability is picked and its `uuid` cached.
   - `GET https://claude.ai/api/organizations/{org_id}/usage` — returns usage buckets,
@@ -32,8 +32,8 @@ auto-refresh, notifications, and a full options page.
   for the next scheduled fetch. This uses the same `"world": "MAIN"` content-script
   trick as before — see `src/content/inject-hook.js`.
 - Nothing is sent to any third-party server. All data stays in `chrome.storage.local`.
-- This endpoint isn't documented or versioned by Anthropic and can change or disappear
-  without notice — see Known limitations below.
+- This endpoint isn't documented or versioned and can change or disappear without
+  notice — see Known limitations below.
 
 ## Project structure
 

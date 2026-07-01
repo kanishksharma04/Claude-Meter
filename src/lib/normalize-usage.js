@@ -55,11 +55,27 @@ function normalizeBucket(block, fetchedAt, label) {
   return { label, percentUsed, resetsAt, resetsInLabel };
 }
 
+// Only surface a badge when the raw value actually names a known plan —
+// fields like rate_limit_tier can hold internal defaults (e.g.
+// "DEFAULT_CLAUDE_AI") that aren't a plan name and would just confuse users.
+const KNOWN_PLAN_KEYWORDS = ["free", "pro", "max", "team", "enterprise"];
+
+function humanizePlanTier(raw) {
+  const lower = raw.toLowerCase();
+  const matched = KNOWN_PLAN_KEYWORDS.find((kw) => lower.includes(kw));
+  if (!matched) return null;
+  return raw
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function detectPlanTier(orgMeta) {
   if (!orgMeta || typeof orgMeta !== "object") return null;
   for (const field of PLAN_FIELD_CANDIDATES) {
     if (typeof orgMeta[field] === "string" && orgMeta[field].trim()) {
-      return orgMeta[field].trim();
+      const humanized = humanizePlanTier(orgMeta[field].trim());
+      if (humanized) return humanized;
     }
   }
   return null;

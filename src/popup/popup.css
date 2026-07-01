@@ -1,33 +1,33 @@
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, sans-serif;
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --bg: #1a1b1e;
-  --panel: #242529;
-  --border: #33343a;
-  --text: #e8e8ea;
-  --muted: #9a9ba1;
-  --accent: #5b8def;
-  --track: #33343a;
-  --ok: #3fb950;
-  --warn: #e5a02e;
-  --danger: #e5484d;
+  --bg: #262624;
+  --panel: #30302e;
+  --border: #3e3e3a;
+  --text: #f5f4ef;
+  --muted: #a8a6a0;
+  --accent: #cc785c;
+  --track: #3e3e3a;
+  --ok: #7a9b6e;
+  --warn: #d9a452;
+  --danger: #c1554a;
 }
 
 [data-theme="light"] {
   color-scheme: light;
-  --bg: #ffffff;
-  --panel: #f5f6f8;
-  --border: #e2e4e8;
-  --text: #1a1b1e;
-  --muted: #6b6d76;
-  --accent: #4a79db;
-  --track: #e6e8ec;
-  --ok: #2a9d3f;
-  --warn: #c98016;
-  --danger: #d13b40;
+  --bg: #faf9f5;
+  --panel: #f0eee6;
+  --border: #e5e2d9;
+  --text: #30302e;
+  --muted: #82807a;
+  --accent: #cc785c;
+  --track: #e5e2d9;
+  --ok: #4f9358;
+  --warn: #b87f2e;
+  --danger: #b54b3f;
 }
 
 * {
@@ -57,17 +57,18 @@ header {
 }
 
 .wordmark {
-  font-weight: 700;
-  font-size: 14px;
+  font-weight: 600;
+  font-size: 14.5px;
+  letter-spacing: -0.01em;
 }
 
 .badge {
-  background: var(--panel);
-  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 16%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
   color: var(--accent);
   font-size: 10px;
   font-weight: 600;
-  padding: 3px 8px;
+  padding: 3px 9px;
   border-radius: 999px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -80,7 +81,7 @@ header {
   font-size: 16px;
   cursor: pointer;
   padding: 4px 6px;
-  border-radius: 6px;
+  border-radius: 8px;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
@@ -141,7 +142,7 @@ hr {
 }
 
 .progress-track {
-  height: 8px;
+  height: 7px;
   background: var(--track);
   border-radius: 999px;
   overflow: hidden;
@@ -213,10 +214,15 @@ hr {
   background: var(--accent);
   color: #fff;
   border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
+  padding: 8px 18px;
+  border-radius: 10px;
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
+}
+
+#openClaudeBtn:hover {
+  background: color-mix(in srgb, var(--accent) 88%, black);
 }
 
 .skeleton-row,
@@ -254,7 +260,7 @@ hr {
   padding: 8px 10px;
   background: color-mix(in srgb, var(--danger) 15%, transparent);
   border: 1px solid var(--danger);
-  border-radius: 6px;
+  border-radius: 10px;
   color: var(--text);
   font-size: 11px;
 }

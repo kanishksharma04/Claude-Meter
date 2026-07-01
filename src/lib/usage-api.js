@@ -4,7 +4,7 @@
 // claude.ai, exactly as it would for a normal page request. This only works
 // because the extension's host_permissions are scoped to https://claude.ai/*.
 //
-// Endpoints (reverse-engineered, not documented by Anthropic):
+// Endpoints (reverse-engineered, not officially documented):
 //   GET https://claude.ai/api/organizations            -> list orgs, pick one with "chat" capability
 //   GET https://claude.ai/api/organizations/{id}/usage -> five_hour / seven_day / seven_day_* blocks
 
