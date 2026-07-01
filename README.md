@@ -1,33 +1,39 @@
 # ClaudeMeter
 
-A Manifest V3 browser extension that will show your claude.ai Pro/Max plan usage
-(session %, weekly %, reset countdowns) from the toolbar, without opening claude.ai's
-own account menu.
+A Manifest V3 browser extension that shows your claude.ai Pro/Max plan usage (session
+%, weekly %, reset countdowns) from the toolbar, without opening claude.ai's own
+account menu.
 
-**Status: Phase 1 — discovery mode.** Anthropic doesn't publish a documented API for
-this data, so before building the real popup UI, this build first needs to observe
-the exact request/response the claude.ai web app itself uses to render its own "Plan
-usage limits" panel. Phase 1 is a diagnostic extension that passively watches network
-traffic on `claude.ai` tabs and logs anything usage-related to a debug page.
-
-There is no production usage UI yet — the popup currently just confirms discovery
-mode is running and shows how many requests have been captured.
+**Status: Phase 2 complete.** The extension fetches real usage data from claude.ai's
+own (undocumented) usage endpoint and renders it in the popup, with background
+auto-refresh, notifications, and a full options page.
 
 ## How it works (and its limits)
 
-- A content script is injected into `claude.ai` in the page's own **main JS world**
-  at `document_start`, patching `window.fetch` and `XMLHttpRequest` so it can see
-  requests the page makes with its own logged-in session — no credentials are ever
-  read, stored, or replayed by the extension itself.
-- Only requests whose URL contains `usage`, `limit`, `quota`, `rate`,
-  `organizations`, or `billing` are captured (Phase 1 keyword match — Phase 2 will
-  narrow this to the exact endpoint once known).
-- Captured request/response pairs are relayed to the background service worker and
-  stored locally (`chrome.storage.local`, capped at the last 20 captures). Nothing
-  leaves the browser — there's no external server this extension talks to.
-- Because refresh works by observing the page's own authenticated requests, later
-  phases will require an open `claude.ai` tab to actively refresh — this extension
-  cannot fetch usage data on its own.
+- Anthropic doesn't publish a documented consumer usage API. This extension calls the
+  same endpoints claude.ai's own frontend uses to render its account usage panel:
+  - `GET https://claude.ai/api/organizations` — lists your orgs; the one with a
+    `"chat"` capability is picked and its `uuid` cached.
+  - `GET https://claude.ai/api/organizations/{org_id}/usage` — returns usage buckets,
+    e.g. `five_hour` (current session) and `seven_day` / `seven_day_opus` (weekly, per
+    model group where applicable).
+- These calls are made directly from the background service worker with
+  `fetch(url, { credentials: "include" })`. **No credentials are ever read, stored, or
+  forged by the extension** — `credentials: "include"` just tells the browser to
+  attach whatever cookies it already holds for `claude.ai`, exactly as it would for a
+  normal page request from an open tab. This requires the `https://claude.ai/*` host
+  permission, which is the only host permission this extension requests.
+- If you're not logged into claude.ai in this browser, fetches fail with
+  `NOT_LOGGED_IN` and the popup shows an error state — the extension cannot "log in"
+  or otherwise obtain a session on its own.
+- As a secondary, zero-cost data source, a content script also passively observes any
+  matching usage request claude.ai's own UI happens to make (e.g. if you open the
+  account usage panel yourself) and reuses that response immediately, without waiting
+  for the next scheduled fetch. This uses the same `"world": "MAIN"` content-script
+  trick as before — see `src/content/inject-hook.js`.
+- Nothing is sent to any third-party server. All data stays in `chrome.storage.local`.
+- This endpoint isn't documented or versioned by Anthropic and can change or disappear
+  without notice — see Known limitations below.
 
 ## Project structure
 
@@ -35,16 +41,18 @@ mode is running and shows how many requests have been captured.
 claudemeter/
 ├── manifest.json
 ├── src/
-│   ├── background/service-worker.js   # relays captures into storage, alarm skeleton
+│   ├── background/service-worker.js   # active fetch on alarm/request, badge, notifications
 │   ├── content/
 │   │   ├── inject-hook.js             # MAIN world: patches fetch/XHR, dispatches captures
 │   │   └── relay.js                   # ISOLATED world: forwards captures to the background worker
-│   ├── popup/                         # toolbar popup (placeholder until Phase 2)
-│   ├── options/                       # options page, currently just Developer mode + debug link
-│   ├── debug/                         # debug.html — human-readable capture viewer
+│   ├── popup/                         # toolbar popup — session/weekly bars, refresh, states
+│   ├── options/                       # refresh interval, notifications, theme, developer mode
+│   ├── debug/                         # debug.html — raw capture viewer (developer mode only)
 │   ├── lib/
 │   │   ├── storage.js                 # chrome.storage.local schema + helpers
-│   │   └── time-format.js             # relative-time / duration formatting helpers
+│   │   ├── time-format.js             # relative-time / duration formatting helpers
+│   │   ├── usage-api.js               # org discovery + usage fetch + typed errors
+│   │   └── normalize-usage.js         # raw usage response -> UsageSnapshot
 │   └── icons/                         # placeholder icons — swap in real art later
 └── README.md
 ```
@@ -58,48 +66,74 @@ rather than an isolated copy that the page never calls).
 1. Open `chrome://extensions` (or `edge://extensions`).
 2. Enable **Developer mode** (top-right toggle).
 3. Click **Load unpacked** and select this `claudemeter/` folder.
-4. The ClaudeMeter icon should appear in your toolbar.
+4. Make sure you're logged into `claude.ai` in this browser.
+5. Click the ClaudeMeter toolbar icon. On first load it kicks off a background fetch
+   automatically — give it a second, then click the refresh icon if it's still empty.
 
-## Reproduce a capture (what I need from you before Phase 2)
+## Data model
 
-1. Load the extension as above.
-2. Open a new tab to `https://claude.ai` and open DevTools → Console. You should see
-   `[ClaudeMeter:discovery] network hooks installed (fetch + XHR) — watching for...`
-   and, from the isolated-world relay, `[ClaudeMeter:discovery] relay content script ready`.
-3. In the claude.ai UI itself, open your account/profile menu and click into whatever
-   shows your **Plan usage limits** panel (session % / weekly % / reset times) — this
-   is the action that makes claude.ai's frontend fetch the real usage data.
-4. Click the ClaudeMeter toolbar icon → **View debug captures**, or go to
-   `chrome://extensions` → ClaudeMeter → Details → Extension options → **Open Debug
-   Captures**.
-5. You should see one or more captured entries with method, URL, HTTP status, and the
-   raw JSON response body. Use **Copy as JSON** on the relevant entry(ies).
-6. Paste that captured JSON back so Phase 2 can add a precise endpoint matcher and a
-   normalizer into the real `UsageSnapshot` schema.
+```js
+UsageSnapshot = {
+  fetchedAt: number,           // epoch ms
+  planTier: string | null,     // rarely detectable from this endpoint — null is common
+  session: {                   // "five_hour" bucket, or null if unparseable
+    label: string,
+    percentUsed: number,
+    resetsAt: number | null,
+    resetsInLabel: string,
+  } | null,
+  weekly: Array<{               // one entry per "seven_day*" bucket found
+    label: string,              // "All models", "Opus", etc. — derived from the key name
+    percentUsed: number,
+    resetsAt: number | null,
+    resetsInLabel: string,
+  }>,
+}
+```
 
-If nothing appears: check the DevTools console for `[ClaudeMeter:discovery]` warnings
-(the hook logs failures instead of throwing), and confirm the extension has permission
-on `claude.ai` (it should, host permissions are pre-granted at install since
-`https://claude.ai/*` is declared in the manifest).
+Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `history`
+(last 50 snapshots) for potential future charting. Settings live under `settings`
+(`refreshIntervalMinutes`, `notificationsEnabled`, `notifyThresholds`, `theme`,
+`developerMode`). Raw request/response captures (`__debug_captures`, last 20) are only
+written when Developer mode is on, from Options.
 
-## Known limitations (Phase 1)
+## Refresh behavior
 
-- No real usage popup yet — this build only proves out the capture mechanism.
-- Capture matching is a broad keyword filter, not the real endpoint — expect some
-  noise or false negatives depending on what claude.ai's frontend actually calls.
-- The background alarm is wired up but currently a no-op; active/background refresh
-  logic ships in Phase 2 once there's real data to refresh.
-- This will break if Anthropic changes their internal API shape, since it isn't a
-  documented, versioned API.
+- **Background alarm**: fetches on the interval set in Options (default 5 min),
+  regardless of whether a claude.ai tab is open.
+- **Popup open**: triggers a silent background refresh every time you open the popup,
+  so numbers are current without a manual click.
+- **Manual refresh**: the refresh icon in the popup header.
+- **Passive capture**: if claude.ai's own UI makes the exact usage request while a
+  claude.ai tab is open, that response is captured and applied immediately too.
+- Failed refreshes never wipe the UI — the popup keeps showing the last known-good
+  snapshot with an inline "Couldn't refresh — showing data from X ago" warning.
 
-## Next: Phase 2
+## Known limitations
 
-Once you paste back the real endpoint + sample response JSON, Phase 2 will:
+- The usage endpoint is undocumented and reverse-engineered (consistent with what
+  other open-source claude.ai usage extensions use, e.g.
+  [lugia19/Claude-Usage-Extension](https://github.com/lugia19/Claude-Usage-Extension),
+  [sshnox/Claude-Usage-Tracker](https://github.com/sshnox/Claude-Usage-Tracker)) — it
+  can change shape, move, or disappear without notice, at which point normalization
+  will silently degrade to partial data rather than crash (see
+  `src/lib/normalize-usage.js`), but the popup may show stale or missing numbers until
+  the endpoint/parser is updated.
+- Plan tier badge (Free/Pro/Max 5x/Max 20x/Team/Enterprise) is rarely populated — the
+  usage endpoint itself doesn't return it, and the org-list endpoint's plan field name
+  isn't confirmed, so the badge is best-effort and often simply hidden.
+- Requires being logged into claude.ai in the same browser profile the extension runs
+  in; it cannot establish a session on its own.
+- No sparkline/usage-over-time chart yet, though the rolling `history` array needed
+  for one is already being collected.
 
-- Replace the keyword filter with a precise match on the real endpoint.
-- Add a normalizer mapping the raw response into a clean `UsageSnapshot`.
-- Store only normalized snapshots (plus a capped rolling history) by default, and
-  move raw debug capture logging behind the (already-built) Developer mode toggle.
-- Build out the real popup UI (session/weekly progress bars, plan badge, refresh
-  button, relative "last updated" time) and the rest of the options page (refresh
-  interval, notification thresholds, theme).
+## Options
+
+- **Refresh interval** — 1–30 minutes, default 5.
+- **Notifications** — desktop notification when session or weekly usage crosses 80%
+  and/or 95% (configurable), only fires on the transition, not on every fetch above
+  threshold.
+- **Theme** — Auto (follows `prefers-color-scheme`), Light, or Dark.
+- **Developer mode** — keeps raw request/response captures for the debug page
+  (`src/debug/debug.html`), off by default.
+- **Clear stored data** — wipes snapshot, history, org cache, and debug captures.

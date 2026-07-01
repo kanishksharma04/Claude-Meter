@@ -38,6 +38,6 @@
       "all_frames": false
     }
   ],
-  "permissions": ["storage", "alarms"],
+  "permissions": ["storage", "alarms", "notifications"],
   "host_permissions": ["https://claude.ai/*"]
 }

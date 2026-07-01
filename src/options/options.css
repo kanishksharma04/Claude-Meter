@@ -1,4 +1,8 @@
 :root {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+[data-theme="dark"] {
   color-scheme: dark;
   --bg: #1a1b1e;
   --panel: #242529;
@@ -7,7 +11,17 @@
   --muted: #9a9ba1;
   --accent: #5b8def;
   --danger: #e5484d;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --panel: #f5f6f8;
+  --border: #e2e4e8;
+  --text: #1a1b1e;
+  --muted: #6b6d76;
+  --accent: #4a79db;
+  --danger: #d13b40;
 }
 
 * {
@@ -24,13 +38,6 @@ body {
 
 h1 {
   font-size: 18px;
-  margin: 0 0 6px;
-}
-
-.build-note {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
   margin: 0 0 20px;
 }
 
@@ -53,6 +60,7 @@ h1 {
   justify-content: space-between;
   gap: 16px;
   font-size: 13px;
+  margin-bottom: 4px;
 }
 
 .row small {
@@ -62,10 +70,60 @@ h1 {
   margin-top: 2px;
 }
 
+.slider-value {
+  color: var(--accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+  margin-top: 8px;
+}
+
 input[type="checkbox"] {
   width: 18px;
   height: 18px;
   accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
+select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.threshold-checks {
+  display: flex;
+  gap: 14px;
+}
+
+.threshold-checks label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.threshold-checks input {
+  width: 14px;
+  height: 14px;
+}
+
+#thresholdsRow {
+  margin-top: 12px;
+  opacity: 1;
+  transition: opacity 0.15s ease;
+}
+
+#thresholdsRow.disabled {
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 .debug-link {

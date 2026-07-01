@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <title>ClaudeMeter</title>
@@ -7,23 +7,80 @@
   </head>
   <body>
     <header>
-      <span class="wordmark">ClaudeMeter</span>
-      <span class="badge">Discovery mode</span>
+      <div class="header-left">
+        <span class="wordmark">ClaudeMeter</span>
+        <span class="badge" id="planBadge" hidden></span>
+      </div>
+      <button id="refreshBtn" class="icon-btn" title="Refresh now" aria-label="Refresh now">
+        <span class="refresh-icon">&#8635;</span>
+      </button>
     </header>
 
     <main>
-      <p class="lead">
-        This is a Phase 1 build. It's watching claude.ai network traffic for usage/limit
-        endpoints, but doesn't render real usage numbers yet — that lands in Phase 2.
-      </p>
-      <p class="capture-count"><span id="captureCount">0</span> request(s) captured so far.</p>
-      <button id="openClaudeBtn">Open claude.ai</button>
-      <a class="debug-link" id="debugLink" href="#">View debug captures &rarr;</a>
+      <!-- Empty state: no data ever captured -->
+      <section id="emptyState" class="state" hidden>
+        <p class="empty-icon">&#9711;</p>
+        <p class="empty-title">No usage data yet</p>
+        <p class="empty-body">Open claude.ai in a tab to start tracking your usage.</p>
+        <button id="openClaudeBtn">Open claude.ai</button>
+      </section>
+
+      <!-- Loading state: first-ever fetch in flight, nothing to show yet -->
+      <section id="loadingState" class="state" hidden>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-bar"></div>
+        <div class="skeleton-row" style="width: 60%"></div>
+        <div class="skeleton-bar"></div>
+      </section>
+
+      <!-- Data state -->
+      <section id="dataState" hidden>
+        <div class="usage-row">
+          <div class="usage-row-head">
+            <span class="usage-label" id="sessionLabel">Current session</span>
+            <span class="usage-pct" id="sessionPct"></span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="sessionFill"></div>
+          </div>
+          <p class="usage-sub" id="sessionResets"></p>
+        </div>
+
+        <hr />
+
+        <div class="weekly-header">
+          <span>Weekly limits</span>
+          <a
+            id="learnMoreLink"
+            href="https://support.claude.com/en/articles/11647753-how-do-usage-and-length-limits-work"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Learn more</a
+          >
+        </div>
+        <div id="weeklyList"></div>
+      </section>
+
+      <p id="errorBanner" class="error-banner" hidden></p>
     </main>
 
     <footer>
-      <a href="#" id="optionsLink">Options</a>
+      <span id="lastUpdated"></span>
+      <a href="#" id="settingsLink" class="icon-btn" title="Settings" aria-label="Settings">&#9881;</a>
     </footer>
+
+    <template id="weeklyRowTemplate">
+      <div class="usage-row">
+        <div class="usage-row-head">
+          <span class="usage-label"></span>
+          <span class="usage-pct"></span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill"></div>
+        </div>
+        <p class="usage-sub"></p>
+      </div>
+    </template>
 
     <script type="module" src="popup.js"></script>
   </body>

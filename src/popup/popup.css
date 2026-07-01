@@ -1,4 +1,8 @@
 :root {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+[data-theme="dark"] {
   color-scheme: dark;
   --bg: #1a1b1e;
   --panel: #242529;
@@ -6,7 +10,24 @@
   --text: #e8e8ea;
   --muted: #9a9ba1;
   --accent: #5b8def;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --track: #33343a;
+  --ok: #3fb950;
+  --warn: #e5a02e;
+  --danger: #e5484d;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --panel: #f5f6f8;
+  --border: #e2e4e8;
+  --text: #1a1b1e;
+  --muted: #6b6d76;
+  --accent: #4a79db;
+  --track: #e6e8ec;
+  --ok: #2a9d3f;
+  --warn: #c98016;
+  --danger: #d13b40;
 }
 
 * {
@@ -15,7 +36,7 @@
 
 body {
   margin: 0;
-  width: 340px;
+  width: 360px;
   background: var(--bg);
   color: var(--text);
   font-size: 13px;
@@ -29,6 +50,12 @@ header {
   border-bottom: 1px solid var(--border);
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .wordmark {
   font-weight: 700;
   font-size: 14px;
@@ -37,70 +64,210 @@ header {
 .badge {
   background: var(--panel);
   border: 1px solid var(--border);
-  color: var(--muted);
+  color: var(--accent);
   font-size: 10px;
+  font-weight: 600;
   padding: 3px 8px;
   border-radius: 999px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
+.icon-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.icon-btn:hover {
+  color: var(--text);
+  background: var(--panel);
+}
+
+.refresh-icon {
+  display: inline-block;
+  transition: transform 0.6s ease;
+}
+
+.icon-btn.spinning .refresh-icon {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 main {
   padding: 16px;
+  min-height: 140px;
 }
 
-.lead {
-  color: var(--muted);
-  line-height: 1.5;
-  margin: 0 0 14px;
-}
-
-.capture-count {
-  margin: 0 0 14px;
-  font-size: 13px;
-}
-
-#captureCount {
-  color: var(--accent);
-  font-weight: 700;
-}
-
-button {
-  width: 100%;
-  background: var(--accent);
-  color: #fff;
+hr {
   border: none;
-  padding: 9px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-  cursor: pointer;
+  border-top: 1px solid var(--border);
+  margin: 14px 0;
+}
+
+.usage-row {
+  margin-bottom: 12px;
+}
+
+.usage-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.usage-label {
+  font-weight: 600;
+}
+
+.usage-pct {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-track {
+  height: 8px;
+  background: var(--track);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.progress-fill.warn {
+  background: var(--warn);
+}
+
+.progress-fill.danger {
+  background: var(--danger);
+}
+
+.usage-sub {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.weekly-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-weight: 600;
   margin-bottom: 10px;
 }
 
-.debug-link {
-  display: block;
-  text-align: center;
-  color: var(--muted);
-  font-size: 12px;
+.weekly-header a {
+  color: var(--accent);
+  font-weight: 400;
+  font-size: 11px;
   text-decoration: none;
 }
 
-.debug-link:hover {
+.weekly-header a:hover {
+  text-decoration: underline;
+}
+
+.state {
+  text-align: center;
+  padding: 20px 8px;
+}
+
+.empty-icon {
+  font-size: 28px;
+  color: var(--muted);
+  margin: 0 0 6px;
+}
+
+.empty-title {
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.empty-body {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0 0 14px;
+}
+
+#openClaudeBtn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.skeleton-row,
+.skeleton-bar {
+  background: linear-gradient(90deg, var(--panel) 25%, var(--border) 50%, var(--panel) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 6px;
+}
+
+.skeleton-row {
+  height: 12px;
+  width: 40%;
+  margin-bottom: 10px;
+}
+
+.skeleton-bar {
+  height: 8px;
+  width: 100%;
+  margin-bottom: 18px;
+  border-radius: 999px;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.error-banner {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+  border: 1px solid var(--danger);
+  border-radius: 6px;
   color: var(--text);
+  font-size: 11px;
 }
 
 footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 10px 16px;
   border-top: 1px solid var(--border);
-  text-align: right;
 }
 
-footer a {
+footer span {
   color: var(--muted);
-  font-size: 12px;
-  text-decoration: none;
-}
-
-footer a:hover {
-  color: var(--text);
+  font-size: 11px;
 }

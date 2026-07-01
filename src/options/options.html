@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <title>ClaudeMeter — Options</title>
@@ -8,11 +8,49 @@
   <body>
     <header>
       <h1>ClaudeMeter Options</h1>
-      <p class="build-note">
-        Phase 1 (discovery mode) build — full settings (refresh interval, notifications, theme)
-        land once Phase 2 wires up real usage data.
-      </p>
     </header>
+
+    <section class="card">
+      <h2>Refresh</h2>
+      <label class="row">
+        <span>
+          Refresh interval
+          <small>How often the background worker fetches usage in the background.</small>
+        </span>
+        <span class="slider-value" id="refreshIntervalValue">5 min</span>
+      </label>
+      <input type="range" id="refreshIntervalSlider" min="1" max="30" step="1" />
+    </section>
+
+    <section class="card">
+      <h2>Notifications</h2>
+      <label class="row">
+        <span>
+          Notify at usage thresholds
+          <small>Desktop notification when session or weekly usage crosses a threshold.</small>
+        </span>
+        <input type="checkbox" id="notificationsToggle" />
+      </label>
+      <div class="row" id="thresholdsRow">
+        <span>Thresholds</span>
+        <div class="threshold-checks">
+          <label><input type="checkbox" class="threshold-check" value="80" /> 80%</label>
+          <label><input type="checkbox" class="threshold-check" value="95" /> 95%</label>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Appearance</h2>
+      <label class="row">
+        <span>Theme</span>
+        <select id="themeSelect">
+          <option value="auto">Auto (match system)</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+    </section>
 
     <section class="card">
       <h2>Developer / Debug</h2>
@@ -29,7 +67,7 @@
     <section class="card">
       <h2>Data</h2>
       <button id="clearDataBtn" class="danger">Clear stored data</button>
-      <p class="hint">Removes all captured requests and any saved usage snapshot.</p>
+      <p class="hint">Removes all captured requests, usage history, and org lookup cache.</p>
     </section>
 
     <script type="module" src="options.js"></script>

@@ -17,12 +17,20 @@ export function timeAgo(epochMs) {
   return `${day} day${day === 1 ? "" : "s"} ago`;
 }
 
-/** Format the ms until a future epoch-ms timestamp as "X hr Y min". */
+/** Format the ms until a future epoch-ms timestamp as "X hr Y min" (or "X day Y hr" beyond a day). */
 export function formatDuration(fromMs, toMs) {
   if (toMs == null) return null;
   const diffMs = toMs - fromMs;
   if (diffMs <= 0) return "now";
   const totalMin = Math.round(diffMs / 60000);
+
+  if (totalMin >= 24 * 60) {
+    const day = Math.floor(totalMin / (24 * 60));
+    const hr = Math.floor((totalMin % (24 * 60)) / 60);
+    if (hr === 0) return `${day} day${day === 1 ? "" : "s"}`;
+    return `${day} day${day === 1 ? "" : "s"} ${hr} hr`;
+  }
+
   const hr = Math.floor(totalMin / 60);
   const min = totalMin % 60;
   if (hr === 0) return `${min} min`;
