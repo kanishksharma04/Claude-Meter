@@ -1,39 +1,82 @@
-# ClaudeMeter
+<p align="center">
+  <img src="src/icons/icon128.png" alt="ClaudeMeter logo" width="96" height="96" />
+</p>
 
-A Manifest V3 browser extension that shows your claude.ai Pro/Max plan usage (session
-%, weekly %, reset countdowns) from the toolbar, without opening claude.ai's own
-account menu.
+<h1 align="center">ClaudeMeter</h1>
 
-**Status: Phase 2 complete.** The extension fetches real usage data from claude.ai's
-own (undocumented) usage endpoint and renders it in the popup, with background
-auto-refresh, notifications, and a full options page.
+<p align="center">
+  A Manifest V3 browser extension that shows your claude.ai Pro/Max plan usage —
+  current session %, weekly %, and reset countdowns — right from the toolbar,
+  without ever opening claude.ai's own account menu.
+</p>
+
+---
+
+## What this is
+
+ClaudeMeter is a small, self-contained Chrome/Edge/Brave extension. Click the toolbar
+icon and you immediately see:
+
+- **Current session usage** — percent used, a progress bar, and "resets in X hr Y min"
+- **Weekly limits** — one bar per bucket claude.ai actually returns (e.g. "All models",
+  and "Opus" separately if your plan has a model-specific weekly cap), each with its
+  own reset countdown
+- **Plan badge** — shown only when a real plan name (Free/Pro/Max/Team/Enterprise) can
+  be confidently detected, hidden otherwise rather than guessing
+- **Manual refresh**, a spinning-icon in-flight state, and a "Last updated: X ago"
+  label that keeps itself current
+- Empty/loading/error states that never wipe out the last good reading — a failed
+  refresh shows an inline warning, not a blank popup
+
+Data auto-refreshes in the background on a configurable interval and every time you
+open the popup, so the numbers stay current without you doing anything.
 
 ## How it works (and its limits)
 
-- There's no documented consumer usage API. This extension calls the same endpoints
-  claude.ai's own frontend uses to render its account usage panel:
-  - `GET https://claude.ai/api/organizations` — lists your orgs; the one with a
-    `"chat"` capability is picked and its `uuid` cached.
-  - `GET https://claude.ai/api/organizations/{org_id}/usage` — returns usage buckets,
-    e.g. `five_hour` (current session) and `seven_day` / `seven_day_opus` (weekly, per
-    model group where applicable).
-- These calls are made directly from the background service worker with
-  `fetch(url, { credentials: "include" })`. **No credentials are ever read, stored, or
-  forged by the extension** — `credentials: "include"` just tells the browser to
-  attach whatever cookies it already holds for `claude.ai`, exactly as it would for a
-  normal page request from an open tab. This requires the `https://claude.ai/*` host
-  permission, which is the only host permission this extension requests.
-- If you're not logged into claude.ai in this browser, fetches fail with
-  `NOT_LOGGED_IN` and the popup shows an error state — the extension cannot "log in"
-  or otherwise obtain a session on its own.
-- As a secondary, zero-cost data source, a content script also passively observes any
-  matching usage request claude.ai's own UI happens to make (e.g. if you open the
-  account usage panel yourself) and reuses that response immediately, without waiting
-  for the next scheduled fetch. This uses the same `"world": "MAIN"` content-script
-  trick as before — see `src/content/inject-hook.js`.
-- Nothing is sent to any third-party server. All data stays in `chrome.storage.local`.
-- This endpoint isn't documented or versioned and can change or disappear without
-  notice — see Known limitations below.
+There's no documented, public API for this data — claude.ai's own frontend calls an
+internal endpoint to render its account usage panel, and this extension calls that
+same endpoint directly:
+
+- `GET https://claude.ai/api/organizations` — lists your orgs; the one with a
+  `"chat"` capability is picked and its `uuid` cached.
+- `GET https://claude.ai/api/organizations/{org_id}/usage` — returns usage buckets,
+  e.g. `five_hour` (current session) and `seven_day` / `seven_day_opus` (weekly, per
+  model group where applicable).
+
+These calls are made directly from the background service worker with
+`fetch(url, { credentials: "include" })`. **No credentials are ever read, stored, or
+forged by the extension** — `credentials: "include"` just tells the browser to attach
+whatever cookies it already holds for `claude.ai`, exactly as it would for a normal
+page request from an open tab. This requires the `https://claude.ai/*` host
+permission, which is the only host permission this extension requests.
+
+If you're not logged into claude.ai in this browser, fetches fail with
+`NOT_LOGGED_IN` and the popup shows an error state — the extension cannot "log in" or
+otherwise obtain a session on its own.
+
+As a secondary, zero-cost data source, a content script also passively observes any
+matching usage request claude.ai's own UI happens to make (e.g. if you open the
+account usage panel yourself) and reuses that response immediately, without waiting
+for the next scheduled fetch. See `src/content/inject-hook.js`.
+
+Nothing is ever sent to any third-party server — everything stays in
+`chrome.storage.local` on your machine.
+
+## Tech stack
+
+- **Manifest V3** — targets Chrome, Edge, and Brave (any Chromium-based browser)
+- **Vanilla JavaScript (ES modules)** — no framework, no bundler, no build step;
+  `src/**/*.js` is loaded and run as-is
+- **Plain HTML/CSS** — hand-written, using CSS custom properties for a single
+  light/dark/auto theme system shared across the popup, options, and debug pages
+- **`chrome.storage.local`** — the only persistence layer; schema in `src/lib/storage.js`
+- **`chrome.alarms`** — periodic background refresh, independent of any open tab
+- **`chrome.notifications`** — optional desktop alerts on usage-threshold crossings
+- **`chrome.action`** — toolbar icon, popup, and color-coded usage badge text
+- Content scripts split across the **MAIN** and **isolated** JS worlds (see
+  `src/content/inject-hook.js` and `src/content/relay.js`) to safely observe the
+  page's own network calls without touching page state
+- No external runtime dependencies of any kind — nothing "phones home"
 
 ## Project structure
 
@@ -53,20 +96,20 @@ claudemeter/
 │   │   ├── time-format.js             # relative-time / duration formatting helpers
 │   │   ├── usage-api.js               # org discovery + usage fetch + typed errors
 │   │   └── normalize-usage.js         # raw usage response -> UsageSnapshot
-│   └── icons/                         # placeholder icons — swap in real art later
+│   └── icons/                         # toolbar/store icon set (16/32/48/128)
 └── README.md
 ```
 
-## Load it locally (Chrome / Edge)
+## Load it locally (Chrome / Edge / Brave)
 
-Requires **Chrome/Edge 111+** — the content script uses the `"world": "MAIN"` key in
-`manifest.json` (needed so the hook patches the page's *real* `fetch`/`XMLHttpRequest`
-rather than an isolated copy that the page never calls).
+Requires a **Chromium 111+** based browser — the content script uses the
+`"world": "MAIN"` key in `manifest.json` (needed so the hook patches the page's *real*
+`fetch`/`XMLHttpRequest` rather than an isolated copy the page never calls).
 
-1. Open `chrome://extensions` (or `edge://extensions`).
+1. Open `chrome://extensions` (`brave://extensions` on Brave, `edge://extensions` on Edge).
 2. Enable **Developer mode** (top-right toggle).
 3. Click **Load unpacked** and select this `claudemeter/` folder.
-4. Make sure you're logged into `claude.ai` in this browser.
+4. Make sure you're logged into `claude.ai` in that same browser.
 5. Click the ClaudeMeter toolbar icon. On first load it kicks off a background fetch
    automatically — give it a second, then click the refresh icon if it's still empty.
 
@@ -137,3 +180,7 @@ written when Developer mode is on, from Options.
 - **Developer mode** — keeps raw request/response captures for the debug page
   (`src/debug/debug.html`), off by default.
 - **Clear stored data** — wipes snapshot, history, org cache, and debug captures.
+
+## Author
+
+Built by [**kanishksharma04**](https://github.com/kanishksharma04).
