@@ -98,7 +98,7 @@ developerModeToggle.addEventListener("change", async () => {
 });
 
 clearDataBtn.addEventListener("click", async () => {
-  if (!confirm("Clear all stored ClaudeMeter data (captures + usage snapshot + history + message costs)?")) return;
+  if (!confirm("Clear all stored ClaudeMeter data (captures + usage snapshot + history + message costs + limit-hit log)?")) return;
   await clearAllData();
   clearDataBtn.textContent = "Cleared!";
   setTimeout(() => (clearDataBtn.textContent = "Clear stored data"), 1200);

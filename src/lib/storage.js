@@ -2,6 +2,7 @@
 // Shared by the background worker, popup, options, and debug pages.
 
 import { appendMessage, prunePending } from "./message-cost.js";
+import { addLimitHit } from "./limit-hits.js";
 
 export const MAX_DEBUG_CAPTURES = 20;
 export const MAX_HISTORY = 50;
@@ -29,6 +30,7 @@ export const DEFAULT_STATE = {
   modelHint: null, // see modelSwitchHint() in lib/burn-rate.js
   messageLog: [], // per-message cost entries, oldest first (see lib/message-cost.js)
   pendingMessages: {}, // requestId -> { before snapshot, ... } for replies still streaming
+  limitHits: [], // "limit reached" events, oldest first (see lib/limit-hits.js)
 };
 
 export async function getAll() {
@@ -43,6 +45,7 @@ export async function getAll() {
     modelHint: stored.modelHint ?? DEFAULT_STATE.modelHint,
     messageLog: stored.messageLog ?? DEFAULT_STATE.messageLog,
     pendingMessages: stored.pendingMessages ?? DEFAULT_STATE.pendingMessages,
+    limitHits: stored.limitHits ?? DEFAULT_STATE.limitHits,
   };
 }
 
@@ -116,6 +119,13 @@ export async function pushMessageCost(entry) {
   return next;
 }
 
+export async function pushLimitHit(hit) {
+  const { limitHits } = await chrome.storage.local.get("limitHits");
+  const next = addLimitHit(limitHits, hit);
+  await chrome.storage.local.set({ limitHits: next });
+  return next;
+}
+
 export async function clearDebugCaptures() {
   await chrome.storage.local.set({ __debug_captures: [] });
 }
@@ -130,6 +140,7 @@ export async function clearAllData() {
     modelHint: null,
     messageLog: [],
     pendingMessages: {},
+    limitHits: [],
   });
 }
 

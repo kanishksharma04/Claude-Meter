@@ -164,9 +164,47 @@
     };
   }
 
+  function toEpochMs(value) {
+    if (typeof value === "number" && Number.isFinite(value)) return value < 1e12 ? value * 1000 : value;
+    const parsed = typeof value === "string" ? Date.parse(value) : NaN;
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  /**
+   * Looks for claude.ai's "limit reached" marker — an object with
+   * type "exceeded_limit" — anywhere in a payload. It shows up nested, and in
+   * error responses it is a JSON string inside the error message, so strings
+   * that look like JSON are unwrapped too.
+   */
+  function findExceededLimit(value, depth = 0) {
+    if (depth > 5 || value == null) return null;
+    if (typeof value === "string") {
+      return value.includes("exceeded_limit") ? findExceededLimit(safeJsonParse(value), depth + 1) : null;
+    }
+    if (typeof value !== "object") return null;
+    if (value.type === "exceeded_limit") {
+      return {
+        resetsAt: toEpochMs(value.resetsAt ?? value.resets_at),
+        claim: typeof value.representativeClaim === "string" ? value.representativeClaim : null,
+      };
+    }
+    for (const child of Object.values(value)) {
+      const found = findExceededLimit(child, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+
   /** Drain a clone of the reply stream so we know when it actually finished and how long the reply was. */
   async function watchCompletion(response, chat, startedAt) {
     let replyChars = 0;
+    let limitReported = false;
+    const reportLimit = (limit, source) => {
+      if (limitReported) return;
+      limitReported = true;
+      emitChat({ kind: "limit_hit", ...chat, source, resetsAt: limit?.resetsAt ?? null, claim: limit?.claim ?? null });
+    };
+
     const finish = (extra) =>
       emitChat({
         kind: "completion_end",
@@ -177,9 +215,19 @@
         ...extra,
       });
 
+    if (response.status === 429) {
+      // The message was refused outright. The body says which limit and until when.
+      const text = await response.clone().text().catch(() => "");
+      reportLimit(findExceededLimit(text), "rejected");
+    }
     if (!response.ok || !response.body) return finish({ ok: false });
 
     const feed = createSseReader((data) => {
+      // Sent alongside a reply that went through but used up the last of the allowance.
+      if (data.type === "message_limit") {
+        const limit = findExceededLimit(data);
+        if (limit) reportLimit(limit, "reply");
+      }
       if (data.type === "content_block_delta" && typeof data.delta?.text === "string") {
         replyChars += data.delta.text.length;
       } else if (typeof data.completion === "string") {

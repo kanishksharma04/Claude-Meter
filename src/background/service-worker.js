@@ -9,11 +9,13 @@ import {
   takePendingMessage,
   pushMessageCost,
   setModelHint,
+  pushLimitHit,
 } from "../lib/storage.js";
 import { fetchUsageSnapshot, UsageApiError } from "../lib/usage-api.js";
 import { normalizeUsageResponse } from "../lib/normalize-usage.js";
 import { computeMessageCost } from "../lib/message-cost.js";
 import { modelSwitchHint } from "../lib/burn-rate.js";
+import { resolveResetsAt } from "../lib/limit-hits.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
 const ALARM_NAME = "claudemeter-refresh-check";
@@ -85,6 +87,8 @@ const startsInFlight = new Map();
 
 async function handleChatEvent(event) {
   try {
+    if (event?.kind === "limit_hit") return await recordLimitHit(event);
+
     const settings = await getSettings();
     if (!settings.messageCost || !event?.requestId) return;
 
@@ -140,6 +144,28 @@ async function recordMessageEnd(event) {
     // Another reply was streaming at the same time, so the delta is split between them.
     shared: othersInFlight,
   });
+}
+
+// -------------------------------------------------------------- limit hits --
+
+async function recordLimitHit(event) {
+  // Refresh first: a hit usually means the numbers we hold are behind, and the
+  // fresh reading can supply a reset time the response didn't carry.
+  const result = await refreshUsage();
+  const snapshot = result.ok ? result.snapshot : (await getAll()).latestSnapshot;
+
+  const hit = {
+    at: event.timestamp ?? Date.now(),
+    source: event.source ?? "rejected", // "rejected" = message refused, "reply" = last reply before the lockout
+    claim: event.claim ?? null,
+    resetsAt: event.resetsAt ?? null,
+    conversationId: event.conversationId ?? null,
+    model: event.model ?? null,
+  };
+  hit.resetsAt = resolveResetsAt(hit, snapshot);
+
+  await pushLimitHit(hit);
+  console.log(LOG_PREFIX, "logged limit hit", hit.claim ?? "(unnamed limit)");
 }
 
 // ------------------------------------------------------------------ fetch --

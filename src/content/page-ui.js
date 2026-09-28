@@ -45,6 +45,7 @@
     conversationId: null, // chat currently on screen, tracked across SPA navigation
     threads: new Map(), // conversationId -> { messages, chars } for the active thread
     modelHint: null, // computed by the background worker (lib/burn-rate.js)
+    limitHits: [], // "limit reached" log (lib/limit-hits.js)
     sentModel: null, // model id from the last completion request made in this tab
     pickerModel: "", // text of claude.ai's model picker
     dismissed: new Set(), // banner keys the user closed in this tab
@@ -409,6 +410,7 @@
       lastMessageLine(),
       conversationLine(),
       threadLine(),
+      limitHitsLine(),
       el("div", { class: "panel-foot", text: `Updated ${timeAgo(snapshot?.fetchedAt)}` })
     );
   }
@@ -526,6 +528,18 @@
         )
       )
     );
+  }
+
+  // -------------------------------------------------------------- limit hits --
+
+  function limitHitsLine() {
+    const weekAgo = Date.now() - 7 * 24 * 3600e3;
+    const recent = state.limitHits.filter((hit) => hit.at >= weekAgo);
+    if (recent.length === 0) return null;
+    return el("div", {
+      class: "sub",
+      text: `Limit reached ${recent.length}\u00d7 in the last 7 days · last ${timeAgo(recent.at(-1).lastAt)}`,
+    });
   }
 
   // ------------------------------------------------------ long-context nudge --
@@ -685,6 +699,7 @@
     settings: ["settings", {}],
     messageLog: ["messageLog", []],
     modelHint: ["modelHint", null],
+    limitHits: ["limitHits", []],
   };
 
   function applyStored(key, value) {

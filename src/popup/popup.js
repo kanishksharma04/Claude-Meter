@@ -2,6 +2,7 @@ import { getAll, onStorageChanged } from "../lib/storage.js";
 import { timeAgo, formatDuration } from "../lib/time-format.js";
 import { formatCost } from "../lib/message-cost.js";
 import { rankConversations } from "../lib/conversation-costs.js";
+import { summarizeLimitHits, claimLabel } from "../lib/limit-hits.js";
 
 const emptyState = document.getElementById("emptyState");
 const loadingState = document.getElementById("loadingState");
@@ -17,6 +18,7 @@ const sessionResets = document.getElementById("sessionResets");
 const lastMessageEl = document.getElementById("lastMessage");
 const topChats = document.getElementById("topChats");
 const topChatsList = document.getElementById("topChatsList");
+const limitHitsEl = document.getElementById("limitHits");
 const weeklyList = document.getElementById("weeklyList");
 const weeklyRowTemplate = document.getElementById("weeklyRowTemplate");
 
@@ -70,9 +72,21 @@ function renderTopChats(messageLog) {
   );
 }
 
+function renderLimitHits(limitHits) {
+  const { last7Days, last } = summarizeLimitHits(limitHits);
+  limitHitsEl.hidden = last7Days === 0;
+  if (last7Days === 0) return;
+
+  const which = claimLabel(last.claim);
+  limitHitsEl.textContent =
+    `Limit reached ${last7Days}× in the last 7 days · last ${timeAgo(last.lastAt)}` + (which ? ` (${which})` : "");
+  limitHitsEl.title =
+    last.attempts > 1 ? `${last.attempts} messages were sent into that lockout.` : "Detected from claude.ai's response.";
+}
+
 function render(state) {
   latestState = state;
-  const { latestSnapshot, settings, lastError, messageLog } = state;
+  const { latestSnapshot, settings, lastError, messageLog, limitHits } = state;
 
   applyTheme(settings.theme);
 
@@ -105,6 +119,7 @@ function render(state) {
   }
   renderLastMessage(settings.messageCost ? messageLog : []);
   renderTopChats(settings.messageCost ? messageLog : []);
+  renderLimitHits(limitHits);
 
   weeklyList.innerHTML = "";
   if (latestSnapshot.weekly.length === 0) {
@@ -181,7 +196,7 @@ document.getElementById("settingsLink").addEventListener("click", (event) => {
 });
 
 onStorageChanged((changes) => {
-  if (changes.latestSnapshot || changes.settings || changes.lastError || changes.messageLog) {
+  if (changes.latestSnapshot || changes.settings || changes.lastError || changes.messageLog || changes.limitHits) {
     loadAndRender();
   }
 });

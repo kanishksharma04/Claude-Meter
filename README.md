@@ -52,6 +52,10 @@ numbers are in front of you while you type:
   fastest-filling one and past a threshold (default 50%), and that's the model you
   have selected, a banner suggests Sonnet or Haiku, which count against the larger
   all-models limit. It shows the measured pace ("+4%/hr, about 5 hr left").
+- **Limit-hit detector** — when claude.ai refuses a message (HTTP 429) or marks a
+  reply as the one that used up your allowance, ClaudeMeter logs it: when, which limit,
+  when it resets, and how many messages you sent into the lockout. The popup and the
+  pill panel show "Limit reached 3× in the last 7 days".
 - **Long-context nudge** — every message re-sends the whole thread, so long chats burn
   faster. ClaudeMeter estimates the active thread's size when a chat loads and after
   each reply; past a threshold (default ~40k tokens) it suggests a new chat. The
@@ -127,6 +131,7 @@ claudemeter/
 │   │   ├── message-cost.js            # before/after usage delta for one message
 │   │   ├── conversation-costs.js      # per-chat totals + ranking, derived from the message log
 │   │   ├── burn-rate.js               # weekly %/hr from history + the model-switch hint
+│   │   ├── limit-hits.js              # "limit reached" log: dedupe per lockout + summary
 │   │   ├── usage-api.js               # org discovery + usage fetch + typed errors
 │   │   └── normalize-usage.js         # raw usage response -> UsageSnapshot
 │   └── icons/                         # toolbar/store icon set (16/32/48/128)
@@ -189,6 +194,21 @@ MessageCost = {
 }
 ```
 
+"Limit reached" events go to `limitHits` (last 100), one entry per lockout:
+
+```js
+LimitHit = {
+  at: number,                  // epoch ms of the first refused/flagged message
+  lastAt: number,              // ...and of the most recent one in the same lockout
+  attempts: number,            // messages sent into this lockout
+  source: "rejected" | "reply",// HTTP 429, or the reply stream's message_limit event
+  claim: string | null,        // claude.ai's name for the limit, e.g. "five_hour"
+  resetsAt: number | null,     // from the response, else from the usage snapshot
+  conversationId: string | null,
+  model: string | null,
+}
+```
+
 Per-conversation totals aren't stored — `src/lib/conversation-costs.js` derives them
 from `messageLog` on demand, so they only cover the messages still in that log.
  Raw request/response captures (`__debug_captures`, last 20) are only
@@ -227,6 +247,10 @@ written when Developer mode is on, from Options.
   message reads as "under 1%", and anything else using your plan in the same seconds
   (another tab, Claude Code, another device) is counted in the same delta. Only
   messages sent through `fetch` in a tab with the extension loaded are measured.
+- Limit hits are recognised by the `exceeded_limit` marker claude.ai currently puts in
+  its 429 body and in the reply stream. A bare 429 with no readable body is still
+  logged, with the reset time borrowed from the usage snapshot. Hits that happen in
+  another browser, the desktop/mobile apps, or Claude Code aren't seen.
 - The model-switch hint needs about ten minutes of history to measure a pace; before
   that it falls back to "fullest weekly limit". It only appears when ClaudeMeter can
   tell which model you're on (from the model picker or the last message sent).
@@ -252,8 +276,8 @@ written when Developer mode is on, from Options.
 - **Theme** — Auto (follows `prefers-color-scheme`), Light, or Dark.
 - **Developer mode** — keeps raw request/response captures for the debug page
   (`src/debug/debug.html`), off by default.
-- **Clear stored data** — wipes snapshot, history, message costs, org cache, and debug
-  captures.
+- **Clear stored data** — wipes snapshot, history, message costs, the limit-hit log,
+  org cache, and debug captures.
 
 ## Author
 
