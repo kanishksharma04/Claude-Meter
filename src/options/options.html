@@ -65,6 +65,19 @@
       </label>
       <label class="row">
         <span>
+          Long-chat nudge
+          <small>Suggests starting a new chat once the thread is roughly this long.</small>
+        </span>
+        <select id="longContextSelect">
+          <option value="0">Off</option>
+          <option value="20000">~20k tokens</option>
+          <option value="40000">~40k tokens</option>
+          <option value="80000">~80k tokens</option>
+          <option value="120000">~120k tokens</option>
+        </select>
+      </label>
+      <label class="row">
+        <span>
           Measure what each message costs
           <small>Reads your usage right before you send and right after the reply ends.</small>
         </span>

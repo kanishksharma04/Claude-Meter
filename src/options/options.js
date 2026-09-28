@@ -7,6 +7,7 @@ const thresholdsRow = document.getElementById("thresholdsRow");
 const thresholdChecks = [...document.querySelectorAll(".threshold-check")];
 const inlinePillToggle = document.getElementById("inlinePillToggle");
 const preSendWarnSelect = document.getElementById("preSendWarnSelect");
+const longContextSelect = document.getElementById("longContextSelect");
 const messageCostToggle = document.getElementById("messageCostToggle");
 const themeSelect = document.getElementById("themeSelect");
 const developerModeToggle = document.getElementById("developerModeToggle");
@@ -36,6 +37,7 @@ async function init() {
 
   inlinePillToggle.checked = settings.inlinePill;
   preSendWarnSelect.value = String(settings.preSendWarnPercent);
+  longContextSelect.value = String(settings.longContextTokens);
   messageCostToggle.checked = settings.messageCost;
 
   themeSelect.value = settings.theme;
@@ -70,6 +72,10 @@ inlinePillToggle.addEventListener("change", async () => {
 
 preSendWarnSelect.addEventListener("change", async () => {
   await setSettings({ preSendWarnPercent: Number(preSendWarnSelect.value) });
+});
+
+longContextSelect.addEventListener("change", async () => {
+  await setSettings({ longContextTokens: Number(longContextSelect.value) });
 });
 
 messageCostToggle.addEventListener("change", async () => {

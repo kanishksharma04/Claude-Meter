@@ -12,6 +12,8 @@
   const CHAT_EVENT_NAME = "__claudemeter_chat__"; // dispatched by inject-hook.js
   const COST_FLASH_MS = 15_000;
   const MEASURE_TIMEOUT_MS = 20_000;
+  // Rough English-text ratio. Good enough to tell a 5k-token chat from a 50k one.
+  const CHARS_PER_TOKEN = 4;
   const STALE_AFTER_MS = 60_000;
   const REPOSITION_MS = 500;
 
@@ -33,6 +35,8 @@
     messageLog: [],
     measuring: new Set(), // requestIds whose cost hasn't landed in messageLog yet
     costFlash: null, // { entry, until } — the just-measured message, shown briefly next to the pill
+    conversationId: null, // chat currently on screen, tracked across SPA navigation
+    threads: new Map(), // conversationId -> { messages, chars } for the active thread
     dismissed: new Set(), // banner keys the user closed in this tab
   };
 
@@ -117,6 +121,10 @@
 
   function currentConversationId() {
     return /\/chat\/([0-9a-f-]{36})/i.exec(location.pathname)?.[1] ?? null;
+  }
+
+  function formatTokens(tokens) {
+    return tokens >= 1000 ? `~${Math.round(tokens / 1000)}k tokens` : `~${tokens} tokens`;
   }
 
   /** Mirrors formatCost() in src/lib/message-cost.js. */
@@ -390,6 +398,7 @@
       ...bucketsOf(snapshot).map(renderBucket),
       lastMessageLine(),
       conversationLine(),
+      threadLine(),
       el("div", { class: "panel-foot", text: `Updated ${timeAgo(snapshot?.fetchedAt)}` })
     );
   }
@@ -448,7 +457,8 @@
 
   window.addEventListener(CHAT_EVENT_NAME, (event) => {
     const chat = event.detail;
-    if (!chat?.requestId) return;
+    if (!chat?.kind) return;
+    onThreadEvent(chat);
 
     if (chat.kind === "completion_start") {
       state.measuring.add(chat.requestId);
@@ -507,6 +517,50 @@
     );
   }
 
+  // ------------------------------------------------------ long-context nudge --
+
+  function currentThread() {
+    const thread = state.threads.get(state.conversationId);
+    return thread ? { ...thread, tokens: Math.round(thread.chars / CHARS_PER_TOKEN) } : null;
+  }
+
+  function threadLine() {
+    const thread = currentThread();
+    if (!thread || thread.messages === 0) return null;
+    return el("div", {
+      class: "sub",
+      text: `Thread length: ${formatTokens(thread.tokens)} · ${thread.messages} messages`,
+    });
+  }
+
+  /** Every message re-sends the whole thread, so a long chat makes each new message cost more. */
+  function updateLongContextNudge() {
+    const threshold = Number(state.settings.longContextTokens ?? 40000);
+    const thread = currentThread();
+    if (!thread || threshold <= 0 || thread.tokens < threshold) return setBanner("longctx", null);
+
+    setBanner("longctx", {
+      // Re-arm each time the thread grows by another threshold's worth.
+      key: `longctx:${state.conversationId}:${Math.floor(thread.tokens / threshold)}`,
+      lead: `Long chat (${formatTokens(thread.tokens)}, ${thread.messages} messages).`,
+      text: "Every new message re-reads all of it. A fresh chat will use less of your limit.",
+      actions: [{ label: "New chat", href: "https://claude.ai/new" }],
+    });
+  }
+
+  function onThreadEvent(chat) {
+    if (chat.kind === "conversation_loaded") {
+      state.threads.set(chat.conversationId, { messages: chat.messages ?? 0, chars: chat.chars ?? 0 });
+    } else if (chat.kind === "completion_end" && chat.ok) {
+      // Until the page reloads the conversation, grow the estimate by this exchange.
+      const thread = state.threads.get(chat.conversationId) ?? { messages: 0, chars: 0 };
+      state.threads.set(chat.conversationId, {
+        messages: thread.messages + 2,
+        chars: thread.chars + (chat.promptChars ?? 0) + (chat.replyChars ?? 0),
+      });
+    }
+  }
+
   // -------------------------------------------------------- pre-send warning --
 
   /** While a draft is in the composer, flag the bucket closest to its limit. */
@@ -536,6 +590,7 @@
     renderCostChip();
     renderPanel();
     updatePreSendWarning();
+    updateLongContextNudge();
     renderBanners();
   }
 
@@ -543,8 +598,10 @@
   function tick() {
     positionDock();
     const drafting = hasDraft();
-    if (drafting !== state.drafting) {
+    const conversationId = currentConversationId();
+    if (drafting !== state.drafting || conversationId !== state.conversationId) {
       state.drafting = drafting;
+      state.conversationId = conversationId;
       render();
     }
   }

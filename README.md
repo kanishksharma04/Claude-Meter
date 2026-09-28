@@ -48,6 +48,10 @@ numbers are in front of you while you type:
 - **Per-conversation totals** — those per-message costs are summed per chat. The pill
   panel shows the running total for the chat you're in, and the popup ranks your
   **most expensive chats** with a link back to each.
+- **Long-context nudge** — every message re-sends the whole thread, so long chats burn
+  faster. ClaudeMeter estimates the active thread's size when a chat loads and after
+  each reply; past a threshold (default ~40k tokens) it suggests a new chat. The
+  estimate is always visible in the pill panel.
 
 Everything is rendered inside a shadow root (claude.ai's DOM and styles are never
 modified) and each piece can be switched off in Options.
@@ -161,7 +165,8 @@ UsageSnapshot = {
 Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `history`
 (last 50 snapshots) for potential future charting. Settings live under `settings`
 (`refreshIntervalMinutes`, `notificationsEnabled`, `notifyThresholds`, `theme`,
-`developerMode`, `inlinePill`, `preSendWarnPercent`, `messageCost`). Per-message costs
+`developerMode`, `inlinePill`, `preSendWarnPercent`, `longContextTokens`,
+`messageCost`). Per-message costs
 are appended to `messageLog` (last 300):
 
 ```js
@@ -216,6 +221,9 @@ written when Developer mode is on, from Options.
   message reads as "under 1%", and anything else using your plan in the same seconds
   (another tab, Claude Code, another device) is counted in the same delta. Only
   messages sent through `fetch` in a tab with the extension loaded are measured.
+- Thread length is a character count divided by four, not a real token count. It
+  covers message text and pasted/extracted attachments on the active branch; images,
+  PDFs, project knowledge, and tool results aren't counted, so treat it as a floor.
 - No sparkline/usage-over-time chart yet, though the rolling `history` array needed
   for one is already being collected.
 
@@ -228,6 +236,7 @@ written when Developer mode is on, from Options.
 - **Usage pill next to the composer** — show/hide the in-page pill on claude.ai.
 - **Warn before sending** — Off, or 50 / 70 / 80 / 90 / 95%; the usage level at which
   the banner above the composer appears while you type.
+- **Long-chat nudge** — Off, or ~20k / 40k / 80k / 120k tokens.
 - **Measure what each message costs** — on by default; turning it off also stops the
   two extra usage reads around each message.
 - **Theme** — Auto (follows `prefers-color-scheme`), Light, or Dark.

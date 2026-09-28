@@ -14,6 +14,7 @@ export const DEFAULT_SETTINGS = {
   developerMode: false,
   inlinePill: true, // usage pill next to claude.ai's composer (src/content/page-ui.js)
   preSendWarnPercent: 80, // warn above the composer while drafting at/above this %; 0 = off
+  longContextTokens: 40000, // nudge towards a new chat once the thread is about this long; 0 = off
   messageCost: true, // measure session % before/after each reply (two extra usage fetches per message)
 };
 

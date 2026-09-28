@@ -16,6 +16,7 @@
   const CHAT_EVENT_NAME = "__claudemeter_chat__";
   const COMPLETION_PATTERN =
     /\/api\/organizations\/[^/]+\/chat_conversations\/([0-9a-f-]+)\/(?:retry_)?completion(?:[/?]|$)/i;
+  const CONVERSATION_PATTERN = /\/api\/organizations\/[^/]+\/chat_conversations\/([0-9a-f-]+)(?:\?|$)/i;
   const LOG_PREFIX = "[ClaudeMeter:discovery]";
   const MAX_BODY_CHARS = 20000;
 
@@ -56,7 +57,9 @@
   // ----------------------------------------------------------------- chat --
   // Sending a message is a POST to .../chat_conversations/{id}/completion that
   // streams the reply back as server-sent events. We only announce that one
-  // started and when its stream finished — message text never leaves the page.
+  // started and when its stream finished, plus character counts so the page UI
+  // can estimate how long the thread has grown — message text itself never
+  // leaves the page.
 
   function emitChat(detail) {
     try {
@@ -83,24 +86,117 @@
         requestId: makeCaptureId(),
         conversationId: match[1],
         model: typeof body?.model === "string" ? body.model : null,
+        promptChars: messageChars({ text: body?.prompt, attachments: body?.attachments }),
       };
     } catch {
       return null;
     }
   }
 
-  /** Drain a clone of the reply stream so we know when it actually finished. */
+  /** Characters of text one message contributes to the thread (its text blocks plus pasted/extracted attachments). */
+  function messageChars(message) {
+    let chars = 0;
+    const blocks = Array.isArray(message?.content) ? message.content : [];
+    for (const block of blocks) {
+      if (typeof block?.text === "string") chars += block.text.length;
+    }
+    if (chars === 0 && typeof message?.text === "string") chars = message.text.length;
+    for (const attachment of Array.isArray(message?.attachments) ? message.attachments : []) {
+      if (typeof attachment?.extracted_content === "string") chars += attachment.extracted_content.length;
+    }
+    return chars;
+  }
+
+  /**
+   * The conversation endpoint returns every branch (edits, retries). Only the
+   * branch ending at current_leaf_message_uuid is what gets re-sent, so walk
+   * back from the leaf; fall back to all messages if the links aren't there.
+   */
+  function activeThread(conversation) {
+    const all = Array.isArray(conversation?.chat_messages) ? conversation.chat_messages : null;
+    if (!all) return null;
+
+    const byId = new Map(all.map((m) => [m?.uuid, m]));
+    const thread = [];
+    let cursor = byId.get(conversation.current_leaf_message_uuid);
+    while (cursor && thread.length < all.length) {
+      thread.push(cursor);
+      cursor = byId.get(cursor.parent_message_uuid);
+    }
+    return thread.length > 0 ? thread : all;
+  }
+
+  /** When the page loads a conversation, report how big its active thread is. */
+  function watchConversation(response, absoluteUrl, method) {
+    const match = method === "GET" && response.ok ? CONVERSATION_PATTERN.exec(absoluteUrl) : null;
+    if (!match) return;
+
+    response
+      .clone()
+      .json()
+      .then((conversation) => {
+        const thread = activeThread(conversation);
+        if (!thread) return;
+        emitChat({
+          kind: "conversation_loaded",
+          conversationId: match[1],
+          messages: thread.length,
+          chars: thread.reduce((sum, m) => sum + messageChars(m), 0),
+        });
+      })
+      .catch(() => {});
+  }
+
+  /** Feeds a byte stream of server-sent events to onData, one parsed `data:` payload at a time. */
+  function createSseReader(onData) {
+    const decoder = new TextDecoder();
+    let buffer = "";
+    return (chunk) => {
+      buffer += decoder.decode(chunk, { stream: true });
+      let newline;
+      while ((newline = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, newline).trim();
+        buffer = buffer.slice(newline + 1);
+        if (!line.startsWith("data:")) continue;
+        const data = safeJsonParse(line.slice(5));
+        if (data && typeof data === "object") onData(data);
+      }
+    };
+  }
+
+  /** Drain a clone of the reply stream so we know when it actually finished and how long the reply was. */
   async function watchCompletion(response, chat, startedAt) {
+    let replyChars = 0;
     const finish = (extra) =>
-      emitChat({ kind: "completion_end", ...chat, status: response.status, durationMs: Date.now() - startedAt, ...extra });
+      emitChat({
+        kind: "completion_end",
+        ...chat,
+        status: response.status,
+        durationMs: Date.now() - startedAt,
+        replyChars,
+        ...extra,
+      });
 
     if (!response.ok || !response.body) return finish({ ok: false });
+
+    const feed = createSseReader((data) => {
+      if (data.type === "content_block_delta" && typeof data.delta?.text === "string") {
+        replyChars += data.delta.text.length;
+      } else if (typeof data.completion === "string") {
+        replyChars += data.completion.length; // older stream format
+      }
+    });
 
     try {
       const reader = response.clone().body.getReader();
       for (;;) {
-        const { done } = await reader.read();
+        const { done, value } = await reader.read();
         if (done) break;
+        try {
+          feed(value);
+        } catch {
+          // A parsing slip must not stop us from seeing the end of the stream.
+        }
       }
       finish({ ok: true });
     } catch {
@@ -133,6 +229,8 @@
       const rawUrl = typeof input === "string" ? input : input?.url ?? "";
       const absoluteUrl = toAbsoluteUrl(rawUrl);
       const method = (init.method || (typeof input === "object" && input?.method) || "GET").toUpperCase();
+
+      watchConversation(response, absoluteUrl, method);
 
       if (absoluteUrl && matchesKeywords(absoluteUrl)) {
         response
