@@ -1,5 +1,6 @@
 import { getAll, onStorageChanged } from "../lib/storage.js";
 import { timeAgo, formatDuration } from "../lib/time-format.js";
+import { formatCost } from "../lib/message-cost.js";
 
 const emptyState = document.getElementById("emptyState");
 const loadingState = document.getElementById("loadingState");
@@ -12,6 +13,7 @@ const sessionLabel = document.getElementById("sessionLabel");
 const sessionPct = document.getElementById("sessionPct");
 const sessionFill = document.getElementById("sessionFill");
 const sessionResets = document.getElementById("sessionResets");
+const lastMessageEl = document.getElementById("lastMessage");
 const weeklyList = document.getElementById("weeklyList");
 const weeklyRowTemplate = document.getElementById("weeklyRowTemplate");
 
@@ -33,9 +35,17 @@ function renderBucketRow({ labelEl, pctEl, fillEl, subEl }, bucket) {
   subEl.textContent = liveLabel ? `Resets in ${liveLabel}` : `Resets in ${bucket.resetsInLabel}`;
 }
 
+function renderLastMessage(messageLog) {
+  const last = messageLog.findLast((m) => m.session != null);
+  lastMessageEl.hidden = !last;
+  if (!last) return;
+  const approx = last.shared ? "about " : "";
+  lastMessageEl.textContent = `Last message: ${approx}${formatCost(last.session)} of session · ${timeAgo(last.at)}`;
+}
+
 function render(state) {
   latestState = state;
-  const { latestSnapshot, settings, lastError } = state;
+  const { latestSnapshot, settings, lastError, messageLog } = state;
 
   applyTheme(settings.theme);
 
@@ -66,6 +76,7 @@ function render(state) {
     sessionFill.style.width = "0%";
     sessionResets.textContent = "";
   }
+  renderLastMessage(settings.messageCost ? messageLog : []);
 
   weeklyList.innerHTML = "";
   if (latestSnapshot.weekly.length === 0) {
@@ -142,7 +153,7 @@ document.getElementById("settingsLink").addEventListener("click", (event) => {
 });
 
 onStorageChanged((changes) => {
-  if (changes.latestSnapshot || changes.settings || changes.lastError) {
+  if (changes.latestSnapshot || changes.settings || changes.lastError || changes.messageLog) {
     loadAndRender();
   }
 });

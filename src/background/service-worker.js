@@ -5,19 +5,32 @@ import {
   setLatestSnapshot,
   setLastError,
   pushDebugCapture,
+  setPendingMessage,
+  takePendingMessage,
+  pushMessageCost,
 } from "../lib/storage.js";
 import { fetchUsageSnapshot, UsageApiError } from "../lib/usage-api.js";
 import { normalizeUsageResponse } from "../lib/normalize-usage.js";
+import { computeMessageCost } from "../lib/message-cost.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
 const ALARM_NAME = "claudemeter-refresh-check";
 const USAGE_ENDPOINT_PATTERN = /\/api\/organizations\/[^/]+\/usage(?:[/?]|$)/;
+// A "before" reading this fresh is reused rather than re-fetched when a message is sent.
+const BEFORE_MAX_AGE_MS = 20_000;
+// The usage endpoint lags the end of a reply slightly; wait before the "after" reading.
+const AFTER_SETTLE_MS = 1500;
 
 // ---------------------------------------------------------------- messages --
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "CLAUDEMETER_CAPTURE") {
     handlePassiveCapture(message.capture, sender);
+    return false;
+  }
+
+  if (message?.type === "CLAUDEMETER_CHAT_EVENT") {
+    handleChatEvent(message.event);
     return false;
   }
 
@@ -60,6 +73,71 @@ async function handlePassiveCapture(capture, sender) {
   } catch (err) {
     console.error(LOG_PREFIX, "failed to handle passive capture", err);
   }
+}
+
+// ------------------------------------------------------------ message cost --
+
+// In-flight "before" readings, so a reply that ends before its start handler
+// has finished still finds its baseline. Lost if the worker is recycled — the
+// stored pendingMessages entry covers that case.
+const startsInFlight = new Map();
+
+async function handleChatEvent(event) {
+  try {
+    const settings = await getSettings();
+    if (!settings.messageCost || !event?.requestId) return;
+
+    if (event.kind === "completion_start") {
+      const started = recordMessageStart(event);
+      startsInFlight.set(event.requestId, started);
+      await started;
+      startsInFlight.delete(event.requestId);
+    } else if (event.kind === "completion_end") {
+      await startsInFlight.get(event.requestId);
+      await recordMessageEnd(event);
+    }
+  } catch (err) {
+    console.error(LOG_PREFIX, "failed to handle chat event", err);
+  }
+}
+
+async function recordMessageStart(event) {
+  let { latestSnapshot: before } = await getAll();
+  if (!before || Date.now() - before.fetchedAt > BEFORE_MAX_AGE_MS) {
+    const result = await refreshUsage();
+    if (result.ok) before = result.snapshot;
+  }
+  if (!before) return;
+
+  await setPendingMessage(event.requestId, {
+    startedAt: event.timestamp ?? Date.now(),
+    conversationId: event.conversationId ?? null,
+    model: event.model ?? null,
+    before,
+  });
+}
+
+async function recordMessageEnd(event) {
+  const { pending, othersInFlight } = await takePendingMessage(event.requestId);
+  // A request that never produced a reply (HTTP error, network failure) cost nothing.
+  if (!pending || !event.ok) return;
+
+  await new Promise((resolve) => setTimeout(resolve, AFTER_SETTLE_MS));
+  const result = await refreshUsage();
+  if (!result.ok) return;
+
+  const cost = computeMessageCost(pending.before, result.snapshot);
+  await pushMessageCost({
+    id: event.requestId,
+    at: Date.now(),
+    conversationId: pending.conversationId,
+    model: pending.model,
+    session: cost.session,
+    weekly: cost.weekly,
+    durationMs: event.durationMs ?? null,
+    // Another reply was streaming at the same time, so the delta is split between them.
+    shared: othersInFlight,
+  });
 }
 
 // ------------------------------------------------------------------ fetch --

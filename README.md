@@ -42,6 +42,9 @@ numbers are in front of you while you type:
 - **Pre-send warning** — while there's a draft in the composer and any limit is past
   a threshold you choose (default 80%), a slim banner says so and when it resets.
   Dismiss it once and it stays away until that limit's window rolls over.
+- **Per-message cost** — ClaudeMeter reads your usage right before a message goes out
+  and again when the reply finishes streaming, then shows the difference next to the
+  pill ("Last message: 3% of session"). The popup shows the most recent one too.
 
 Everything is rendered inside a shadow root (claude.ai's DOM and styles are never
 modified) and each piece can be switched off in Options.
@@ -101,8 +104,8 @@ claudemeter/
 ├── src/
 │   ├── background/service-worker.js   # active fetch on alarm/request, badge, notifications
 │   ├── content/
-│   │   ├── inject-hook.js             # MAIN world: patches fetch/XHR, dispatches captures
-│   │   ├── relay.js                   # ISOLATED world: forwards captures to the background worker
+│   │   ├── inject-hook.js             # MAIN world: patches fetch/XHR, dispatches captures + chat events
+│   │   ├── relay.js                   # ISOLATED world: forwards both to the background worker
 │   │   └── page-ui.js                 # ISOLATED world: in-page UI (pill, banners) in a shadow root
 │   ├── popup/                         # toolbar popup — session/weekly bars, refresh, states
 │   ├── options/                       # refresh interval, notifications, theme, developer mode
@@ -110,6 +113,7 @@ claudemeter/
 │   ├── lib/
 │   │   ├── storage.js                 # chrome.storage.local schema + helpers
 │   │   ├── time-format.js             # relative-time / duration formatting helpers
+│   │   ├── message-cost.js            # before/after usage delta for one message
 │   │   ├── usage-api.js               # org discovery + usage fetch + typed errors
 │   │   └── normalize-usage.js         # raw usage response -> UsageSnapshot
 │   └── icons/                         # toolbar/store icon set (16/32/48/128)
@@ -153,7 +157,22 @@ UsageSnapshot = {
 Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `history`
 (last 50 snapshots) for potential future charting. Settings live under `settings`
 (`refreshIntervalMinutes`, `notificationsEnabled`, `notifyThresholds`, `theme`,
-`developerMode`, `inlinePill`, `preSendWarnPercent`). Raw request/response captures (`__debug_captures`, last 20) are only
+`developerMode`, `inlinePill`, `preSendWarnPercent`, `messageCost`). Per-message costs
+are appended to `messageLog` (last 300):
+
+```js
+MessageCost = {
+  id: string,                  // request id assigned by the page hook
+  at: number,                  // epoch ms the reply finished
+  conversationId: string | null,
+  model: string | null,        // as sent in the completion request, when readable
+  session: number | null,      // session % points this message used; null if the window reset mid-reply
+  weekly: Array<{ label: string, delta: number }>,
+  durationMs: number | null,
+  shared: boolean,             // another reply was streaming at the same time
+}
+```
+ Raw request/response captures (`__debug_captures`, last 20) are only
 written when Developer mode is on, from Options.
 
 ## Refresh behavior
@@ -165,6 +184,8 @@ written when Developer mode is on, from Options.
 - **Manual refresh**: the refresh icon in the popup header.
 - **Passive capture**: if claude.ai's own UI makes the exact usage request while a
   claude.ai tab is open, that response is captured and applied immediately too.
+- **Around each message** (when per-message cost is on): once as you send — skipped if
+  the last reading is under 20 seconds old — and once ~1.5 s after the reply ends.
 - Failed refreshes never wipe the UI — the popup keeps showing the last known-good
   snapshot with an inline "Couldn't refresh — showing data from X ago" warning.
 
@@ -183,6 +204,10 @@ written when Developer mode is on, from Options.
   isn't confirmed, so the badge is best-effort and often simply hidden.
 - Requires being logged into claude.ai in the same browser profile the extension runs
   in; it cannot establish a session on its own.
+- Per-message cost is an estimate. The endpoint reports whole percentages, so a small
+  message reads as "under 1%", and anything else using your plan in the same seconds
+  (another tab, Claude Code, another device) is counted in the same delta. Only
+  messages sent through `fetch` in a tab with the extension loaded are measured.
 - No sparkline/usage-over-time chart yet, though the rolling `history` array needed
   for one is already being collected.
 
@@ -195,10 +220,13 @@ written when Developer mode is on, from Options.
 - **Usage pill next to the composer** — show/hide the in-page pill on claude.ai.
 - **Warn before sending** — Off, or 50 / 70 / 80 / 90 / 95%; the usage level at which
   the banner above the composer appears while you type.
+- **Measure what each message costs** — on by default; turning it off also stops the
+  two extra usage reads around each message.
 - **Theme** — Auto (follows `prefers-color-scheme`), Light, or Dark.
 - **Developer mode** — keeps raw request/response captures for the debug page
   (`src/debug/debug.html`), off by default.
-- **Clear stored data** — wipes snapshot, history, org cache, and debug captures.
+- **Clear stored data** — wipes snapshot, history, message costs, org cache, and debug
+  captures.
 
 ## Author
 

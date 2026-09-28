@@ -7,6 +7,7 @@ const thresholdsRow = document.getElementById("thresholdsRow");
 const thresholdChecks = [...document.querySelectorAll(".threshold-check")];
 const inlinePillToggle = document.getElementById("inlinePillToggle");
 const preSendWarnSelect = document.getElementById("preSendWarnSelect");
+const messageCostToggle = document.getElementById("messageCostToggle");
 const themeSelect = document.getElementById("themeSelect");
 const developerModeToggle = document.getElementById("developerModeToggle");
 const clearDataBtn = document.getElementById("clearDataBtn");
@@ -35,6 +36,7 @@ async function init() {
 
   inlinePillToggle.checked = settings.inlinePill;
   preSendWarnSelect.value = String(settings.preSendWarnPercent);
+  messageCostToggle.checked = settings.messageCost;
 
   themeSelect.value = settings.theme;
   applyTheme(settings.theme);
@@ -70,6 +72,10 @@ preSendWarnSelect.addEventListener("change", async () => {
   await setSettings({ preSendWarnPercent: Number(preSendWarnSelect.value) });
 });
 
+messageCostToggle.addEventListener("change", async () => {
+  await setSettings({ messageCost: messageCostToggle.checked });
+});
+
 themeSelect.addEventListener("change", async () => {
   applyTheme(themeSelect.value);
   await setSettings({ theme: themeSelect.value });
@@ -80,7 +86,7 @@ developerModeToggle.addEventListener("change", async () => {
 });
 
 clearDataBtn.addEventListener("click", async () => {
-  if (!confirm("Clear all stored ClaudeMeter data (captures + usage snapshot + history)?")) return;
+  if (!confirm("Clear all stored ClaudeMeter data (captures + usage snapshot + history + message costs)?")) return;
   await clearAllData();
   clearDataBtn.textContent = "Cleared!";
   setTimeout(() => (clearDataBtn.textContent = "Clear stored data"), 1200);

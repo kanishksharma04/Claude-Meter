@@ -1,6 +1,8 @@
 // Thin wrapper around chrome.storage.local with schema defaults.
 // Shared by the background worker, popup, options, and debug pages.
 
+import { appendMessage, prunePending } from "./message-cost.js";
+
 export const MAX_DEBUG_CAPTURES = 20;
 export const MAX_HISTORY = 50;
 
@@ -12,6 +14,7 @@ export const DEFAULT_SETTINGS = {
   developerMode: false,
   inlinePill: true, // usage pill next to claude.ai's composer (src/content/page-ui.js)
   preSendWarnPercent: 80, // warn above the composer while drafting at/above this %; 0 = off
+  messageCost: true, // measure session % before/after each reply (two extra usage fetches per message)
 };
 
 export const DEFAULT_STATE = {
@@ -21,6 +24,8 @@ export const DEFAULT_STATE = {
   __debug_captures: [],
   orgCache: null,
   lastError: null,
+  messageLog: [], // per-message cost entries, oldest first (see lib/message-cost.js)
+  pendingMessages: {}, // requestId -> { before snapshot, ... } for replies still streaming
 };
 
 export async function getAll() {
@@ -32,6 +37,8 @@ export async function getAll() {
     __debug_captures: stored.__debug_captures ?? DEFAULT_STATE.__debug_captures,
     orgCache: stored.orgCache ?? DEFAULT_STATE.orgCache,
     lastError: stored.lastError ?? DEFAULT_STATE.lastError,
+    messageLog: stored.messageLog ?? DEFAULT_STATE.messageLog,
+    pendingMessages: stored.pendingMessages ?? DEFAULT_STATE.pendingMessages,
   };
 }
 
@@ -75,6 +82,28 @@ export async function pushDebugCapture(capture) {
   return next;
 }
 
+/** Remember the "before" reading for a message whose reply is still streaming. */
+export async function setPendingMessage(requestId, pending) {
+  const { pendingMessages } = await chrome.storage.local.get("pendingMessages");
+  const next = { ...prunePending(pendingMessages), [requestId]: pending };
+  await chrome.storage.local.set({ pendingMessages: next });
+}
+
+/** Removes and returns a pending message, plus whether other replies were in flight alongside it. */
+export async function takePendingMessage(requestId) {
+  const { pendingMessages = {} } = await chrome.storage.local.get("pendingMessages");
+  const { [requestId]: pending, ...rest } = pendingMessages;
+  if (pending) await chrome.storage.local.set({ pendingMessages: rest });
+  return { pending: pending ?? null, othersInFlight: Object.keys(prunePending(rest)).length > 0 };
+}
+
+export async function pushMessageCost(entry) {
+  const { messageLog } = await chrome.storage.local.get("messageLog");
+  const next = appendMessage(messageLog, entry);
+  await chrome.storage.local.set({ messageLog: next });
+  return next;
+}
+
 export async function clearDebugCaptures() {
   await chrome.storage.local.set({ __debug_captures: [] });
 }
@@ -86,6 +115,8 @@ export async function clearAllData() {
     __debug_captures: [],
     orgCache: null,
     lastError: null,
+    messageLog: [],
+    pendingMessages: {},
   });
 }
 

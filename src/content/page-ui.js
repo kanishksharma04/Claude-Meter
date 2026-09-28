@@ -9,6 +9,9 @@
 (() => {
   const LOG_PREFIX = "[ClaudeMeter:page]";
   const HOST_ID = "claudemeter-page-ui";
+  const CHAT_EVENT_NAME = "__claudemeter_chat__"; // dispatched by inject-hook.js
+  const COST_FLASH_MS = 15_000;
+  const MEASURE_TIMEOUT_MS = 20_000;
   const STALE_AFTER_MS = 60_000;
   const REPOSITION_MS = 500;
 
@@ -27,6 +30,9 @@
     settings: {},
     panelOpen: false,
     drafting: false, // composer currently holds unsent text
+    messageLog: [],
+    measuring: new Set(), // requestIds whose cost hasn't landed in messageLog yet
+    costFlash: null, // { entry, until } — the just-measured message, shown briefly next to the pill
     dismissed: new Set(), // banner keys the user closed in this tab
   };
 
@@ -109,6 +115,23 @@
     return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
 
+  function currentConversationId() {
+    return /\/chat\/([0-9a-f-]{36})/i.exec(location.pathname)?.[1] ?? null;
+  }
+
+  /** Mirrors formatCost() in src/lib/message-cost.js. */
+  function formatCost(delta) {
+    return delta === 0 ? "under 1%" : `${delta}%`;
+  }
+
+  /** "3% of session", falling back to the weekly bucket that moved most when the session window reset mid-reply. */
+  function costLabel(entry) {
+    const approx = entry.shared ? "~" : "";
+    if (entry.session != null) return `${approx}${formatCost(entry.session)} of session`;
+    const weekly = [...(entry.weekly ?? [])].sort((a, b) => b.delta - a.delta)[0];
+    return weekly ? `${approx}${formatCost(weekly.delta)} of ${weekly.label} week` : null;
+  }
+
   /** Dismissals are scoped to a bucket's reset window, so a banner comes back after the reset. */
   function windowKey(prefix, bucket) {
     return `${prefix}:${bucket.label}:${bucket.resetsAt ?? "?"}`;
@@ -178,6 +201,17 @@
     .pill.danger .dot { background: var(--danger); }
     .pill .sep, .pill .stale { color: var(--muted); }
 
+    .chip {
+      padding: 3px 9px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .chip strong { color: var(--text); font-weight: 600; }
+
     .panel {
       width: 264px;
       padding: 12px 14px;
@@ -237,7 +271,8 @@
 
   const panel = el("div", { class: "panel", role: "dialog", "aria-label": "ClaudeMeter usage", hidden: true });
   const pill = el("button", { class: "pill", type: "button", "aria-expanded": "false", onclick: togglePanel });
-  const pillRow = el("div", { class: "pill-row" }, pill);
+  const costChip = el("span", { class: "chip", hidden: true });
+  const pillRow = el("div", { class: "pill-row" }, costChip, pill);
   const banners = el("div", { class: "banners", role: "status", "aria-live": "polite" });
   const dock = el("div", { class: "dock" }, banners, panel, pillRow);
   shadow.append(dock);
@@ -353,9 +388,64 @@
         })
       ),
       ...bucketsOf(snapshot).map(renderBucket),
+      lastMessageLine(),
       el("div", { class: "panel-foot", text: `Updated ${timeAgo(snapshot?.fetchedAt)}` })
     );
   }
+
+  // ------------------------------------------------------------ message cost --
+
+  function lastMessageLine() {
+    const conversationId = currentConversationId();
+    const entry = conversationId && state.messageLog.findLast((m) => m.conversationId === conversationId);
+    const label = entry && costLabel(entry);
+    if (!label) return null;
+
+    const extras = (entry.weekly ?? [])
+      .filter((w) => w.delta > 0 && entry.session != null)
+      .map((w) => `${w.label} week +${w.delta}%`);
+    return el("div", { class: "sub", text: [`Last message here: ${label}`, ...extras].join(" · ") });
+  }
+
+  function renderCostChip() {
+    const enabled = state.settings.messageCost !== false;
+    const flash = state.costFlash && state.costFlash.until > Date.now() ? state.costFlash.entry : null;
+    const label = flash && costLabel(flash);
+
+    if (enabled && label) {
+      costChip.replaceChildren("Last message: ", el("strong", { text: label }));
+      costChip.title = flash.shared
+        ? "Another reply was streaming at the same time, so this is split between them."
+        : "Change in your usage between sending this message and the end of the reply.";
+    } else if (enabled && state.measuring.size > 0) {
+      costChip.replaceChildren("measuring\u2026");
+      costChip.title = "ClaudeMeter is measuring what this message costs.";
+    }
+    costChip.hidden = !enabled || !(label || state.measuring.size > 0);
+  }
+
+  function onMessageLogChanged() {
+    const newest = state.messageLog.at(-1);
+    if (!newest || !state.measuring.delete(newest.id)) return;
+    state.costFlash = { entry: newest, until: Date.now() + COST_FLASH_MS };
+    setTimeout(render, COST_FLASH_MS + 50);
+  }
+
+  window.addEventListener(CHAT_EVENT_NAME, (event) => {
+    const chat = event.detail;
+    if (!chat?.requestId) return;
+
+    if (chat.kind === "completion_start") {
+      state.measuring.add(chat.requestId);
+    } else if (chat.kind === "completion_end" && !chat.ok) {
+      state.measuring.delete(chat.requestId);
+    } else if (chat.kind === "completion_end") {
+      // The background worker normally answers within a couple of seconds by
+      // appending to messageLog; don't leave "measuring…" up if it never does.
+      setTimeout(() => state.measuring.delete(chat.requestId) && render(), MEASURE_TIMEOUT_MS);
+    }
+    render();
+  });
 
   function togglePanel() {
     state.panelOpen = !state.panelOpen;
@@ -428,6 +518,7 @@
   function render() {
     dock.dataset.theme = effectiveTheme();
     renderPill();
+    renderCostChip();
     renderPanel();
     updatePreSendWarning();
     renderBanners();
@@ -456,12 +547,18 @@
 
   // ----------------------------------------------------------------- storage --
 
-  const STORAGE_KEYS = { latestSnapshot: "snapshot", settings: "settings" };
+  // storage key -> [state field, value when absent]
+  const STORAGE_KEYS = {
+    latestSnapshot: ["snapshot", null],
+    settings: ["settings", {}],
+    messageLog: ["messageLog", []],
+  };
 
   function applyStored(key, value) {
-    const field = STORAGE_KEYS[key];
-    if (!field) return false;
-    state[field] = value ?? (field === "settings" ? {} : null);
+    if (!STORAGE_KEYS[key]) return false;
+    const [field, fallback] = STORAGE_KEYS[key];
+    state[field] = value ?? fallback;
+    if (key === "messageLog") onMessageLogChanged();
     return true;
   }
 

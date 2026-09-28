@@ -13,6 +13,9 @@
 (() => {
   const MATCH_KEYWORDS = ["usage", "limit", "quota", "rate", "organizations", "billing"];
   const EVENT_NAME = "__claudemeter_capture__";
+  const CHAT_EVENT_NAME = "__claudemeter_chat__";
+  const COMPLETION_PATTERN =
+    /\/api\/organizations\/[^/]+\/chat_conversations\/([0-9a-f-]+)\/(?:retry_)?completion(?:[/?]|$)/i;
   const LOG_PREFIX = "[ClaudeMeter:discovery]";
   const MAX_BODY_CHARS = 20000;
 
@@ -50,10 +53,79 @@
     }
   }
 
+  // ----------------------------------------------------------------- chat --
+  // Sending a message is a POST to .../chat_conversations/{id}/completion that
+  // streams the reply back as server-sent events. We only announce that one
+  // started and when its stream finished — message text never leaves the page.
+
+  function emitChat(detail) {
+    try {
+      window.dispatchEvent(new CustomEvent(CHAT_EVENT_NAME, { detail: { ...detail, timestamp: Date.now() } }));
+    } catch (err) {
+      console.warn(LOG_PREFIX, "failed to emit chat event", err);
+    }
+  }
+
+  /** Returns a small descriptor if this fetch call is a chat completion, else null. Never throws. */
+  function describeCompletion(args) {
+    try {
+      const input = args[0];
+      const init = args[1] || {};
+      const rawUrl = typeof input === "string" ? input : input?.url ?? String(input ?? "");
+      const method = (init.method || (typeof input === "object" && input?.method) || "GET").toUpperCase();
+      if (method !== "POST") return null;
+
+      const match = COMPLETION_PATTERN.exec(toAbsoluteUrl(rawUrl));
+      if (!match) return null;
+
+      const body = typeof init.body === "string" ? safeJsonParse(init.body) : null;
+      return {
+        requestId: makeCaptureId(),
+        conversationId: match[1],
+        model: typeof body?.model === "string" ? body.model : null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Drain a clone of the reply stream so we know when it actually finished. */
+  async function watchCompletion(response, chat, startedAt) {
+    const finish = (extra) =>
+      emitChat({ kind: "completion_end", ...chat, status: response.status, durationMs: Date.now() - startedAt, ...extra });
+
+    if (!response.ok || !response.body) return finish({ ok: false });
+
+    try {
+      const reader = response.clone().body.getReader();
+      for (;;) {
+        const { done } = await reader.read();
+        if (done) break;
+      }
+      finish({ ok: true });
+    } catch {
+      // The user hit "stop" (or the connection dropped) — whatever was
+      // generated up to that point still counted against the limit.
+      finish({ ok: true, aborted: true });
+    }
+  }
+
   // ---------------------------------------------------------------- fetch --
   const originalFetch = window.fetch;
   window.fetch = async function claudeMeterFetch(...args) {
-    const response = await originalFetch.apply(this, args);
+    const chat = describeCompletion(args);
+    const startedAt = Date.now();
+    if (chat) emitChat({ kind: "completion_start", ...chat });
+
+    let response;
+    try {
+      response = await originalFetch.apply(this, args);
+    } catch (err) {
+      if (chat) emitChat({ kind: "completion_end", ...chat, ok: false, status: 0, durationMs: Date.now() - startedAt });
+      throw err;
+    }
+
+    if (chat) watchCompletion(response, chat, startedAt);
 
     try {
       const input = args[0];
