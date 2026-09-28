@@ -6,6 +6,7 @@ const notificationsToggle = document.getElementById("notificationsToggle");
 const thresholdsRow = document.getElementById("thresholdsRow");
 const thresholdChecks = [...document.querySelectorAll(".threshold-check")];
 const inlinePillToggle = document.getElementById("inlinePillToggle");
+const tabIndicatorSelect = document.getElementById("tabIndicatorSelect");
 const preSendWarnSelect = document.getElementById("preSendWarnSelect");
 const modelHintSelect = document.getElementById("modelHintSelect");
 const longContextSelect = document.getElementById("longContextSelect");
@@ -37,6 +38,7 @@ async function init() {
   }
 
   inlinePillToggle.checked = settings.inlinePill;
+  tabIndicatorSelect.value = settings.tabIndicator;
   preSendWarnSelect.value = String(settings.preSendWarnPercent);
   modelHintSelect.value = String(settings.modelHintPercent);
   longContextSelect.value = String(settings.longContextTokens);
@@ -70,6 +72,10 @@ for (const check of thresholdChecks) {
 
 inlinePillToggle.addEventListener("change", async () => {
   await setSettings({ inlinePill: inlinePillToggle.checked });
+});
+
+tabIndicatorSelect.addEventListener("change", async () => {
+  await setSettings({ tabIndicator: tabIndicatorSelect.value });
 });
 
 preSendWarnSelect.addEventListener("change", async () => {

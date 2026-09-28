@@ -39,6 +39,9 @@ numbers are in front of you while you type:
 - **Inline usage pill** — session % and your highest weekly % float just above the
   composer, colour-coded like the popup bars. Click it for every bucket and its reset
   time; no toolbar click needed.
+- **Tab title / favicon %** — the claude.ai tab itself carries your session %, as a
+  `[42%]` title prefix, a drawn favicon with a colour-coded meter, or both — readable
+  from any other tab without switching.
 - **Pre-send warning** — while there's a draft in the composer and any limit is past
   a threshold you choose (default 80%), a slim banner says so and when it resets.
   Dismiss it once and it stays away until that limit's window rolls over.
@@ -61,8 +64,10 @@ numbers are in front of you while you type:
   each reply; past a threshold (default ~40k tokens) it suggests a new chat. The
   estimate is always visible in the pill panel.
 
-Everything is rendered inside a shadow root (claude.ai's DOM and styles are never
-modified) and each piece can be switched off in Options.
+The UI is rendered inside a shadow root, so claude.ai's own DOM and styles are left
+alone — the one exception is the tab indicator, which has to edit the page's `<title>`
+and icon `<link>`s and restores them when switched off. Each piece can be turned off
+in Options.
 
 ## How it works (and its limits)
 
@@ -175,7 +180,7 @@ UsageSnapshot = {
 Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `history`
 (last 50 snapshots) for potential future charting. Settings live under `settings`
 (`refreshIntervalMinutes`, `notificationsEnabled`, `notifyThresholds`, `theme`,
-`developerMode`, `inlinePill`, `preSendWarnPercent`, `modelHintPercent`,
+`developerMode`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
 `longContextTokens`, `messageCost`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300):
@@ -267,6 +272,7 @@ written when Developer mode is on, from Options.
   and/or 95% (configurable), only fires on the transition, not on every fetch above
   threshold.
 - **Usage pill next to the composer** — show/hide the in-page pill on claude.ai.
+- **Usage in the tab** — Off, title prefix (default), favicon, or both.
 - **Warn before sending** — Off, or 50 / 70 / 80 / 90 / 95%; the usage level at which
   the banner above the composer appears while you type.
 - **Model-switch hint** — Off, or 30 / 50 / 70 / 90%.

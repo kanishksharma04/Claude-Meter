@@ -14,6 +14,7 @@ export const DEFAULT_SETTINGS = {
   theme: "auto",
   developerMode: false,
   inlinePill: true, // usage pill next to claude.ai's composer (src/content/page-ui.js)
+  tabIndicator: "title", // usage % on the claude.ai tab: "off" | "title" | "favicon" | "both"
   preSendWarnPercent: 80, // warn above the composer while drafting at/above this %; 0 = off
   modelHintPercent: 50, // suggest a lighter model once a model-specific weekly bucket is this full; 0 = off
   longContextTokens: 40000, // nudge towards a new chat once the thread is about this long; 0 = off

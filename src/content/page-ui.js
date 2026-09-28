@@ -12,6 +12,11 @@
   const CHAT_EVENT_NAME = "__claudemeter_chat__"; // dispatched by inject-hook.js
   const COST_FLASH_MS = 15_000;
   const MEASURE_TIMEOUT_MS = 20_000;
+  // "[42%] " — what the tab-title indicator prepends. relay.js strips the same
+  // shape before using the title as a chat name.
+  const TITLE_PREFIX_PATTERN = /^\[\d{1,3}%\]\s*/;
+  const FAVICON_SIZE = 32;
+  const SEVERITY_COLORS = { "": "#7a9b6e", warn: "#d9a452", danger: "#c1554a" };
   // Rough English-text ratio. Good enough to tell a 5k-token chat from a 50k one.
   const CHARS_PER_TOKEN = 4;
   const STALE_AFTER_MS = 60_000;
@@ -530,6 +535,98 @@
     );
   }
 
+  // ----------------------------------------------------------- tab indicator --
+
+  /** The one number worth showing in a tab strip: session %, or the fullest weekly bucket without one. */
+  function tabPercent() {
+    const mode = state.settings.tabIndicator ?? "title";
+    if (mode === "off" || !state.snapshot) return null;
+    return state.snapshot.session?.percentUsed ?? worstWeekly(state.snapshot)?.percentUsed ?? null;
+  }
+
+  function applyTabTitle() {
+    const mode = state.settings.tabIndicator ?? "title";
+    const pct = mode === "title" || mode === "both" ? tabPercent() : null;
+    const bare = document.title.replace(TITLE_PREFIX_PATTERN, "");
+    const wanted = pct != null ? `[${pct}%] ${bare}` : bare;
+    // Only write on a real difference — this runs from a MutationObserver on <head>.
+    if (document.title !== wanted) document.title = wanted;
+  }
+
+  function drawFavicon(pct) {
+    const canvas = el("canvas", { width: FAVICON_SIZE, height: FAVICON_SIZE });
+    const ctx = canvas.getContext("2d");
+    const color = SEVERITY_COLORS[severityClass(pct)];
+
+    ctx.fillStyle = "#262624";
+    ctx.beginPath();
+    ctx.roundRect(0, 0, FAVICON_SIZE, FAVICON_SIZE, 7);
+    ctx.fill();
+
+    // The number, then a meter along the bottom edge.
+    ctx.fillStyle = "#f5f4ef";
+    ctx.font = `700 ${pct >= 100 ? 15 : 19}px -apple-system, "Segoe UI", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(pct), FAVICON_SIZE / 2, 13);
+
+    ctx.fillStyle = "#3e3e3a";
+    ctx.fillRect(4, 24, 24, 4);
+    ctx.fillStyle = color;
+    ctx.fillRect(4, 24, Math.max(2, Math.round((24 * Math.min(pct, 100)) / 100)), 4);
+
+    return canvas.toDataURL("image/png");
+  }
+
+  let faviconShown = null; // percent currently drawn, so we only redraw on change
+
+  function applyFavicon() {
+    const mode = state.settings.tabIndicator ?? "title";
+    const pct = mode === "favicon" || mode === "both" ? tabPercent() : null;
+    const links = [...document.querySelectorAll('link[rel~="icon"]')];
+
+    if (pct == null) {
+      if (faviconShown == null) return;
+      for (const link of links) {
+        if (link.dataset.claudemeterAdded) link.remove();
+        else if (link.dataset.claudemeterOriginal != null) link.href = link.dataset.claudemeterOriginal;
+        delete link.dataset.claudemeterOriginal;
+      }
+      faviconShown = null;
+      return;
+    }
+
+    const untouched = links.filter((link) => link.dataset.claudemeterOriginal == null && !link.dataset.claudemeterAdded);
+    if (pct === faviconShown && untouched.length === 0 && links.length > 0) return;
+
+    let href;
+    try {
+      href = drawFavicon(pct);
+    } catch (err) {
+      console.warn(LOG_PREFIX, "could not draw favicon", err);
+      return;
+    }
+
+    if (links.length === 0) {
+      const link = el("link", { rel: "icon", type: "image/png" });
+      link.dataset.claudemeterAdded = "1";
+      document.head.append(link);
+      links.push(link);
+    }
+    for (const link of links) {
+      if (!link.dataset.claudemeterAdded && link.dataset.claudemeterOriginal == null) {
+        link.dataset.claudemeterOriginal = link.getAttribute("href") ?? "";
+      }
+      link.href = href;
+    }
+    faviconShown = pct;
+  }
+
+  function updateTabIndicator() {
+    applyTabTitle();
+    applyFavicon();
+  }
+
   // -------------------------------------------------------------- limit hits --
 
   function limitHitsLine() {
@@ -660,6 +757,7 @@
     updateModelHint();
     updateLongContextNudge();
     renderBanners();
+    updateTabIndicator();
   }
 
   /** Cheap poll for things the DOM won't tell us about (draft cleared after send, SPA navigation). */
@@ -736,6 +834,12 @@
     render();
 
     setInterval(tick, REPOSITION_MS);
+    // claude.ai rewrites <title> (and occasionally its icon links) on every navigation.
+    new MutationObserver(updateTabIndicator).observe(document.head, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
     window.addEventListener("resize", positionDock);
     // Keep "resets in" / "updated X ago" honest while the tab sits open.
     setInterval(render, 30_000);

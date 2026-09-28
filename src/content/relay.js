@@ -18,7 +18,10 @@ window.addEventListener(EVENT_NAME, (event) => {
 
 /** claude.ai titles a chat tab "<conversation name> - Claude"; a bare "Claude" means it isn't named yet. */
 function conversationTitle() {
-  const title = document.title.replace(/\s+[-\u2013|]\s+Claude\s*$/, "").trim();
+  const title = document.title
+    .replace(/^\[\d{1,3}%\]\s*/, "") // ClaudeMeter's own tab-title indicator (page-ui.js)
+    .replace(/\s+[-\u2013|]\s+Claude\s*$/, "")
+    .trim();
   return title && title !== "Claude" ? title.slice(0, 120) : null;
 }
 
