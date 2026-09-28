@@ -45,6 +45,9 @@ numbers are in front of you while you type:
 - **Per-message cost** — ClaudeMeter reads your usage right before a message goes out
   and again when the reply finishes streaming, then shows the difference next to the
   pill ("Last message: 3% of session"). The popup shows the most recent one too.
+- **Per-conversation totals** — those per-message costs are summed per chat. The pill
+  panel shows the running total for the chat you're in, and the popup ranks your
+  **most expensive chats** with a link back to each.
 
 Everything is rendered inside a shadow root (claude.ai's DOM and styles are never
 modified) and each piece can be switched off in Options.
@@ -114,6 +117,7 @@ claudemeter/
 │   │   ├── storage.js                 # chrome.storage.local schema + helpers
 │   │   ├── time-format.js             # relative-time / duration formatting helpers
 │   │   ├── message-cost.js            # before/after usage delta for one message
+│   │   ├── conversation-costs.js      # per-chat totals + ranking, derived from the message log
 │   │   ├── usage-api.js               # org discovery + usage fetch + typed errors
 │   │   └── normalize-usage.js         # raw usage response -> UsageSnapshot
 │   └── icons/                         # toolbar/store icon set (16/32/48/128)
@@ -165,6 +169,7 @@ MessageCost = {
   id: string,                  // request id assigned by the page hook
   at: number,                  // epoch ms the reply finished
   conversationId: string | null,
+  title: string | null,        // chat name from the tab title when the reply finished
   model: string | null,        // as sent in the completion request, when readable
   session: number | null,      // session % points this message used; null if the window reset mid-reply
   weekly: Array<{ label: string, delta: number }>,
@@ -172,6 +177,9 @@ MessageCost = {
   shared: boolean,             // another reply was streaming at the same time
 }
 ```
+
+Per-conversation totals aren't stored — `src/lib/conversation-costs.js` derives them
+from `messageLog` on demand, so they only cover the messages still in that log.
  Raw request/response captures (`__debug_captures`, last 20) are only
 written when Developer mode is on, from Options.
 

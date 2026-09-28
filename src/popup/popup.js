@@ -1,6 +1,7 @@
 import { getAll, onStorageChanged } from "../lib/storage.js";
 import { timeAgo, formatDuration } from "../lib/time-format.js";
 import { formatCost } from "../lib/message-cost.js";
+import { rankConversations } from "../lib/conversation-costs.js";
 
 const emptyState = document.getElementById("emptyState");
 const loadingState = document.getElementById("loadingState");
@@ -14,6 +15,8 @@ const sessionPct = document.getElementById("sessionPct");
 const sessionFill = document.getElementById("sessionFill");
 const sessionResets = document.getElementById("sessionResets");
 const lastMessageEl = document.getElementById("lastMessage");
+const topChats = document.getElementById("topChats");
+const topChatsList = document.getElementById("topChatsList");
 const weeklyList = document.getElementById("weeklyList");
 const weeklyRowTemplate = document.getElementById("weeklyRowTemplate");
 
@@ -41,6 +44,30 @@ function renderLastMessage(messageLog) {
   if (!last) return;
   const approx = last.shared ? "about " : "";
   lastMessageEl.textContent = `Last message: ${approx}${formatCost(last.session)} of session · ${timeAgo(last.at)}`;
+}
+
+function renderTopChats(messageLog) {
+  const ranked = rankConversations(messageLog, { limit: 5 });
+  topChats.hidden = ranked.length === 0;
+
+  topChatsList.replaceChildren(
+    ...ranked.map((chat) => {
+      const link = document.createElement("a");
+      link.href = `https://claude.ai/chat/${chat.conversationId}`;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = chat.title ?? "Untitled chat";
+      link.title = `Last message ${timeAgo(chat.lastAt)}`;
+
+      const cost = document.createElement("span");
+      cost.className = "chat-cost";
+      cost.textContent = `${chat.approx ? "~" : ""}${chat.session}% · ${chat.messages} msg${chat.messages === 1 ? "" : "s"}`;
+
+      const item = document.createElement("li");
+      item.append(link, cost);
+      return item;
+    })
+  );
 }
 
 function render(state) {
@@ -77,6 +104,7 @@ function render(state) {
     sessionResets.textContent = "";
   }
   renderLastMessage(settings.messageCost ? messageLog : []);
+  renderTopChats(settings.messageCost ? messageLog : []);
 
   weeklyList.innerHTML = "";
   if (latestSnapshot.weekly.length === 0) {

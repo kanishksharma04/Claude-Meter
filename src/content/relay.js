@@ -16,11 +16,18 @@ window.addEventListener(EVENT_NAME, (event) => {
   });
 });
 
+/** claude.ai titles a chat tab "<conversation name> - Claude"; a bare "Claude" means it isn't named yet. */
+function conversationTitle() {
+  const title = document.title.replace(/\s+[-\u2013|]\s+Claude\s*$/, "").trim();
+  return title && title !== "Claude" ? title.slice(0, 120) : null;
+}
+
 window.addEventListener(CHAT_EVENT_NAME, (event) => {
   const chatEvent = event.detail;
   if (!chatEvent?.kind) return;
 
-  chrome.runtime.sendMessage({ type: "CLAUDEMETER_CHAT_EVENT", event: chatEvent }).catch((err) => {
+  const message = { type: "CLAUDEMETER_CHAT_EVENT", event: { ...chatEvent, title: conversationTitle() } };
+  chrome.runtime.sendMessage(message).catch((err) => {
     console.warn(LOG_PREFIX, "failed to relay chat event to background", err);
   });
 });

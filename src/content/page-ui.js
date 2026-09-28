@@ -389,6 +389,7 @@
       ),
       ...bucketsOf(snapshot).map(renderBucket),
       lastMessageLine(),
+      conversationLine(),
       el("div", { class: "panel-foot", text: `Updated ${timeAgo(snapshot?.fetchedAt)}` })
     );
   }
@@ -405,6 +406,20 @@
       .filter((w) => w.delta > 0 && entry.session != null)
       .map((w) => `${w.label} week +${w.delta}%`);
     return el("div", { class: "sub", text: [`Last message here: ${label}`, ...extras].join(" · ") });
+  }
+
+  /** Mirrors conversationTotal() in src/lib/conversation-costs.js for the chat on screen. */
+  function conversationLine() {
+    const conversationId = currentConversationId();
+    const entries = conversationId ? state.messageLog.filter((m) => m.conversationId === conversationId) : [];
+    if (entries.length < 2) return null; // one message is already covered by the "last message" line
+
+    const total = entries.reduce((sum, m) => sum + (m.session ?? 0), 0);
+    const approx = entries.some((m) => m.session == null || m.shared) ? "~" : "";
+    return el("div", {
+      class: "sub",
+      text: `This chat so far: ${approx}${total}% of a session across ${entries.length} messages`,
+    });
   }
 
   function renderCostChip() {

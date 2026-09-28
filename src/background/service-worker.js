@@ -131,6 +131,7 @@ async function recordMessageEnd(event) {
     id: event.requestId,
     at: Date.now(),
     conversationId: pending.conversationId,
+    title: event.title ?? null,
     model: pending.model,
     session: cost.session,
     weekly: cost.weekly,

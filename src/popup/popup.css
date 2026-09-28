@@ -188,6 +188,46 @@ hr {
   text-decoration: underline;
 }
 
+.header-note {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 11px;
+}
+
+.chat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.chat-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 7px;
+}
+
+.chat-list a {
+  color: var(--text);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-list a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.chat-cost {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .state {
   text-align: center;
   padding: 20px 8px;
