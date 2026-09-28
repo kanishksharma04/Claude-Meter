@@ -10,6 +10,7 @@ export const DEFAULT_SETTINGS = {
   notifyThresholds: [80, 95],
   theme: "auto",
   developerMode: false,
+  inlinePill: true, // usage pill next to claude.ai's composer (src/content/page-ui.js)
 };
 
 export const DEFAULT_STATE = {

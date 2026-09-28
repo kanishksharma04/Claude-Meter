@@ -36,6 +36,12 @@
       "js": ["src/content/relay.js"],
       "run_at": "document_start",
       "all_frames": false
+    },
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["src/content/page-ui.js"],
+      "run_at": "document_idle",
+      "all_frames": false
     }
   ],
   "permissions": ["storage", "alarms", "notifications"],

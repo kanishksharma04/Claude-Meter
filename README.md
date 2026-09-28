@@ -31,6 +31,18 @@ icon and you immediately see:
 Data auto-refreshes in the background on a configurable interval and every time you
 open the popup, so the numbers stay current without you doing anything.
 
+### On claude.ai itself
+
+A content script also draws a small ClaudeMeter layer on top of claude.ai, so the
+numbers are in front of you while you type:
+
+- **Inline usage pill** — session % and your highest weekly % float just above the
+  composer, colour-coded like the popup bars. Click it for every bucket and its reset
+  time; no toolbar click needed.
+
+Everything is rendered inside a shadow root (claude.ai's DOM and styles are never
+modified) and each piece can be switched off in Options.
+
 ## How it works (and its limits)
 
 There's no documented, public API for this data — claude.ai's own frontend calls an
@@ -87,7 +99,8 @@ claudemeter/
 │   ├── background/service-worker.js   # active fetch on alarm/request, badge, notifications
 │   ├── content/
 │   │   ├── inject-hook.js             # MAIN world: patches fetch/XHR, dispatches captures
-│   │   └── relay.js                   # ISOLATED world: forwards captures to the background worker
+│   │   ├── relay.js                   # ISOLATED world: forwards captures to the background worker
+│   │   └── page-ui.js                 # ISOLATED world: in-page UI (usage pill) in a shadow root
 │   ├── popup/                         # toolbar popup — session/weekly bars, refresh, states
 │   ├── options/                       # refresh interval, notifications, theme, developer mode
 │   ├── debug/                         # debug.html — raw capture viewer (developer mode only)
@@ -137,7 +150,7 @@ UsageSnapshot = {
 Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `history`
 (last 50 snapshots) for potential future charting. Settings live under `settings`
 (`refreshIntervalMinutes`, `notificationsEnabled`, `notifyThresholds`, `theme`,
-`developerMode`). Raw request/response captures (`__debug_captures`, last 20) are only
+`developerMode`, `inlinePill`). Raw request/response captures (`__debug_captures`, last 20) are only
 written when Developer mode is on, from Options.
 
 ## Refresh behavior
@@ -176,6 +189,7 @@ written when Developer mode is on, from Options.
 - **Notifications** — desktop notification when session or weekly usage crosses 80%
   and/or 95% (configurable), only fires on the transition, not on every fetch above
   threshold.
+- **Usage pill next to the composer** — show/hide the in-page pill on claude.ai.
 - **Theme** — Auto (follows `prefers-color-scheme`), Light, or Dark.
 - **Developer mode** — keeps raw request/response captures for the debug page
   (`src/debug/debug.html`), off by default.

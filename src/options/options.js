@@ -5,6 +5,7 @@ const refreshIntervalValue = document.getElementById("refreshIntervalValue");
 const notificationsToggle = document.getElementById("notificationsToggle");
 const thresholdsRow = document.getElementById("thresholdsRow");
 const thresholdChecks = [...document.querySelectorAll(".threshold-check")];
+const inlinePillToggle = document.getElementById("inlinePillToggle");
 const themeSelect = document.getElementById("themeSelect");
 const developerModeToggle = document.getElementById("developerModeToggle");
 const clearDataBtn = document.getElementById("clearDataBtn");
@@ -31,6 +32,8 @@ async function init() {
     check.checked = settings.notifyThresholds.includes(Number(check.value));
   }
 
+  inlinePillToggle.checked = settings.inlinePill;
+
   themeSelect.value = settings.theme;
   applyTheme(settings.theme);
 
@@ -56,6 +59,10 @@ for (const check of thresholdChecks) {
     await setSettings({ notifyThresholds: thresholds });
   });
 }
+
+inlinePillToggle.addEventListener("change", async () => {
+  await setSettings({ inlinePill: inlinePillToggle.checked });
+});
 
 themeSelect.addEventListener("change", async () => {
   applyTheme(themeSelect.value);
