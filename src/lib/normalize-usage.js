@@ -24,7 +24,10 @@ const PLAN_FIELD_CANDIDATES = ["rate_limit_tier", "plan_tier", "plan", "subscrip
 
 function toPercent(rawValue) {
   if (typeof rawValue !== "number" || Number.isNaN(rawValue)) return null;
-  const pct = rawValue <= 1 ? rawValue * 100 : rawValue;
+  // Below 1 is read as a 0–1 fraction. Exactly 1 is read as 1%, not 100%: on
+  // the 0–100 scale the endpoint uses today that's an everyday reading, and
+  // calling it "full" would raise a false lockout.
+  const pct = rawValue < 1 ? rawValue * 100 : rawValue;
   return Math.max(0, Math.min(100, Math.round(pct)));
 }
 

@@ -11,6 +11,7 @@ const preSendWarnSelect = document.getElementById("preSendWarnSelect");
 const modelHintSelect = document.getElementById("modelHintSelect");
 const longContextSelect = document.getElementById("longContextSelect");
 const attachmentWarnSelect = document.getElementById("attachmentWarnSelect");
+const lockoutOverlayToggle = document.getElementById("lockoutOverlayToggle");
 const messageCostToggle = document.getElementById("messageCostToggle");
 const themeSelect = document.getElementById("themeSelect");
 const developerModeToggle = document.getElementById("developerModeToggle");
@@ -44,6 +45,7 @@ async function init() {
   modelHintSelect.value = String(settings.modelHintPercent);
   longContextSelect.value = String(settings.longContextTokens);
   attachmentWarnSelect.value = String(settings.attachmentWarnTokens);
+  lockoutOverlayToggle.checked = settings.lockoutOverlay;
   messageCostToggle.checked = settings.messageCost;
 
   themeSelect.value = settings.theme;
@@ -94,6 +96,10 @@ longContextSelect.addEventListener("change", async () => {
 
 attachmentWarnSelect.addEventListener("change", async () => {
   await setSettings({ attachmentWarnTokens: Number(attachmentWarnSelect.value) });
+});
+
+lockoutOverlayToggle.addEventListener("change", async () => {
+  await setSettings({ lockoutOverlay: lockoutOverlayToggle.checked });
 });
 
 messageCostToggle.addEventListener("change", async () => {

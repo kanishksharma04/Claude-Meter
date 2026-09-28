@@ -17,6 +17,11 @@
   const TITLE_PREFIX_PATTERN = /^\[\d{1,3}%\]\s*/;
   const FAVICON_SIZE = 32;
   const SEVERITY_COLORS = { "": "#7a9b6e", warn: "#d9a452", danger: "#c1554a" };
+  // A reading at least this much newer than a logged limit hit, showing the
+  // bucket clearly below full, means the lockout ended early (limits were
+  // reset, plan changed) — stop counting down.
+  const LOCKOUT_OVERRULE_AFTER_MS = 60_000;
+  const LOCKOUT_CLEARLY_BELOW = 90;
   // Rough weights for files we can't read: an image costs about this many
   // tokens whatever its size on disk, and PDFs/office files carry far less
   // text per byte than plain text does.
@@ -279,6 +284,26 @@
     .sub { margin-top: 4px; color: var(--muted); font-size: 11px; }
     .panel-foot { color: var(--muted); font-size: 11px; }
 
+    .lockout {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      width: 100%;
+      padding: 10px 10px 10px 14px;
+      border: 1px solid var(--danger);
+      border-left-width: 3px;
+      border-radius: 12px;
+      background: var(--bg);
+      box-shadow: 0 6px 24px rgb(0 0 0 / 0.28);
+    }
+    .lockout-main { flex: 1; min-width: 0; }
+    .lockout-title { font-weight: 600; font-size: 13px; }
+    .lockout-sub { color: var(--muted); font-size: 11px; margin-top: 2px; }
+    .lockout-count {
+      font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+    }
+    .chip.locked { border-color: var(--danger); color: var(--text); cursor: pointer; font: inherit; }
+
     .banners { display: flex; flex-direction: column; gap: 6px; width: 100%; }
     .banner {
       display: flex;
@@ -313,9 +338,11 @@
   const panel = el("div", { class: "panel", role: "dialog", "aria-label": "ClaudeMeter usage", hidden: true });
   const pill = el("button", { class: "pill", type: "button", "aria-expanded": "false", onclick: togglePanel });
   const costChip = el("span", { class: "chip", hidden: true });
-  const pillRow = el("div", { class: "pill-row" }, costChip, pill);
+  const lockoutChip = el("button", { class: "chip locked", type: "button", hidden: true });
+  const pillRow = el("div", { class: "pill-row" }, lockoutChip, costChip, pill);
   const banners = el("div", { class: "banners", role: "status", "aria-live": "polite" });
-  const dock = el("div", { class: "dock" }, banners, panel, pillRow);
+  const lockoutCard = el("div", { class: "lockout", role: "timer", "aria-label": "Limit reached", hidden: true });
+  const dock = el("div", { class: "dock" }, banners, lockoutCard, panel, pillRow);
   shadow.append(dock);
 
   function mountHost() {
@@ -551,6 +578,120 @@
         )
       )
     );
+  }
+
+  // --------------------------------------------------------- lockout overlay --
+
+  /** Mirrors claimLabel() in src/lib/limit-hits.js. */
+  function claimLabel(claim) {
+    if (typeof claim !== "string" || !claim) return null;
+    if (/^five_hour/i.test(claim)) return "Current session";
+    if (!/^seven_day/i.test(claim)) return null;
+    const suffix = claim.replace(/^seven_day_?/i, "").replace(/_/g, " ").trim();
+    return suffix ? suffix.replace(/\b\w/g, (c) => c.toUpperCase()) : "All models";
+  }
+
+  /** Is the most recent logged limit hit still in force, as far as we can tell? */
+  function activeLimitHit(now) {
+    const hit = state.limitHits.at(-1);
+    if (!hit || hit.resetsAt == null || hit.resetsAt <= now) return null;
+
+    const label = claimLabel(hit.claim);
+    const snapshot = state.snapshot;
+    if (snapshot && snapshot.fetchedAt - hit.lastAt >= LOCKOUT_OVERRULE_AFTER_MS) {
+      const buckets = bucketsOf(snapshot);
+      const relevant = label ? buckets.filter((b) => b.label === label) : buckets;
+      if (relevant.length > 0 && relevant.every((b) => b.percentUsed < LOCKOUT_CLEARLY_BELOW)) return null;
+    }
+    return { label: label ?? "Usage limit", until: hit.resetsAt };
+  }
+
+  /** Locked out until the last of: a logged limit hit, or any bucket the snapshot shows as full. */
+  function currentLockout(now = Date.now()) {
+    const candidates = bucketsOf(state.snapshot)
+      .filter((b) => b.percentUsed >= 100 && b.resetsAt != null && b.resetsAt > now)
+      .map((b) => ({ label: b.label, until: b.resetsAt }));
+    const hit = activeLimitHit(now);
+    if (hit) candidates.push(hit);
+    return candidates.sort((a, b) => b.until - a.until)[0] ?? null;
+  }
+
+  function formatClock(epochMs) {
+    const date = new Date(epochMs);
+    const sameDay = date.toDateString() === new Date().toDateString();
+    return date.toLocaleString([], {
+      ...(sameDay ? {} : { weekday: "short" }),
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+
+  /** "1:12:05" under a day; days-and-hours beyond that, where seconds are just noise. */
+  function formatCountdown(ms) {
+    if (ms >= 24 * 3600e3) return formatDuration(0, ms);
+    const total = Math.max(0, Math.ceil(ms / 1000));
+    const pad = (n) => String(n).padStart(2, "0");
+    const hr = Math.floor(total / 3600);
+    const min = Math.floor((total % 3600) / 60);
+    return hr > 0 ? `${hr}:${pad(min)}:${pad(total % 60)}` : `${min}:${pad(total % 60)}`;
+  }
+
+  let lockoutTimer = null;
+  let lockoutCountEl = null;
+
+  function tickLockout() {
+    const lockout = state.settings.lockoutOverlay !== false ? currentLockout() : null;
+    if (lockout) {
+      if (lockoutCountEl) lockoutCountEl.textContent = formatCountdown(lockout.until - Date.now());
+      return;
+    }
+    // The window just rolled over (or the overlay was switched off): get fresh numbers and redraw.
+    clearInterval(lockoutTimer);
+    lockoutTimer = null;
+    sendToBackground({ type: "CLAUDEMETER_REFRESH" });
+    render();
+  }
+
+  function renderLockout() {
+    const lockout = state.settings.lockoutOverlay !== false ? currentLockout() : null;
+    const key = lockout ? `lockout:${lockout.until}` : null;
+    const collapsed = lockout != null && state.dismissed.has(key);
+
+    lockoutCard.hidden = !lockout || collapsed;
+    lockoutChip.hidden = !collapsed;
+    if (!lockout) return;
+
+    const backAt = formatClock(lockout.until);
+    lockoutChip.textContent = `Back at ${backAt}`;
+    lockoutChip.title = "Limit reached — click for the countdown";
+    lockoutChip.onclick = () => {
+      state.dismissed.delete(key);
+      render();
+    };
+
+    lockoutCountEl = el("div", { class: "lockout-count", text: formatCountdown(lockout.until - Date.now()) });
+    lockoutCard.replaceChildren(
+      el(
+        "div",
+        { class: "lockout-main" },
+        el("div", { class: "lockout-title", text: `Limit reached — back at ${backAt}` }),
+        el("div", { class: "lockout-sub", text: `${lockout.label} resets then. ClaudeMeter will refresh as soon as it does.` })
+      ),
+      lockoutCountEl,
+      el("button", {
+        class: "icon-btn",
+        type: "button",
+        title: "Minimise",
+        "aria-label": "Minimise",
+        text: "\u00d7",
+        onclick: () => {
+          state.dismissed.add(key);
+          render();
+        },
+      })
+    );
+
+    if (!lockoutTimer) lockoutTimer = setInterval(tickLockout, 1000);
   }
 
   // -------------------------------------------------------- attachment weight --
@@ -857,6 +998,7 @@
     dock.dataset.theme = effectiveTheme();
     renderPill();
     renderCostChip();
+    renderLockout();
     renderPanel();
     updatePreSendWarning();
     updateModelHint();

@@ -63,6 +63,10 @@ numbers are in front of you while you type:
   reply as the one that used up your allowance, ClaudeMeter logs it: when, which limit,
   when it resets, and how many messages you sent into the lockout. The popup and the
   pill panel show "Limit reached 3× in the last 7 days".
+- **Lockout countdown overlay** — while a limit is exhausted (a logged limit hit, or a
+  bucket at 100%), a card above the composer says "Limit reached — back at 4:30 PM"
+  with a timer that ticks every second. Minimise it to a small "Back at 4:30 PM" chip;
+  when the window rolls over it refreshes your usage and disappears.
 - **Long-context nudge** — every message re-sends the whole thread, so long chats burn
   faster. ClaudeMeter estimates the active thread's size when a chat loads and after
   each reply; past a threshold (default ~40k tokens) it suggests a new chat. The
@@ -130,7 +134,7 @@ claudemeter/
 │   ├── content/
 │   │   ├── inject-hook.js             # MAIN world: patches fetch/XHR, dispatches captures + chat events
 │   │   ├── relay.js                   # ISOLATED world: forwards both to the background worker
-│   │   └── page-ui.js                 # ISOLATED world: in-page UI (pill, banners) in a shadow root
+│   │   └── page-ui.js                 # ISOLATED world: in-page UI (pill, banners, lockout timer) in a shadow root
 │   ├── popup/                         # toolbar popup — session/weekly bars, refresh, states
 │   ├── options/                       # refresh interval, notifications, theme, developer mode
 │   ├── debug/                         # debug.html — raw capture viewer (developer mode only)
@@ -185,7 +189,7 @@ Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `his
 (last 50 snapshots) for potential future charting. Settings live under `settings`
 (`refreshIntervalMinutes`, `notificationsEnabled`, `notifyThresholds`, `theme`,
 `developerMode`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
-`longContextTokens`, `attachmentWarnTokens`, `messageCost`). The current model-switch hint, if any, is kept
+`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300):
 
@@ -287,6 +291,7 @@ written when Developer mode is on, from Options.
 - **Model-switch hint** — Off, or 30 / 50 / 70 / 90%.
 - **Long-chat nudge** — Off, or ~20k / 40k / 80k / 120k tokens.
 - **Attachment weight warning** — Off, or ~10k / 25k / 50k / 100k estimated tokens.
+- **Lockout countdown** — show/hide the "back at …" timer while a limit is exhausted.
 - **Measure what each message costs** — on by default; turning it off also stops the
   two extra usage reads around each message.
 - **Theme** — Auto (follows `prefers-color-scheme`), Light, or Dark.

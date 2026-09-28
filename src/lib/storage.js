@@ -19,6 +19,7 @@ export const DEFAULT_SETTINGS = {
   modelHintPercent: 50, // suggest a lighter model once a model-specific weekly bucket is this full; 0 = off
   longContextTokens: 40000, // nudge towards a new chat once the thread is about this long; 0 = off
   attachmentWarnTokens: 25000, // warn when a draft's attachments (or project knowledge) are about this heavy; 0 = off
+  lockoutOverlay: true, // live "back at 4:30 PM" countdown on claude.ai while a limit is exhausted
   messageCost: true, // measure session % before/after each reply (two extra usage fetches per message)
 };
 
