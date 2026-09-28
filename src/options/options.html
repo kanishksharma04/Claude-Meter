@@ -65,6 +65,22 @@
       </label>
       <label class="row">
         <span>
+          Model-switch hint
+          <small>
+            Suggests a lighter model when a model-specific weekly limit (e.g. Opus) is your fastest-filling one and
+            this full.
+          </small>
+        </span>
+        <select id="modelHintSelect">
+          <option value="0">Off</option>
+          <option value="30">At 30%</option>
+          <option value="50">At 50%</option>
+          <option value="70">At 70%</option>
+          <option value="90">At 90%</option>
+        </select>
+      </label>
+      <label class="row">
+        <span>
           Long-chat nudge
           <small>Suggests starting a new chat once the thread is roughly this long.</small>
         </span>

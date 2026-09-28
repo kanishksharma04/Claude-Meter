@@ -8,10 +8,12 @@ import {
   setPendingMessage,
   takePendingMessage,
   pushMessageCost,
+  setModelHint,
 } from "../lib/storage.js";
 import { fetchUsageSnapshot, UsageApiError } from "../lib/usage-api.js";
 import { normalizeUsageResponse } from "../lib/normalize-usage.js";
 import { computeMessageCost } from "../lib/message-cost.js";
+import { modelSwitchHint } from "../lib/burn-rate.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
 const ALARM_NAME = "claudemeter-refresh-check";
@@ -65,8 +67,7 @@ async function handlePassiveCapture(capture, sender) {
       const orgCache = await getOrgCache();
       const snapshot = normalizeUsageResponse(capture.responseBody, { orgMeta: orgCache?.raw });
       if (snapshot) {
-        await setLatestSnapshot(snapshot);
-        await updateBadge(snapshot);
+        await applySnapshot(snapshot);
         console.log(LOG_PREFIX, "updated snapshot from passive capture");
       }
     }
@@ -147,8 +148,7 @@ async function refreshUsage() {
   try {
     const { latestSnapshot: previous } = await getAll();
     const snapshot = await fetchUsageSnapshot();
-    await setLatestSnapshot(snapshot);
-    await updateBadge(snapshot);
+    await applySnapshot(snapshot);
     await maybeNotify(previous, snapshot);
     console.log(LOG_PREFIX, "refreshed usage snapshot");
     return { ok: true, snapshot };
@@ -159,6 +159,22 @@ async function refreshUsage() {
     console.warn(LOG_PREFIX, "refresh failed:", code, message);
     return { ok: false, error: { code, message } };
   }
+}
+
+/** Everything that has to happen whenever a new reading lands, whichever way it arrived. */
+async function applySnapshot(snapshot) {
+  await setLatestSnapshot(snapshot);
+  await updateBadge(snapshot);
+  await updateModelHint();
+}
+
+// ------------------------------------------------------------- model hint --
+
+async function updateModelHint() {
+  const { history, settings } = await getAll();
+  const hint =
+    settings.modelHintPercent > 0 ? modelSwitchHint(history, { minPercent: settings.modelHintPercent }) : null;
+  await setModelHint(hint);
 }
 
 // ------------------------------------------------------------------ badge --
@@ -234,5 +250,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     const before = changes.settings.oldValue?.refreshIntervalMinutes;
     const after = changes.settings.newValue?.refreshIntervalMinutes;
     if (before !== after) ensureAlarm();
+
+    if (changes.settings.oldValue?.modelHintPercent !== changes.settings.newValue?.modelHintPercent) {
+      updateModelHint();
+    }
   }
 });

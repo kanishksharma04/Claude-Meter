@@ -14,6 +14,7 @@ export const DEFAULT_SETTINGS = {
   developerMode: false,
   inlinePill: true, // usage pill next to claude.ai's composer (src/content/page-ui.js)
   preSendWarnPercent: 80, // warn above the composer while drafting at/above this %; 0 = off
+  modelHintPercent: 50, // suggest a lighter model once a model-specific weekly bucket is this full; 0 = off
   longContextTokens: 40000, // nudge towards a new chat once the thread is about this long; 0 = off
   messageCost: true, // measure session % before/after each reply (two extra usage fetches per message)
 };
@@ -25,6 +26,7 @@ export const DEFAULT_STATE = {
   __debug_captures: [],
   orgCache: null,
   lastError: null,
+  modelHint: null, // see modelSwitchHint() in lib/burn-rate.js
   messageLog: [], // per-message cost entries, oldest first (see lib/message-cost.js)
   pendingMessages: {}, // requestId -> { before snapshot, ... } for replies still streaming
 };
@@ -38,6 +40,7 @@ export async function getAll() {
     __debug_captures: stored.__debug_captures ?? DEFAULT_STATE.__debug_captures,
     orgCache: stored.orgCache ?? DEFAULT_STATE.orgCache,
     lastError: stored.lastError ?? DEFAULT_STATE.lastError,
+    modelHint: stored.modelHint ?? DEFAULT_STATE.modelHint,
     messageLog: stored.messageLog ?? DEFAULT_STATE.messageLog,
     pendingMessages: stored.pendingMessages ?? DEFAULT_STATE.pendingMessages,
   };
@@ -83,6 +86,14 @@ export async function pushDebugCapture(capture) {
   return next;
 }
 
+/** Writes only when the hint actually changed, so open tabs don't re-render on every refresh. */
+export async function setModelHint(hint) {
+  const { modelHint = null } = await chrome.storage.local.get("modelHint");
+  if (JSON.stringify(modelHint) !== JSON.stringify(hint)) {
+    await chrome.storage.local.set({ modelHint: hint });
+  }
+}
+
 /** Remember the "before" reading for a message whose reply is still streaming. */
 export async function setPendingMessage(requestId, pending) {
   const { pendingMessages } = await chrome.storage.local.get("pendingMessages");
@@ -116,6 +127,7 @@ export async function clearAllData() {
     __debug_captures: [],
     orgCache: null,
     lastError: null,
+    modelHint: null,
     messageLog: [],
     pendingMessages: {},
   });

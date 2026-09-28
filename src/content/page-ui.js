@@ -20,6 +20,13 @@
   // claude.ai's composer is a ProseMirror contenteditable inside a <fieldset>.
   // None of this is a stable contract, so try a few shapes and fall back to a
   // corner of the viewport when nothing matches.
+  // The model picker's button text ("Opus 4.5") — used until a message has
+  // been sent from this tab and the request itself tells us the model.
+  const MODEL_PICKER_SELECTORS = [
+    '[data-testid="model-selector-dropdown"]',
+    'button[aria-haspopup="menu"][data-testid*="model"]',
+  ];
+
   const COMPOSER_SELECTORS = [
     '[data-testid="chat-input"]',
     'div.ProseMirror[contenteditable="true"]',
@@ -37,6 +44,9 @@
     costFlash: null, // { entry, until } — the just-measured message, shown briefly next to the pill
     conversationId: null, // chat currently on screen, tracked across SPA navigation
     threads: new Map(), // conversationId -> { messages, chars } for the active thread
+    modelHint: null, // computed by the background worker (lib/burn-rate.js)
+    sentModel: null, // model id from the last completion request made in this tab
+    pickerModel: "", // text of claude.ai's model picker
     dismissed: new Set(), // banner keys the user closed in this tab
   };
 
@@ -461,6 +471,7 @@
     onThreadEvent(chat);
 
     if (chat.kind === "completion_start") {
+      if (chat.model) state.sentModel = chat.model;
       state.measuring.add(chat.requestId);
     } else if (chat.kind === "completion_end" && !chat.ok) {
       state.measuring.delete(chat.requestId);
@@ -561,6 +572,47 @@
     }
   }
 
+  // -------------------------------------------------------- model-switch hint --
+
+  function readModelPicker() {
+    for (const selector of MODEL_PICKER_SELECTORS) {
+      const text = document.querySelector(selector)?.textContent?.trim();
+      if (text) return text.slice(0, 60);
+    }
+    return "";
+  }
+
+  /** Only nudge when we can tell the model in use is the one whose bucket is under pressure. */
+  function usingModel(label) {
+    // The picker reflects a switch immediately; the last request only knows what was sent.
+    const current = state.pickerModel || state.sentModel || "";
+    return current.toLowerCase().includes(String(label).toLowerCase());
+  }
+
+  function updateModelHint() {
+    const hint = state.modelHint;
+    if (!hint || !usingModel(hint.label)) return setBanner("model", null);
+
+    const pace =
+      hint.basis === "rate"
+        ? `It's your fastest-filling limit (+${hint.ratePerHour}%/hr` +
+          (hint.hoursLeft != null ? `, about ${formatDuration(0, hint.hoursLeft * 3600e3)} left at this pace).` : ").")
+        : "It's your fullest weekly limit.";
+
+    const key = windowKey("model", hint);
+    // Same bucket as the pre-send warning? This banner says more, so it replaces it.
+    if (!state.dismissed.has(key) && bannerSpecs.get("presend")?.bucketLabel === hint.label) {
+      bannerSpecs.delete("presend");
+    }
+
+    setBanner("model", {
+      key,
+      tone: severityClass(hint.percentUsed),
+      lead: `${hint.label} weekly limit at ${hint.percentUsed}%.`,
+      text: `${pace} ${hint.suggest} count against the larger all-models limit instead.`,
+    });
+  }
+
   // -------------------------------------------------------- pre-send warning --
 
   /** While a draft is in the composer, flag the bucket closest to its limit. */
@@ -575,6 +627,7 @@
     const isSession = over === state.snapshot.session;
     const resetsIn = over.resetsAt != null ? formatDuration(Date.now(), over.resetsAt) : null;
     setBanner("presend", {
+      bucketLabel: over.label,
       key: windowKey("presend", over),
       tone: severityClass(over.percentUsed) || "warn",
       lead: isSession ? `Session at ${over.percentUsed}%.` : `${over.label} weekly limit at ${over.percentUsed}%.`,
@@ -590,6 +643,7 @@
     renderCostChip();
     renderPanel();
     updatePreSendWarning();
+    updateModelHint();
     updateLongContextNudge();
     renderBanners();
   }
@@ -599,9 +653,15 @@
     positionDock();
     const drafting = hasDraft();
     const conversationId = currentConversationId();
-    if (drafting !== state.drafting || conversationId !== state.conversationId) {
+    const pickerModel = readModelPicker();
+    if (
+      drafting !== state.drafting ||
+      conversationId !== state.conversationId ||
+      pickerModel !== state.pickerModel
+    ) {
       state.drafting = drafting;
       state.conversationId = conversationId;
+      state.pickerModel = pickerModel;
       render();
     }
   }
@@ -624,6 +684,7 @@
     latestSnapshot: ["snapshot", null],
     settings: ["settings", {}],
     messageLog: ["messageLog", []],
+    modelHint: ["modelHint", null],
   };
 
   function applyStored(key, value) {

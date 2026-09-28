@@ -48,6 +48,10 @@ numbers are in front of you while you type:
 - **Per-conversation totals** — those per-message costs are summed per chat. The pill
   panel shows the running total for the chat you're in, and the popup ranks your
   **most expensive chats** with a link back to each.
+- **Model-switch hint** — if a model-specific weekly limit (e.g. Opus) is your
+  fastest-filling one and past a threshold (default 50%), and that's the model you
+  have selected, a banner suggests Sonnet or Haiku, which count against the larger
+  all-models limit. It shows the measured pace ("+4%/hr, about 5 hr left").
 - **Long-context nudge** — every message re-sends the whole thread, so long chats burn
   faster. ClaudeMeter estimates the active thread's size when a chat loads and after
   each reply; past a threshold (default ~40k tokens) it suggests a new chat. The
@@ -122,6 +126,7 @@ claudemeter/
 │   │   ├── time-format.js             # relative-time / duration formatting helpers
 │   │   ├── message-cost.js            # before/after usage delta for one message
 │   │   ├── conversation-costs.js      # per-chat totals + ranking, derived from the message log
+│   │   ├── burn-rate.js               # weekly %/hr from history + the model-switch hint
 │   │   ├── usage-api.js               # org discovery + usage fetch + typed errors
 │   │   └── normalize-usage.js         # raw usage response -> UsageSnapshot
 │   └── icons/                         # toolbar/store icon set (16/32/48/128)
@@ -165,8 +170,9 @@ UsageSnapshot = {
 Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `history`
 (last 50 snapshots) for potential future charting. Settings live under `settings`
 (`refreshIntervalMinutes`, `notificationsEnabled`, `notifyThresholds`, `theme`,
-`developerMode`, `inlinePill`, `preSendWarnPercent`, `longContextTokens`,
-`messageCost`). Per-message costs
+`developerMode`, `inlinePill`, `preSendWarnPercent`, `modelHintPercent`,
+`longContextTokens`, `messageCost`). The current model-switch hint, if any, is kept
+under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300):
 
 ```js
@@ -221,6 +227,9 @@ written when Developer mode is on, from Options.
   message reads as "under 1%", and anything else using your plan in the same seconds
   (another tab, Claude Code, another device) is counted in the same delta. Only
   messages sent through `fetch` in a tab with the extension loaded are measured.
+- The model-switch hint needs about ten minutes of history to measure a pace; before
+  that it falls back to "fullest weekly limit". It only appears when ClaudeMeter can
+  tell which model you're on (from the model picker or the last message sent).
 - Thread length is a character count divided by four, not a real token count. It
   covers message text and pasted/extracted attachments on the active branch; images,
   PDFs, project knowledge, and tool results aren't counted, so treat it as a floor.
@@ -236,6 +245,7 @@ written when Developer mode is on, from Options.
 - **Usage pill next to the composer** — show/hide the in-page pill on claude.ai.
 - **Warn before sending** — Off, or 50 / 70 / 80 / 90 / 95%; the usage level at which
   the banner above the composer appears while you type.
+- **Model-switch hint** — Off, or 30 / 50 / 70 / 90%.
 - **Long-chat nudge** — Off, or ~20k / 40k / 80k / 120k tokens.
 - **Measure what each message costs** — on by default; turning it off also stops the
   two extra usage reads around each message.
