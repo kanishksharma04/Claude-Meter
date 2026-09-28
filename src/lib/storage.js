@@ -18,6 +18,7 @@ export const DEFAULT_SETTINGS = {
   preSendWarnPercent: 80, // warn above the composer while drafting at/above this %; 0 = off
   modelHintPercent: 50, // suggest a lighter model once a model-specific weekly bucket is this full; 0 = off
   longContextTokens: 40000, // nudge towards a new chat once the thread is about this long; 0 = off
+  attachmentWarnTokens: 25000, // warn when a draft's attachments (or project knowledge) are about this heavy; 0 = off
   messageCost: true, // measure session % before/after each reply (two extra usage fetches per message)
 };
 

@@ -10,6 +10,7 @@ const tabIndicatorSelect = document.getElementById("tabIndicatorSelect");
 const preSendWarnSelect = document.getElementById("preSendWarnSelect");
 const modelHintSelect = document.getElementById("modelHintSelect");
 const longContextSelect = document.getElementById("longContextSelect");
+const attachmentWarnSelect = document.getElementById("attachmentWarnSelect");
 const messageCostToggle = document.getElementById("messageCostToggle");
 const themeSelect = document.getElementById("themeSelect");
 const developerModeToggle = document.getElementById("developerModeToggle");
@@ -42,6 +43,7 @@ async function init() {
   preSendWarnSelect.value = String(settings.preSendWarnPercent);
   modelHintSelect.value = String(settings.modelHintPercent);
   longContextSelect.value = String(settings.longContextTokens);
+  attachmentWarnSelect.value = String(settings.attachmentWarnTokens);
   messageCostToggle.checked = settings.messageCost;
 
   themeSelect.value = settings.theme;
@@ -88,6 +90,10 @@ modelHintSelect.addEventListener("change", async () => {
 
 longContextSelect.addEventListener("change", async () => {
   await setSettings({ longContextTokens: Number(longContextSelect.value) });
+});
+
+attachmentWarnSelect.addEventListener("change", async () => {
+  await setSettings({ attachmentWarnTokens: Number(attachmentWarnSelect.value) });
 });
 
 messageCostToggle.addEventListener("change", async () => {

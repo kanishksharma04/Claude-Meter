@@ -17,6 +17,15 @@
   const TITLE_PREFIX_PATTERN = /^\[\d{1,3}%\]\s*/;
   const FAVICON_SIZE = 32;
   const SEVERITY_COLORS = { "": "#7a9b6e", warn: "#d9a452", danger: "#c1554a" };
+  // Rough weights for files we can't read: an image costs about this many
+  // tokens whatever its size on disk, and PDFs/office files carry far less
+  // text per byte than plain text does.
+  const IMAGE_TOKENS = 1500;
+  const BINARY_BYTES_PER_TOKEN = 20;
+  const TEXT_FILE_PATTERN =
+    /\.(txt|md|csv|tsv|json|xml|ya?ml|html?|css|jsx?|tsx?|py|rb|go|rs|java|kt|swift|c|h|cpp|cs|php|sql|sh|log|tex)$/i;
+  // Pasting more than this much text is treated like attaching a file (claude.ai does the same).
+  const PASTE_WEIGHT_CHARS = 4000;
   // Rough English-text ratio. Good enough to tell a 5k-token chat from a 50k one.
   const CHARS_PER_TOKEN = 4;
   const STALE_AFTER_MS = 60_000;
@@ -51,6 +60,9 @@
     threads: new Map(), // conversationId -> { messages, chars } for the active thread
     modelHint: null, // computed by the background worker (lib/burn-rate.js)
     limitHits: [], // "limit reached" log (lib/limit-hits.js)
+    pendingFiles: [], // { name, size, tokens } added to the draft since the last message was sent
+    projects: new Map(), // projectId -> { docs, chars } of project knowledge
+    threadProjects: new Map(), // conversationId -> projectId
     sentModel: null, // model id from the last completion request made in this tab
     pickerModel: "", // text of claude.ai's model picker
     dismissed: new Set(), // banner keys the user closed in this tab
@@ -137,6 +149,11 @@
 
   function currentConversationId() {
     return /\/chat\/([0-9a-f-]{36})/i.exec(location.pathname)?.[1] ?? null;
+  }
+
+  function formatBytes(bytes) {
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   }
 
   function formatTokens(tokens) {
@@ -478,6 +495,7 @@
     onThreadEvent(chat);
 
     if (chat.kind === "completion_start") {
+      state.pendingFiles = []; // whatever was attached has now been sent
       if (chat.model) state.sentModel = chat.model;
       state.measuring.add(chat.requestId);
     } else if (chat.kind === "completion_end" && !chat.ok) {
@@ -533,6 +551,90 @@
         )
       )
     );
+  }
+
+  // -------------------------------------------------------- attachment weight --
+
+  function estimateFileTokens(file) {
+    const type = file.type ?? "";
+    if (type.startsWith("image/")) return IMAGE_TOKENS;
+    const isText = type.startsWith("text/") || /json|xml|javascript/.test(type) || TEXT_FILE_PATTERN.test(file.name ?? "");
+    return Math.round(file.size / (isText ? CHARS_PER_TOKEN : BINARY_BYTES_PER_TOKEN));
+  }
+
+  /** Called for every way a file can reach the composer: the picker, a drop, or a paste. */
+  function notePendingFiles(files) {
+    let added = false;
+    for (const file of files ?? []) {
+      const id = `${file.name}:${file.size}:${file.lastModified ?? ""}`;
+      // The same file can surface twice (e.g. a drop that the page forwards to its file input).
+      if (state.pendingFiles.some((f) => f.id === id)) continue;
+      state.pendingFiles.push({ id, name: file.name || "pasted file", size: file.size, tokens: estimateFileTokens(file) });
+      added = true;
+    }
+    if (added) render();
+  }
+
+  function clearPendingFiles() {
+    if (state.pendingFiles.length === 0) return;
+    state.pendingFiles = [];
+    render();
+  }
+
+  document.addEventListener(
+    "change",
+    (event) => {
+      if (event.target?.type === "file") notePendingFiles(event.target.files);
+    },
+    true
+  );
+  document.addEventListener("drop", (event) => notePendingFiles(event.dataTransfer?.files), true);
+  document.addEventListener(
+    "paste",
+    (event) => {
+      notePendingFiles(event.clipboardData?.files);
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      if (text.length >= PASTE_WEIGHT_CHARS) {
+        notePendingFiles([{ name: "pasted text", size: text.length, type: "text/plain", lastModified: Date.now() }]);
+      }
+    },
+    true
+  );
+
+  /** We can't see files being removed again, so this errs towards warning; dismissing clears it until more is added. */
+  function updateAttachmentWarning() {
+    const threshold = Number(state.settings.attachmentWarnTokens ?? 25000);
+    const files = state.pendingFiles;
+    const tokens = files.reduce((sum, f) => sum + f.tokens, 0);
+    if (threshold <= 0 || tokens < threshold) return setBanner("attach", null);
+
+    const bytes = files.reduce((sum, f) => sum + f.size, 0);
+    const largest = files.reduce((a, b) => (b.size > a.size ? b : a));
+    const count = `${files.length} item${files.length === 1 ? "" : "s"}, ${formatBytes(bytes)}`;
+    setBanner("attach", {
+      key: `attach:${files.length}:${bytes}`,
+      tone: "warn",
+      lead: `Heavy attachments (${formatTokens(tokens)}, rough).`,
+      text:
+        `${count}${files.length > 1 ? ` — largest is ${largest.name}` : ""}. ` +
+        "They're re-read with every later message in this chat, so trim to what Claude needs.",
+    });
+  }
+
+  /** Project knowledge rides along with every chat in the project. */
+  function updateProjectWarning() {
+    const threshold = Number(state.settings.attachmentWarnTokens ?? 25000);
+    const projectId =
+      /\/project\/([0-9a-f-]{36})/i.exec(location.pathname)?.[1] ?? state.threadProjects.get(state.conversationId);
+    const project = projectId ? state.projects.get(projectId) : null;
+    const tokens = project ? Math.round(project.chars / CHARS_PER_TOKEN) : 0;
+    if (threshold <= 0 || tokens < threshold) return setBanner("project", null);
+
+    setBanner("project", {
+      key: `project:${projectId}:${Math.floor(tokens / threshold)}`,
+      lead: `Large project knowledge (${formatTokens(tokens)}, ${project.docs} file${project.docs === 1 ? "" : "s"}).`,
+      text: "It's loaded into every chat in this project, so each message here starts from that much.",
+    });
   }
 
   // ----------------------------------------------------------- tab indicator --
@@ -671,8 +773,11 @@
   }
 
   function onThreadEvent(chat) {
-    if (chat.kind === "conversation_loaded") {
+    if (chat.kind === "project_loaded") {
+      state.projects.set(chat.projectId, { docs: chat.docs ?? 0, chars: chat.chars ?? 0 });
+    } else if (chat.kind === "conversation_loaded") {
       state.threads.set(chat.conversationId, { messages: chat.messages ?? 0, chars: chat.chars ?? 0 });
+      if (chat.projectId) state.threadProjects.set(chat.conversationId, chat.projectId);
     } else if (chat.kind === "completion_end" && chat.ok) {
       // Until the page reloads the conversation, grow the estimate by this exchange.
       const thread = state.threads.get(chat.conversationId) ?? { messages: 0, chars: 0 };
@@ -756,6 +861,8 @@
     updatePreSendWarning();
     updateModelHint();
     updateLongContextNudge();
+    updateAttachmentWarning();
+    updateProjectWarning();
     renderBanners();
     updateTabIndicator();
   }
@@ -771,6 +878,8 @@
       conversationId !== state.conversationId ||
       pickerModel !== state.pickerModel
     ) {
+      // A draft's attachments don't follow you to a different chat.
+      if (conversationId !== state.conversationId && state.conversationId) state.pendingFiles = [];
       state.drafting = drafting;
       state.conversationId = conversationId;
       state.pickerModel = pickerModel;

@@ -17,6 +17,7 @@
   const COMPLETION_PATTERN =
     /\/api\/organizations\/[^/]+\/chat_conversations\/([0-9a-f-]+)\/(?:retry_)?completion(?:[/?]|$)/i;
   const CONVERSATION_PATTERN = /\/api\/organizations\/[^/]+\/chat_conversations\/([0-9a-f-]+)(?:\?|$)/i;
+  const PROJECT_DOCS_PATTERN = /\/api\/organizations\/[^/]+\/projects\/([0-9a-f-]+)\/docs(?:\?|$)/i;
   const LOG_PREFIX = "[ClaudeMeter:discovery]";
   const MAX_BODY_CHARS = 20000;
 
@@ -140,8 +141,29 @@
         emitChat({
           kind: "conversation_loaded",
           conversationId: match[1],
+          projectId: typeof conversation.project_uuid === "string" ? conversation.project_uuid : null,
           messages: thread.length,
           chars: thread.reduce((sum, m) => sum + messageChars(m), 0),
+        });
+      })
+      .catch(() => {});
+  }
+
+  /** When the page loads a project's knowledge files, report how much text they add up to. */
+  function watchProjectDocs(response, absoluteUrl, method) {
+    const match = method === "GET" && response.ok ? PROJECT_DOCS_PATTERN.exec(absoluteUrl) : null;
+    if (!match) return;
+
+    response
+      .clone()
+      .json()
+      .then((docs) => {
+        if (!Array.isArray(docs)) return;
+        emitChat({
+          kind: "project_loaded",
+          projectId: match[1],
+          docs: docs.length,
+          chars: docs.reduce((sum, doc) => sum + (typeof doc?.content === "string" ? doc.content.length : 0), 0),
         });
       })
       .catch(() => {});
@@ -279,6 +301,7 @@
       const method = (init.method || (typeof input === "object" && input?.method) || "GET").toUpperCase();
 
       watchConversation(response, absoluteUrl, method);
+      watchProjectDocs(response, absoluteUrl, method);
 
       if (absoluteUrl && matchesKeywords(absoluteUrl)) {
         response

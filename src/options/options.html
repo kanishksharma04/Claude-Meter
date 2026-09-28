@@ -106,6 +106,19 @@
       </label>
       <label class="row">
         <span>
+          Attachment weight warning
+          <small>Flags heavy files, long pastes, and large project knowledge before you send.</small>
+        </span>
+        <select id="attachmentWarnSelect">
+          <option value="0">Off</option>
+          <option value="10000">~10k tokens</option>
+          <option value="25000">~25k tokens</option>
+          <option value="50000">~50k tokens</option>
+          <option value="100000">~100k tokens</option>
+        </select>
+      </label>
+      <label class="row">
+        <span>
           Measure what each message costs
           <small>Reads your usage right before you send and right after the reply ends.</small>
         </span>

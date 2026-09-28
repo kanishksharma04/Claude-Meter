@@ -55,6 +55,10 @@ numbers are in front of you while you type:
   fastest-filling one and past a threshold (default 50%), and that's the model you
   have selected, a banner suggests Sonnet or Haiku, which count against the larger
   all-models limit. It shows the measured pace ("+4%/hr, about 5 hr left").
+- **Attachment weight warning** — files you pick, drop, or paste into the composer
+  (and long text pastes) are sized up before you send. Past a threshold (default ~25k
+  tokens) a banner tells you how heavy the draft is and which file is the largest. The
+  same check runs on a project's knowledge files when you're in that project.
 - **Limit-hit detector** — when claude.ai refuses a message (HTTP 429) or marks a
   reply as the one that used up your allowance, ClaudeMeter logs it: when, which limit,
   when it resets, and how many messages you sent into the lockout. The popup and the
@@ -181,7 +185,7 @@ Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `his
 (last 50 snapshots) for potential future charting. Settings live under `settings`
 (`refreshIntervalMinutes`, `notificationsEnabled`, `notifyThresholds`, `theme`,
 `developerMode`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
-`longContextTokens`, `messageCost`). The current model-switch hint, if any, is kept
+`longContextTokens`, `attachmentWarnTokens`, `messageCost`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300):
 
@@ -259,6 +263,11 @@ written when Developer mode is on, from Options.
 - The model-switch hint needs about ten minutes of history to measure a pace; before
   that it falls back to "fullest weekly limit". It only appears when ClaudeMeter can
   tell which model you're on (from the model picker or the last message sent).
+- Attachment weight is a rough guess made from file size and type alone (text ≈ 4
+  bytes per token, images ≈ 1.5k tokens each, PDFs and other documents ≈ 20 bytes per
+  token) — the files are never read. ClaudeMeter can't see you remove an attachment,
+  so the warning can linger until you dismiss it or send. Project knowledge is only
+  measured when claude.ai loads the project's file list in that tab.
 - Thread length is a character count divided by four, not a real token count. It
   covers message text and pasted/extracted attachments on the active branch; images,
   PDFs, project knowledge, and tool results aren't counted, so treat it as a floor.
@@ -277,6 +286,7 @@ written when Developer mode is on, from Options.
   the banner above the composer appears while you type.
 - **Model-switch hint** — Off, or 30 / 50 / 70 / 90%.
 - **Long-chat nudge** — Off, or ~20k / 40k / 80k / 120k tokens.
+- **Attachment weight warning** — Off, or ~10k / 25k / 50k / 100k estimated tokens.
 - **Measure what each message costs** — on by default; turning it off also stops the
   two extra usage reads around each message.
 - **Theme** — Auto (follows `prefers-color-scheme`), Light, or Dark.
