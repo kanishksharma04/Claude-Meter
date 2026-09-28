@@ -39,6 +39,9 @@ numbers are in front of you while you type:
 - **Inline usage pill** — session % and your highest weekly % float just above the
   composer, colour-coded like the popup bars. Click it for every bucket and its reset
   time; no toolbar click needed.
+- **Pre-send warning** — while there's a draft in the composer and any limit is past
+  a threshold you choose (default 80%), a slim banner says so and when it resets.
+  Dismiss it once and it stays away until that limit's window rolls over.
 
 Everything is rendered inside a shadow root (claude.ai's DOM and styles are never
 modified) and each piece can be switched off in Options.
@@ -100,7 +103,7 @@ claudemeter/
 │   ├── content/
 │   │   ├── inject-hook.js             # MAIN world: patches fetch/XHR, dispatches captures
 │   │   ├── relay.js                   # ISOLATED world: forwards captures to the background worker
-│   │   └── page-ui.js                 # ISOLATED world: in-page UI (usage pill) in a shadow root
+│   │   └── page-ui.js                 # ISOLATED world: in-page UI (pill, banners) in a shadow root
 │   ├── popup/                         # toolbar popup — session/weekly bars, refresh, states
 │   ├── options/                       # refresh interval, notifications, theme, developer mode
 │   ├── debug/                         # debug.html — raw capture viewer (developer mode only)
@@ -150,7 +153,7 @@ UsageSnapshot = {
 Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `history`
 (last 50 snapshots) for potential future charting. Settings live under `settings`
 (`refreshIntervalMinutes`, `notificationsEnabled`, `notifyThresholds`, `theme`,
-`developerMode`, `inlinePill`). Raw request/response captures (`__debug_captures`, last 20) are only
+`developerMode`, `inlinePill`, `preSendWarnPercent`). Raw request/response captures (`__debug_captures`, last 20) are only
 written when Developer mode is on, from Options.
 
 ## Refresh behavior
@@ -190,6 +193,8 @@ written when Developer mode is on, from Options.
   and/or 95% (configurable), only fires on the transition, not on every fetch above
   threshold.
 - **Usage pill next to the composer** — show/hide the in-page pill on claude.ai.
+- **Warn before sending** — Off, or 50 / 70 / 80 / 90 / 95%; the usage level at which
+  the banner above the composer appears while you type.
 - **Theme** — Auto (follows `prefers-color-scheme`), Light, or Dark.
 - **Developer mode** — keeps raw request/response captures for the debug page
   (`src/debug/debug.html`), off by default.

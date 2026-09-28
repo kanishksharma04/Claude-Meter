@@ -63,6 +63,10 @@ h1 {
   margin-bottom: 4px;
 }
 
+.card .row + .row {
+  margin-top: 12px;
+}
+
 .row small {
   display: block;
   color: var(--muted);

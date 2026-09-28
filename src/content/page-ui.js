@@ -26,6 +26,8 @@
     snapshot: null,
     settings: {},
     panelOpen: false,
+    drafting: false, // composer currently holds unsent text
+    dismissed: new Set(), // banner keys the user closed in this tab
   };
 
   // ---------------------------------------------------------------- helpers --
@@ -105,6 +107,11 @@
     const pageMode = document.documentElement.getAttribute("data-mode");
     if (pageMode === "dark" || pageMode === "light") return pageMode;
     return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
+  /** Dismissals are scoped to a bucket's reset window, so a banner comes back after the reset. */
+  function windowKey(prefix, bucket) {
+    return `${prefix}:${bucket.label}:${bucket.resetsAt ?? "?"}`;
   }
 
   /** chrome.* throws once the extension is reloaded under a live tab — never let that surface. */
@@ -196,6 +203,28 @@
     .fill.danger { background: var(--danger); }
     .sub { margin-top: 4px; color: var(--muted); font-size: 11px; }
     .panel-foot { color: var(--muted); font-size: 11px; }
+
+    .banners { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+    .banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 10px 7px 12px;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 10px;
+      background: var(--bg);
+      box-shadow: 0 1px 4px rgb(0 0 0 / 0.18);
+    }
+    .banner.warn { border-left-color: var(--warn); }
+    .banner.danger { border-left-color: var(--danger); }
+    .banner-text { flex: 1; min-width: 0; }
+    .banner-text strong { font-weight: 600; }
+    .banner-action {
+      color: var(--accent); font: inherit; font-weight: 600; text-decoration: none;
+      border: none; background: none; padding: 0; cursor: pointer; white-space: nowrap;
+    }
+    .banner-action:hover { text-decoration: underline; }
   `;
 
   // --------------------------------------------------------------------- DOM --
@@ -209,7 +238,8 @@
   const panel = el("div", { class: "panel", role: "dialog", "aria-label": "ClaudeMeter usage", hidden: true });
   const pill = el("button", { class: "pill", type: "button", "aria-expanded": "false", onclick: togglePanel });
   const pillRow = el("div", { class: "pill-row" }, pill);
-  const dock = el("div", { class: "dock" }, panel, pillRow);
+  const banners = el("div", { class: "banners", role: "status", "aria-live": "polite" });
+  const dock = el("div", { class: "dock" }, banners, panel, pillRow);
   shadow.append(dock);
 
   function mountHost() {
@@ -217,12 +247,23 @@
     if (!host.isConnected) document.documentElement.append(host);
   }
 
-  function findComposer() {
+  function findComposerInput() {
     for (const selector of COMPOSER_SELECTORS) {
       const node = document.querySelector(selector);
-      if (node && node.getClientRects().length > 0) return node.closest("fieldset") ?? node;
+      if (node && node.getClientRects().length > 0) return node;
     }
     return null;
+  }
+
+  function findComposer() {
+    const input = findComposerInput();
+    return input ? (input.closest("fieldset") ?? input) : null;
+  }
+
+  function hasDraft() {
+    const input = findComposerInput();
+    if (!input) return false;
+    return ((input.value ?? input.textContent) || "").trim().length > 0;
   }
 
   /** Pin the dock just above the composer; fall back to the bottom-right corner. */
@@ -321,13 +362,89 @@
     renderPanel();
   }
 
+  // ----------------------------------------------------------------- banners --
+
+  // Each feature contributes at most one banner, keyed by id. A spec is
+  // { key, tone, lead, text, actions: [{ label, href | onclick }] }; `key`
+  // is what gets remembered when the user dismisses it.
+  const bannerSpecs = new Map();
+
+  function setBanner(id, spec) {
+    if (spec && !state.dismissed.has(spec.key)) bannerSpecs.set(id, spec);
+    else bannerSpecs.delete(id);
+  }
+
+  function renderBanners() {
+    banners.replaceChildren(
+      ...[...bannerSpecs.entries()].map(([id, spec]) =>
+        el(
+          "div",
+          { class: `banner ${spec.tone ?? ""}`.trim(), "data-banner": id },
+          el("span", { class: "banner-text" }, el("strong", { text: spec.lead }), ` ${spec.text}`),
+          ...(spec.actions ?? []).map((action) =>
+            action.href
+              ? el("a", { class: "banner-action", href: action.href, text: action.label })
+              : el("button", { class: "banner-action", type: "button", text: action.label, onclick: action.onclick })
+          ),
+          el("button", {
+            class: "icon-btn",
+            type: "button",
+            title: "Dismiss",
+            "aria-label": "Dismiss",
+            text: "\u00d7",
+            onclick: () => {
+              state.dismissed.add(spec.key);
+              render();
+            },
+          })
+        )
+      )
+    );
+  }
+
+  // -------------------------------------------------------- pre-send warning --
+
+  /** While a draft is in the composer, flag the bucket closest to its limit. */
+  function updatePreSendWarning() {
+    const threshold = Number(state.settings.preSendWarnPercent ?? 80);
+    const over = bucketsOf(state.snapshot)
+      .filter((b) => threshold > 0 && b.percentUsed >= threshold && b.percentUsed < 100)
+      .sort((a, b) => b.percentUsed - a.percentUsed)[0];
+
+    if (!over || !state.drafting) return setBanner("presend", null);
+
+    const isSession = over === state.snapshot.session;
+    const resetsIn = over.resetsAt != null ? formatDuration(Date.now(), over.resetsAt) : null;
+    setBanner("presend", {
+      key: windowKey("presend", over),
+      tone: severityClass(over.percentUsed) || "warn",
+      lead: isSession ? `Session at ${over.percentUsed}%.` : `${over.label} weekly limit at ${over.percentUsed}%.`,
+      text: resetsIn ? `This message may hit your limit — it resets in ${resetsIn}.` : "This message may hit your limit.",
+    });
+  }
+
   // ------------------------------------------------------------------ render --
 
   function render() {
     dock.dataset.theme = effectiveTheme();
     renderPill();
     renderPanel();
+    updatePreSendWarning();
+    renderBanners();
   }
+
+  /** Cheap poll for things the DOM won't tell us about (draft cleared after send, SPA navigation). */
+  function tick() {
+    positionDock();
+    const drafting = hasDraft();
+    if (drafting !== state.drafting) {
+      state.drafting = drafting;
+      render();
+    }
+  }
+
+  // Typing should surface the warning immediately, not on the next poll.
+  document.addEventListener("input", tick, true);
 
   // Close the panel on Escape or a click anywhere outside our shadow root.
   document.addEventListener("keydown", (event) => {
@@ -370,10 +487,10 @@
       console.warn(LOG_PREFIX, "could not subscribe to storage", err);
     }
 
-    positionDock();
+    tick();
     render();
 
-    setInterval(positionDock, REPOSITION_MS);
+    setInterval(tick, REPOSITION_MS);
     window.addEventListener("resize", positionDock);
     // Keep "resets in" / "updated X ago" honest while the tab sits open.
     setInterval(render, 30_000);

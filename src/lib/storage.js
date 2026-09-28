@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS = {
   theme: "auto",
   developerMode: false,
   inlinePill: true, // usage pill next to claude.ai's composer (src/content/page-ui.js)
+  preSendWarnPercent: 80, // warn above the composer while drafting at/above this %; 0 = off
 };
 
 export const DEFAULT_STATE = {
