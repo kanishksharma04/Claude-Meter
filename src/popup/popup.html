@@ -11,8 +11,11 @@
         <span class="wordmark">ClaudeMeter</span>
         <span class="badge" id="planBadge" hidden></span>
       </div>
-      <button id="refreshBtn" class="icon-btn" title="Refresh now" aria-label="Refresh now">
-        <span class="refresh-icon">&#8635;</span>
+      <button id="refreshBtn" class="icon-btn" type="button" title="Refresh now" aria-label="Refresh now">
+        <svg class="refresh-icon" viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M13.5 8a5.5 5.5 0 1 1-1.61-3.89" />
+          <path d="M13.5 2.5V5H11" />
+        </svg>
       </button>
     </header>
 
@@ -71,6 +74,23 @@
         </div>
 
         <p class="usage-sub limit-hits" id="limitHits" hidden></p>
+
+        <!-- Dashboard-only: shown in the side panel / full-tab view, not the toolbar popup -->
+        <div id="history" class="history" hidden>
+          <hr />
+          <div class="weekly-header">
+            <span>Usage over time</span>
+            <span class="header-note" id="historyRange"></span>
+          </div>
+          <div id="historyBody">
+            <svg id="historyChart" class="history-chart" viewBox="0 0 320 120" preserveAspectRatio="none" role="img"></svg>
+            <div class="history-axis"><span id="historyFrom"></span><span>now</span></div>
+            <ul id="historyLegend" class="history-legend"></ul>
+          </div>
+          <p class="usage-sub" id="historyEmpty" hidden>
+            Not enough history yet — this fills in as ClaudeMeter refreshes.
+          </p>
+        </div>
       </section>
 
       <p id="errorBanner" class="error-banner" hidden></p>
@@ -78,7 +98,29 @@
 
     <footer>
       <span id="lastUpdated"></span>
-      <a href="#" id="settingsLink" class="icon-btn" title="Settings" aria-label="Settings">&#9881;</a>
+      <div class="footer-actions">
+        <button
+          id="sidePanelBtn"
+          class="icon-btn"
+          type="button"
+          title="Open in the side panel"
+          aria-label="Open in the side panel"
+          hidden
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <rect x="2" y="3" width="12" height="10" rx="1.5" />
+            <path d="M10 3v10" />
+          </svg>
+        </button>
+        <button id="settingsLink" class="icon-btn" type="button" title="Settings" aria-label="Settings">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M2 4h6M12 4h2M2 8h2M8 8h6M2 12h7M13 12h1" />
+            <circle cx="10" cy="4" r="1.6" />
+            <circle cx="6" cy="8" r="1.6" />
+            <circle cx="11" cy="12" r="1.6" />
+          </svg>
+        </button>
+      </div>
     </footer>
 
     <template id="weeklyRowTemplate">

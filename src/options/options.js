@@ -13,6 +13,7 @@ const longContextSelect = document.getElementById("longContextSelect");
 const attachmentWarnSelect = document.getElementById("attachmentWarnSelect");
 const lockoutOverlayToggle = document.getElementById("lockoutOverlayToggle");
 const messageCostToggle = document.getElementById("messageCostToggle");
+const actionOpensSelect = document.getElementById("actionOpensSelect");
 const themeSelect = document.getElementById("themeSelect");
 const developerModeToggle = document.getElementById("developerModeToggle");
 const clearDataBtn = document.getElementById("clearDataBtn");
@@ -47,6 +48,10 @@ async function init() {
   attachmentWarnSelect.value = String(settings.attachmentWarnTokens);
   lockoutOverlayToggle.checked = settings.lockoutOverlay;
   messageCostToggle.checked = settings.messageCost;
+
+  actionOpensSelect.value = settings.actionOpens;
+  // Older Chromium builds have no side panel; don't offer what can't work.
+  actionOpensSelect.querySelector('[value="sidePanel"]').disabled = !chrome.sidePanel;
 
   themeSelect.value = settings.theme;
   applyTheme(settings.theme);
@@ -104,6 +109,10 @@ lockoutOverlayToggle.addEventListener("change", async () => {
 
 messageCostToggle.addEventListener("change", async () => {
   await setSettings({ messageCost: messageCostToggle.checked });
+});
+
+actionOpensSelect.addEventListener("change", async () => {
+  await setSettings({ actionOpens: actionOpensSelect.value });
 });
 
 themeSelect.addEventListener("change", async () => {

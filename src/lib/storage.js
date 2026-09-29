@@ -5,13 +5,15 @@ import { appendMessage, prunePending } from "./message-cost.js";
 import { addLimitHit } from "./limit-hits.js";
 
 export const MAX_DEBUG_CAPTURES = 20;
-export const MAX_HISTORY = 50;
+// Enough for the dashboard chart to cover about a day at the default refresh interval.
+export const MAX_HISTORY = 500;
 
 export const DEFAULT_SETTINGS = {
   refreshIntervalMinutes: 5,
   notificationsEnabled: false,
   notifyThresholds: [80, 95],
   theme: "auto",
+  actionOpens: "popup", // what a click on the toolbar icon opens: "popup" | "sidePanel"
   developerMode: false,
   inlinePill: true, // usage pill next to claude.ai's composer (src/content/page-ui.js)
   tabIndicator: "title", // usage % on the claude.ai tab: "off" | "title" | "favicon" | "both"

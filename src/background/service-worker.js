@@ -248,6 +248,18 @@ async function maybeNotify(previousSnapshot, snapshot) {
   }
 }
 
+// ------------------------------------------------------------ action surface --
+
+/** Point the toolbar icon at the popup or the side panel, per the user's setting. */
+async function applyActionSurface() {
+  const settings = await getSettings();
+  const usePanel = settings.actionOpens === "sidePanel" && Boolean(chrome.sidePanel?.setPanelBehavior);
+
+  // Both are needed: a registered popup would otherwise still win the click.
+  await chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: usePanel });
+  await chrome.action.setPopup({ popup: usePanel ? "" : chrome.runtime.getURL("src/popup/popup.html") });
+}
+
 // ------------------------------------------------------------------- alarm --
 
 async function ensureAlarm() {
@@ -258,11 +270,13 @@ async function ensureAlarm() {
 chrome.runtime.onInstalled.addListener(() => {
   console.log(LOG_PREFIX, "extension installed");
   ensureAlarm();
+  applyActionSurface();
   refreshUsage(); // best-effort initial fetch; silently no-ops if not logged in
 });
 
 chrome.runtime.onStartup.addListener(() => {
   ensureAlarm();
+  applyActionSurface(); // action.setPopup() doesn't survive a browser restart
   refreshUsage();
 });
 
@@ -279,6 +293,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
     if (changes.settings.oldValue?.modelHintPercent !== changes.settings.newValue?.modelHintPercent) {
       updateModelHint();
+    }
+    if (changes.settings.oldValue?.actionOpens !== changes.settings.newValue?.actionOpens) {
+      applyActionSurface();
     }
   }
 });

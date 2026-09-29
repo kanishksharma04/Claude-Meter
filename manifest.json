@@ -19,6 +19,9 @@
     }
   },
   "options_page": "src/options/options.html",
+  "side_panel": {
+    "default_path": "src/popup/popup.html?view=panel"
+  },
   "background": {
     "service_worker": "src/background/service-worker.js",
     "type": "module"
@@ -44,6 +47,6 @@
       "all_frames": false
     }
   ],
-  "permissions": ["storage", "alarms", "notifications"],
+  "permissions": ["storage", "alarms", "notifications", "sidePanel"],
   "host_permissions": ["https://claude.ai/*"]
 }

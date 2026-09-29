@@ -27,6 +27,10 @@ icon and you immediately see:
   label that keeps itself current
 - Empty/loading/error states that never wipe out the last good reading — a failed
   refresh shows an inline warning, not a blank popup
+- **Side panel dashboard** — the same view as a persistent panel that stays open beside
+  whatever you're browsing, with a **usage-over-time chart** (one line per limit) drawn
+  from the stored history. Open it from the popup's footer, from Chrome's own side
+  panel menu, or make the toolbar icon open it directly
 
 Data auto-refreshes in the background on a configurable interval and every time you
 open the popup, so the numbers stay current without you doing anything.
@@ -119,6 +123,8 @@ Nothing is ever sent to any third-party server — everything stays in
 - **`chrome.alarms`** — periodic background refresh, independent of any open tab
 - **`chrome.notifications`** — optional desktop alerts on usage-threshold crossings
 - **`chrome.action`** — toolbar icon, popup, and color-coded usage badge text
+- **`chrome.sidePanel`** — the dashboard; it is the popup page loaded as
+  `popup.html?view=panel`, so both surfaces share one renderer
 - Content scripts split across the **MAIN** and **isolated** JS worlds (see
   `src/content/inject-hook.js` and `src/content/relay.js`) to safely observe the
   page's own network calls without touching page state
@@ -135,7 +141,7 @@ claudemeter/
 │   │   ├── inject-hook.js             # MAIN world: patches fetch/XHR, dispatches captures + chat events
 │   │   ├── relay.js                   # ISOLATED world: forwards both to the background worker
 │   │   └── page-ui.js                 # ISOLATED world: in-page UI (pill, banners, lockout timer) in a shadow root
-│   ├── popup/                         # toolbar popup — session/weekly bars, refresh, states
+│   ├── popup/                         # toolbar popup and (?view=panel) side panel dashboard
 │   ├── options/                       # refresh interval, notifications, theme, developer mode
 │   ├── debug/                         # debug.html — raw capture viewer (developer mode only)
 │   ├── lib/
@@ -145,6 +151,7 @@ claudemeter/
 │   │   ├── conversation-costs.js      # per-chat totals + ranking, derived from the message log
 │   │   ├── burn-rate.js               # weekly %/hr from history + the model-switch hint
 │   │   ├── limit-hits.js              # "limit reached" log: dedupe per lockout + summary
+│   │   ├── history-chart.js           # snapshot history -> line-chart series + SVG paths
 │   │   ├── usage-api.js               # org discovery + usage fetch + typed errors
 │   │   └── normalize-usage.js         # raw usage response -> UsageSnapshot
 │   └── icons/                         # toolbar/store icon set (16/32/48/128)
@@ -163,6 +170,9 @@ Requires a **Chromium 111+** based browser — the content script uses the
 4. Make sure you're logged into `claude.ai` in that same browser.
 5. Click the ClaudeMeter toolbar icon. On first load it kicks off a background fetch
    automatically — give it a second, then click the refresh icon if it's still empty.
+
+The side panel needs **Chromium 116+**; on older builds the extension still works and
+simply doesn't offer it.
 
 ## Data model
 
@@ -186,9 +196,9 @@ UsageSnapshot = {
 ```
 
 Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `history`
-(last 50 snapshots) for potential future charting. Settings live under `settings`
-(`refreshIntervalMinutes`, `notificationsEnabled`, `notifyThresholds`, `theme`,
-`developerMode`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
+(last 500 snapshots) that feeds the dashboard chart and the burn-rate maths. Settings
+live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
+`notifyThresholds`, `theme`, `actionOpens`, `developerMode`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
 `longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300):
@@ -275,8 +285,9 @@ written when Developer mode is on, from Options.
 - Thread length is a character count divided by four, not a real token count. It
   covers message text and pasted/extracted attachments on the active branch; images,
   PDFs, project knowledge, and tool results aren't counted, so treat it as a floor.
-- No sparkline/usage-over-time chart yet, though the rolling `history` array needed
-  for one is already being collected.
+- The usage-over-time chart only reaches back as far as the stored history: 500
+  readings, which is about a day at the default interval and less if per-message cost
+  is adding two readings per message. There is no long-term archive or export.
 
 ## Options
 
@@ -294,6 +305,7 @@ written when Developer mode is on, from Options.
 - **Lockout countdown** — show/hide the "back at …" timer while a limit is exhausted.
 - **Measure what each message costs** — on by default; turning it off also stops the
   two extra usage reads around each message.
+- **Clicking the icon opens** — the popup (default) or the side panel.
 - **Theme** — Auto (follows `prefers-color-scheme`), Light, or Dark.
 - **Developer mode** — keeps raw request/response captures for the debug page
   (`src/debug/debug.html`), off by default.

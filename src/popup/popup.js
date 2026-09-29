@@ -3,6 +3,17 @@ import { timeAgo, formatDuration } from "../lib/time-format.js";
 import { formatCost } from "../lib/message-cost.js";
 import { rankConversations } from "../lib/conversation-costs.js";
 import { summarizeLimitHits, claimLabel } from "../lib/limit-hits.js";
+import { chartSeries, linePath, describeChart } from "../lib/history-chart.js";
+
+// This page serves more than one surface: the toolbar popup, and — as
+// popup.html?view=panel — the side panel (or a full tab), which gets the
+// room for the dashboard extras.
+const VIEW = new URLSearchParams(location.search).get("view") ?? "popup";
+document.documentElement.dataset.view = VIEW;
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+const CHART_WIDTH = 320;
+const CHART_HEIGHT = 120;
 
 const emptyState = document.getElementById("emptyState");
 const loadingState = document.getElementById("loadingState");
@@ -21,6 +32,14 @@ const topChatsList = document.getElementById("topChatsList");
 const limitHitsEl = document.getElementById("limitHits");
 const weeklyList = document.getElementById("weeklyList");
 const weeklyRowTemplate = document.getElementById("weeklyRowTemplate");
+const sidePanelBtn = document.getElementById("sidePanelBtn");
+const historySection = document.getElementById("history");
+const historyBody = document.getElementById("historyBody");
+const historyChart = document.getElementById("historyChart");
+const historyLegend = document.getElementById("historyLegend");
+const historyRange = document.getElementById("historyRange");
+const historyFrom = document.getElementById("historyFrom");
+const historyEmpty = document.getElementById("historyEmpty");
 
 let latestState = null;
 
@@ -84,9 +103,50 @@ function renderLimitHits(limitHits) {
     last.attempts > 1 ? `${last.attempts} messages were sent into that lockout.` : "Detected from claude.ai's response.";
 }
 
+function svgEl(tag, attrs) {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [name, value] of Object.entries(attrs)) node.setAttribute(name, value);
+  return node;
+}
+
+function renderHistory(history) {
+  historySection.hidden = VIEW !== "panel";
+  if (historySection.hidden) return;
+
+  const chart = chartSeries(history);
+  const drawable = chart.series.filter((s) => s.points.length >= 2);
+  const box = { from: chart.from, to: chart.to, width: CHART_WIDTH, height: CHART_HEIGHT };
+
+  historyEmpty.hidden = drawable.length > 0;
+  historyBody.hidden = drawable.length === 0;
+  historyRange.textContent = drawable.length > 0 ? `last ${formatDuration(chart.from, chart.to)}` : "";
+  historyFrom.textContent = timeAgo(chart.from);
+  historyChart.setAttribute("aria-label", describeChart({ series: drawable }));
+
+  historyChart.replaceChildren(
+    // Gridlines at 0 / 50 / 100%.
+    ...[0, 0.5, 1].map((f) =>
+      svgEl("line", { class: "grid", x1: 0, x2: CHART_WIDTH, y1: f * CHART_HEIGHT, y2: f * CHART_HEIGHT })
+    ),
+    ...drawable.map((series, index) =>
+      svgEl("path", { class: `series series-${index % 5}`, d: linePath(series.points, box) })
+    )
+  );
+
+  historyLegend.replaceChildren(
+    ...drawable.map((series, index) => {
+      const swatch = document.createElement("span");
+      swatch.className = `swatch series-${index % 5}`;
+      const item = document.createElement("li");
+      item.append(swatch, `${series.label} · ${series.points.at(-1).pct}%`);
+      return item;
+    })
+  );
+}
+
 function render(state) {
   latestState = state;
-  const { latestSnapshot, settings, lastError, messageLog, limitHits } = state;
+  const { latestSnapshot, settings, lastError, messageLog, limitHits, history } = state;
 
   applyTheme(settings.theme);
 
@@ -120,6 +180,7 @@ function render(state) {
   renderLastMessage(settings.messageCost ? messageLog : []);
   renderTopChats(settings.messageCost ? messageLog : []);
   renderLimitHits(limitHits);
+  renderHistory(history);
 
   weeklyList.innerHTML = "";
   if (latestSnapshot.weekly.length === 0) {
@@ -190,10 +251,30 @@ document.getElementById("openClaudeBtn").addEventListener("click", () => {
   chrome.tabs.create({ url: "https://claude.ai" });
 });
 
-document.getElementById("settingsLink").addEventListener("click", (event) => {
-  event.preventDefault();
+document.getElementById("settingsLink").addEventListener("click", () => {
   chrome.runtime.openOptionsPage();
 });
+
+// sidePanel.open() has to run inside the click itself — any await before it
+// drops the user gesture — so look the window id up ahead of time.
+let hostWindowId = null;
+if (VIEW === "popup" && chrome.sidePanel?.open) {
+  sidePanelBtn.hidden = false;
+  chrome.windows.getCurrent().then((win) => (hostWindowId = win.id));
+}
+
+sidePanelBtn.addEventListener("click", () => {
+  if (hostWindowId == null) return;
+  chrome.sidePanel
+    .open({ windowId: hostWindowId })
+    .then(() => window.close())
+    .catch((err) => console.warn("[ClaudeMeter] could not open the side panel", err));
+});
+
+// "…/popup.html?view=panel#history" (e.g. opened in a tab) lands on the chart.
+if (location.hash === "#history") {
+  requestAnimationFrame(() => historySection.scrollIntoView());
+}
 
 onStorageChanged((changes) => {
   if (changes.latestSnapshot || changes.settings || changes.lastError || changes.messageLog || changes.limitHits) {
