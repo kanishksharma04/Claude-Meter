@@ -4,6 +4,7 @@ import { formatCost } from "../lib/message-cost.js";
 import { rankConversations } from "../lib/conversation-costs.js";
 import { summarizeLimitHits, claimLabel } from "../lib/limit-hits.js";
 import { chartSeries, linePath, describeChart } from "../lib/history-chart.js";
+import { severityOf, isHexColor } from "../lib/severity.js";
 
 // This page serves more than one surface: the toolbar popup, and — as
 // popup.html?view=panel — the side panel (or a full tab), which gets the
@@ -44,9 +45,18 @@ const historyEmpty = document.getElementById("historyEmpty");
 let latestState = null;
 
 function severityClass(pct) {
-  if (pct >= 95) return "danger";
-  if (pct >= 80) return "warn";
-  return "";
+  const severity = severityOf(pct, latestState?.settings);
+  return severity === "ok" ? "" : severity;
+}
+
+/** A colour the user picked replaces the theme's; anything unset falls back to the stylesheet. */
+function applySeverityColors(settings) {
+  const style = document.documentElement.style;
+  for (const [level, property] of [["ok", "--ok-fill"], ["warn", "--warn"], ["danger", "--danger"]]) {
+    const custom = settings.severityColors?.[level];
+    if (isHexColor(custom)) style.setProperty(property, custom);
+    else style.removeProperty(property);
+  }
 }
 
 function renderBucketRow({ labelEl, pctEl, fillEl, subEl }, bucket) {
@@ -149,6 +159,7 @@ function render(state) {
   const { latestSnapshot, settings, lastError, messageLog, limitHits, history } = state;
 
   applyTheme(settings.theme);
+  applySeverityColors(settings);
 
   const hasData = Boolean(latestSnapshot);
   emptyState.hidden = hasData;

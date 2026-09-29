@@ -17,6 +17,7 @@ import { computeMessageCost } from "../lib/message-cost.js";
 import { modelSwitchHint } from "../lib/burn-rate.js";
 import { resolveResetsAt } from "../lib/limit-hits.js";
 import { gaugeImageData } from "../lib/gauge-icon.js";
+import { severityColor } from "../lib/severity.js";
 import { formatDuration } from "../lib/time-format.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
@@ -213,10 +214,6 @@ async function updateModelHint() {
 
 // ---------------------------------------------------------------- toolbar --
 
-function severityColor(pct) {
-  return pct >= 95 ? "#e5484d" : pct >= 80 ? "#e5a02e" : "#3fb950";
-}
-
 /** Hover text for the toolbar icon — the exact numbers the gauge can only hint at. */
 function toolbarTitle(snapshot) {
   const parts = [];
@@ -230,16 +227,17 @@ function toolbarTitle(snapshot) {
 
 /** Paints the toolbar icon for the session %: a drawn gauge, badge text, both, or neither. */
 async function updateToolbar(snapshot) {
-  const { iconStyle } = await getSettings();
+  const settings = await getSettings();
+  const { iconStyle } = settings;
   const pct = snapshot?.session?.percentUsed ?? null;
   const showGauge = pct != null && (iconStyle === "gauge" || iconStyle === "both");
   const showBadge = pct != null && (iconStyle === "badge" || iconStyle === "both");
 
   await chrome.action.setBadgeText({ text: showBadge ? `${pct}%` : "" });
-  if (showBadge) await chrome.action.setBadgeBackgroundColor({ color: severityColor(pct) });
+  if (showBadge) await chrome.action.setBadgeBackgroundColor({ color: severityColor(pct, settings) });
 
   if (showGauge) {
-    await chrome.action.setIcon({ imageData: gaugeImageData(pct, severityColor(pct)) });
+    await chrome.action.setIcon({ imageData: gaugeImageData(pct, severityColor(pct, settings)) });
   } else {
     await chrome.action.setIcon({ path: DEFAULT_ICON });
   }
@@ -328,7 +326,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     if (changes.settings.oldValue?.actionOpens !== changes.settings.newValue?.actionOpens) {
       applyActionSurface();
     }
-    if (changes.settings.oldValue?.iconStyle !== changes.settings.newValue?.iconStyle) {
+    const toolbarKeys = ["iconStyle", "warnAt", "dangerAt", "severityColors"];
+    const pick = (settings) => JSON.stringify(toolbarKeys.map((key) => settings?.[key]));
+    if (pick(changes.settings.oldValue) !== pick(changes.settings.newValue)) {
       getAll().then(({ latestSnapshot }) => updateToolbar(latestSnapshot));
     }
   }

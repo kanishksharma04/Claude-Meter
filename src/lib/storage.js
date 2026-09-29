@@ -13,6 +13,9 @@ export const DEFAULT_SETTINGS = {
   notificationsEnabled: false,
   notifyThresholds: [80, 95],
   theme: "auto",
+  warnAt: 80, // meters turn amber at this %…
+  dangerAt: 95, // …and red at this one (see lib/severity.js)
+  severityColors: { ok: null, warn: null, danger: null }, // hex overrides; null = each surface's default
   iconStyle: "gauge", // toolbar icon: "gauge" ring | "badge" text | "both" | "plain"
   actionOpens: "popup", // what a click on the toolbar icon opens: "popup" | "sidePanel"
   developerMode: false,
@@ -44,7 +47,7 @@ export async function getAll() {
   return {
     latestSnapshot: stored.latestSnapshot ?? DEFAULT_STATE.latestSnapshot,
     history: stored.history ?? DEFAULT_STATE.history,
-    settings: { ...DEFAULT_SETTINGS, ...(stored.settings ?? {}) },
+    settings: withDefaults(stored.settings),
     __debug_captures: stored.__debug_captures ?? DEFAULT_STATE.__debug_captures,
     orgCache: stored.orgCache ?? DEFAULT_STATE.orgCache,
     lastError: stored.lastError ?? DEFAULT_STATE.lastError,
@@ -76,9 +79,18 @@ export async function setOrgCache(orgMeta) {
   await chrome.storage.local.set({ orgCache: orgMeta });
 }
 
+/** Stored settings over the defaults, one level deep for the object-valued ones. */
+function withDefaults(stored) {
+  return {
+    ...DEFAULT_SETTINGS,
+    ...(stored ?? {}),
+    severityColors: { ...DEFAULT_SETTINGS.severityColors, ...(stored?.severityColors ?? {}) },
+  };
+}
+
 export async function getSettings() {
   const { settings } = await chrome.storage.local.get("settings");
-  return { ...DEFAULT_SETTINGS, ...(settings ?? {}) };
+  return withDefaults(settings);
 }
 
 export async function setSettings(partial) {

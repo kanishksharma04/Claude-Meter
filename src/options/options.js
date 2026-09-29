@@ -1,5 +1,6 @@
 import { getAll, getSettings, setSettings, clearAllData } from "../lib/storage.js";
 import { drawGauge } from "../lib/gauge-icon.js";
+import { normalizeCutoffs, severityColor, severityColors } from "../lib/severity.js";
 
 const refreshIntervalSlider = document.getElementById("refreshIntervalSlider");
 const refreshIntervalValue = document.getElementById("refreshIntervalValue");
@@ -17,6 +18,11 @@ const messageCostToggle = document.getElementById("messageCostToggle");
 const iconStyleSelect = document.getElementById("iconStyleSelect");
 const gaugePreview = document.getElementById("gaugePreview");
 const actionOpensSelect = document.getElementById("actionOpensSelect");
+const cutoffPreview = document.getElementById("cutoffPreview");
+const warnAtInput = document.getElementById("warnAtInput");
+const dangerAtInput = document.getElementById("dangerAtInput");
+const colorInputs = [...document.querySelectorAll('.color-inputs input[type="color"]')];
+const resetSeverityBtn = document.getElementById("resetSeverityBtn");
 const themeSelect = document.getElementById("themeSelect");
 const developerModeToggle = document.getElementById("developerModeToggle");
 const clearDataBtn = document.getElementById("clearDataBtn");
@@ -28,12 +34,30 @@ function applyTheme(theme) {
 
 /** Shows what the gauge icon looks like right now (or a sample reading before there is any data). */
 async function renderGaugePreview() {
-  const { latestSnapshot } = await getAll();
+  const { latestSnapshot, settings } = await getAll();
   const percent = latestSnapshot?.session?.percentUsed ?? 62;
-  const color = percent >= 95 ? "#e5484d" : percent >= 80 ? "#e5a02e" : "#3fb950";
+  const color = severityColor(percent, settings);
   drawGauge(gaugePreview.getContext("2d"), gaugePreview.width, { percent, color });
   gaugePreview.setAttribute("aria-label", `Gauge icon preview at ${percent}%`);
   gaugePreview.style.opacity = iconStyleSelect.value === "gauge" || iconStyleSelect.value === "both" ? "1" : "0.35";
+}
+
+/** The strip above the cut-off fields: three segments sized by the cut-offs, in the chosen colours. */
+function renderSeverity(settings) {
+  const { warnAt, dangerAt } = normalizeCutoffs(settings.warnAt, settings.dangerAt);
+  const colors = severityColors(settings);
+  const widths = { ok: warnAt, warn: dangerAt - warnAt, danger: 100 - dangerAt };
+
+  for (const seg of cutoffPreview.children) {
+    seg.style.flex = `${widths[seg.dataset.level]} 0 0`;
+    seg.style.background = colors[seg.dataset.level];
+  }
+  cutoffPreview.setAttribute("aria-label", `Normal below ${warnAt}%, amber from ${warnAt}%, red from ${dangerAt}%`);
+
+  warnAtInput.value = warnAt;
+  dangerAtInput.value = dangerAt;
+  for (const input of colorInputs) input.value = colors[input.dataset.level];
+  renderGaugePreview();
 }
 
 function updateThresholdsRowState(enabled) {
@@ -64,6 +88,8 @@ async function init() {
 
   iconStyleSelect.value = settings.iconStyle;
   renderGaugePreview();
+
+  renderSeverity(settings);
 
   actionOpensSelect.value = settings.actionOpens;
   // Older Chromium builds have no side panel; don't offer what can't work.
@@ -130,6 +156,27 @@ messageCostToggle.addEventListener("change", async () => {
 iconStyleSelect.addEventListener("change", async () => {
   renderGaugePreview();
   await setSettings({ iconStyle: iconStyleSelect.value });
+});
+
+for (const input of [warnAtInput, dangerAtInput]) {
+  input.addEventListener("change", async () => {
+    // Whichever field was just edited wins; the other one moves out of its way.
+    const cutoffs = normalizeCutoffs(warnAtInput.value, dangerAtInput.value, input === warnAtInput ? "warnAt" : "dangerAt");
+    renderSeverity(await setSettings(cutoffs));
+  });
+}
+
+for (const input of colorInputs) {
+  input.addEventListener("change", async () => {
+    const { severityColors: current } = await getSettings();
+    renderSeverity(await setSettings({ severityColors: { ...current, [input.dataset.level]: input.value } }));
+  });
+}
+
+resetSeverityBtn.addEventListener("click", async () => {
+  renderSeverity(
+    await setSettings({ warnAt: 80, dangerAt: 95, severityColors: { ok: null, warn: null, danger: null } })
+  );
 });
 
 actionOpensSelect.addEventListener("change", async () => {

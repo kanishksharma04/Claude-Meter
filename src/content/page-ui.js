@@ -16,7 +16,8 @@
   // shape before using the title as a chat name.
   const TITLE_PREFIX_PATTERN = /^\[\d{1,3}%\]\s*/;
   const FAVICON_SIZE = 32;
-  const SEVERITY_COLORS = { "": "#7a9b6e", warn: "#d9a452", danger: "#c1554a" };
+  const SEVERITY_COLORS = { ok: "#7a9b6e", warn: "#d9a452", danger: "#c1554a" };
+  const HEX_COLOR = /^#[0-9a-f]{6}$/i;
   // A reading at least this much newer than a logged limit hit, showing the
   // bucket clearly below full, means the lockout ended early (limits were
   // reset, plan changed) — stop counting down.
@@ -110,10 +111,19 @@
     return `${hr} hr ${min} min`;
   }
 
+  /** Mirrors severityOf() in src/lib/severity.js: the user's cut-offs, defaulting to 80 / 95. */
   function severityClass(pct) {
-    if (pct >= 95) return "danger";
-    if (pct >= 80) return "warn";
+    const warnAt = Number(state.settings.warnAt ?? 80);
+    const dangerAt = Number(state.settings.dangerAt ?? 95);
+    if (pct >= dangerAt) return "danger";
+    if (pct >= warnAt) return "warn";
     return "";
+  }
+
+  /** The user's colour for a level if they set one, else null. */
+  function customSeverityColor(level) {
+    const color = state.settings.severityColors?.[level];
+    return typeof color === "string" && HEX_COLOR.test(color) ? color : null;
   }
 
   /** Tiny createElement helper — no innerHTML, so page Trusted Types rules can't bite. */
@@ -278,7 +288,7 @@
     .bucket-label { font-weight: 600; }
     .bucket-pct { color: var(--muted); font-variant-numeric: tabular-nums; }
     .track { height: 6px; border-radius: 999px; background: var(--track); overflow: hidden; }
-    .fill { height: 100%; border-radius: 999px; background: var(--accent); }
+    .fill { height: 100%; border-radius: 999px; background: var(--ok-fill, var(--accent)); }
     .fill.warn { background: var(--warn); }
     .fill.danger { background: var(--danger); }
     .sub { margin-top: 4px; color: var(--muted); font-size: 11px; }
@@ -796,10 +806,15 @@
     if (document.title !== wanted) document.title = wanted;
   }
 
+  function faviconColor(pct) {
+    const level = severityClass(pct) || "ok";
+    return customSeverityColor(level) ?? SEVERITY_COLORS[level];
+  }
+
   function drawFavicon(pct) {
     const canvas = el("canvas", { width: FAVICON_SIZE, height: FAVICON_SIZE });
     const ctx = canvas.getContext("2d");
-    const color = SEVERITY_COLORS[severityClass(pct)];
+    const color = faviconColor(pct);
 
     ctx.fillStyle = "#262624";
     ctx.beginPath();
@@ -821,7 +836,7 @@
     return canvas.toDataURL("image/png");
   }
 
-  let faviconShown = null; // percent currently drawn, so we only redraw on change
+  let faviconShown = null; // "percent:colour" currently drawn, so we only redraw on change
 
   function applyFavicon() {
     const mode = state.settings.tabIndicator ?? "title";
@@ -840,7 +855,8 @@
     }
 
     const untouched = links.filter((link) => link.dataset.claudemeterOriginal == null && !link.dataset.claudemeterAdded);
-    if (pct === faviconShown && untouched.length === 0 && links.length > 0) return;
+    const drawing = `${pct}:${faviconColor(pct)}`;
+    if (drawing === faviconShown && untouched.length === 0 && links.length > 0) return;
 
     let href;
     try {
@@ -862,7 +878,7 @@
       }
       link.href = href;
     }
-    faviconShown = pct;
+    faviconShown = drawing;
   }
 
   function updateTabIndicator() {
@@ -994,8 +1010,20 @@
 
   // ------------------------------------------------------------------ render --
 
+  /** Colours the user picked override the theme's for every meter in the dock. */
+  function applySeverityColors() {
+    for (const [level, properties] of [["ok", ["--ok", "--ok-fill"]], ["warn", ["--warn"]], ["danger", ["--danger"]]]) {
+      const custom = customSeverityColor(level);
+      for (const property of properties) {
+        if (custom) dock.style.setProperty(property, custom);
+        else dock.style.removeProperty(property);
+      }
+    }
+  }
+
   function render() {
     dock.dataset.theme = effectiveTheme();
+    applySeverityColors();
     renderPill();
     renderCostChip();
     renderLockout();

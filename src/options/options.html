@@ -165,6 +165,38 @@
     </section>
 
     <section class="card">
+      <h2>Warning levels</h2>
+      <p class="hint intro">
+        Where every meter changes colour — the toolbar icon, the bars in the popup, and the pill on claude.ai.
+      </p>
+      <div class="cutoff-preview" id="cutoffPreview" role="img">
+        <span class="seg" data-level="ok"></span>
+        <span class="seg" data-level="warn"></span>
+        <span class="seg" data-level="danger"></span>
+      </div>
+      <label class="row">
+        <span>Turns amber at</span>
+        <span class="unit-input"><input type="number" id="warnAtInput" min="1" max="99" step="1" /> %</span>
+      </label>
+      <label class="row">
+        <span>Turns red at</span>
+        <span class="unit-input"><input type="number" id="dangerAtInput" min="2" max="100" step="1" /> %</span>
+      </label>
+      <div class="row">
+        <span>
+          Colours
+          <small>Untouched colours follow the theme, so they stay readable in light and dark.</small>
+        </span>
+        <span class="color-inputs">
+          <label>Normal <input type="color" id="okColorInput" data-level="ok" /></label>
+          <label>Amber <input type="color" id="warnColorInput" data-level="warn" /></label>
+          <label>Red <input type="color" id="dangerColorInput" data-level="danger" /></label>
+        </span>
+      </div>
+      <button id="resetSeverityBtn" class="secondary" type="button">Reset to defaults</button>
+    </section>
+
+    <section class="card">
       <h2>Appearance</h2>
       <label class="row">
         <span>Theme</span>
