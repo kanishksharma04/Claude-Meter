@@ -109,10 +109,20 @@ header {
   stroke-linejoin: round;
 }
 
-.footer-actions {
+.footer-actions,
+.header-actions {
   display: flex;
   align-items: center;
   gap: 2px;
+}
+
+/* The eye is crossed out only while privacy mode is on. */
+#privacyBtn .eye-slash {
+  display: none;
+}
+
+#privacyBtn[aria-pressed="true"] .eye-slash {
+  display: inline;
 }
 
 .refresh-icon {
@@ -195,6 +205,21 @@ hr {
   margin: 6px 0 0;
   color: var(--muted);
   font-size: 11px;
+}
+
+/* -------------------------------------------------------- privacy mode -- */
+/* For screen sharing: every figure is blurred past reading, and bars lose the
+   width and colour that would give the number away. Screen readers still get
+   the real values — this hides what is on screen, not what the user can know. */
+
+[data-privacy="on"] :is(.usage-pct, #lastMessage, .chat-list, #limitHits, #historyBody, #planBadge) {
+  filter: blur(5px);
+  user-select: none;
+}
+
+[data-privacy="on"] .progress-fill {
+  width: 100% !important;
+  background: repeating-linear-gradient(-45deg, var(--track), var(--track) 5px, var(--border) 5px, var(--border) 10px);
 }
 
 /* --------------------------------------------------- arranging buckets -- */

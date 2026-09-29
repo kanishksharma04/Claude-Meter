@@ -285,6 +285,18 @@
     }
     .chip strong { color: var(--text); font-weight: 600; }
 
+    /* Privacy mode (screen sharing): figures blurred past reading; bars lose the
+       width and colour that would give them away. */
+    .dock[data-privacy="on"] :is(.bucket-pct, .panel .sub, .banner-text, .lockout-main, .lockout-count, .chip.locked) {
+      filter: blur(5px);
+      user-select: none;
+    }
+    .dock[data-privacy="on"] .fill {
+      width: 100% !important;
+      background: repeating-linear-gradient(-45deg, var(--track), var(--track) 4px, var(--border) 4px, var(--border) 8px);
+    }
+    .dock[data-privacy="on"] .pill .dot { background: var(--muted); }
+
     .panel {
       width: 264px;
       padding: 12px 14px;
@@ -445,6 +457,15 @@
       return;
     }
 
+    if (state.settings.privacyMode) {
+      // No numbers and no severity colour — either would say how full the limits are.
+      pill.className = "pill";
+      pill.title = "ClaudeMeter — numbers hidden (privacy mode)";
+      pill.setAttribute("aria-label", "ClaudeMeter usage, hidden on screen by privacy mode. Show details.");
+      pill.replaceChildren(el("span", { class: "dot" }), el("span", { class: "stale", text: "Usage hidden" }));
+      return;
+    }
+
     const session = snapshot.session;
     const weekly = worstWeekly(snapshot);
     const worstPct = Math.max(session?.percentUsed ?? 0, weekly?.percentUsed ?? 0);
@@ -565,7 +586,7 @@
   }
 
   function renderCostChip() {
-    const enabled = state.settings.messageCost !== false;
+    const enabled = state.settings.messageCost !== false && !state.settings.privacyMode;
     const flash = state.costFlash && state.costFlash.until > Date.now() ? state.costFlash.entry : null;
     const label = flash && costLabel(flash);
 
@@ -871,7 +892,8 @@
   /** The one number worth showing in a tab strip: session %, or the fullest weekly bucket without one. */
   function tabPercent() {
     const mode = state.settings.tabIndicator ?? "title";
-    if (mode === "off" || !state.snapshot) return null;
+    // The tab strip is the first thing an audience sees, so privacy mode clears it entirely.
+    if (mode === "off" || !state.snapshot || state.settings.privacyMode) return null;
     return state.snapshot.session?.percentUsed ?? worstWeekly(state.snapshot)?.percentUsed ?? null;
   }
 
@@ -1116,6 +1138,7 @@
 
   function render() {
     dock.dataset.theme = effectiveTheme();
+    dock.dataset.privacy = state.settings.privacyMode ? "on" : "off";
     // High contrast keeps its own accent; the other themes take the chosen preset.
     if (dock.dataset.theme === "contrast") dock.style.removeProperty("--accent");
     else dock.style.setProperty("--accent", ACCENT_COLORS[state.settings.accent] ?? ACCENT_COLORS.clay);

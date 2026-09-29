@@ -21,6 +21,12 @@ export const COMMANDS = [
   { id: "refresh", keywords: ["refresh", "reload", "update"], description: "Refresh usage now", enter: "refreshes usage" },
   { id: "claude", keywords: ["open", "claude", "chat"], description: "Open claude.ai", enter: "opens claude.ai" },
   { id: "options", keywords: ["options", "settings"], description: "Open ClaudeMeter options", enter: "opens options" },
+  {
+    id: "privacy",
+    keywords: ["privacy", "hide", "blur"],
+    description: "Turn privacy mode on or off",
+    enter: "toggles privacy mode",
+  },
 ];
 
 export function escapeXml(text) {
@@ -56,15 +62,15 @@ export function resolveCommand(text, hasSnapshot = true) {
  * @returns {{ defaultDescription: string, suggestions: Array<{ content: string, description: string }> }}
  *   `defaultDescription` is the top row — the one Enter acts on; `suggestions` are the rows under it.
  */
-export function buildSuggestions(text, snapshot, now = Date.now()) {
+export function buildSuggestions(text, snapshot, { now = Date.now(), concealed = false } = {}) {
   const typed = String(text ?? "").trim().toLowerCase();
-  const rows = bucketRows(snapshot, now);
-  const action = COMMANDS.find((c) => c.id === resolveCommand(typed, rows.length > 0));
+  const action = COMMANDS.find((c) => c.id === resolveCommand(typed, Boolean(snapshot)));
+  // In privacy mode the address bar is as visible to an audience as anything else.
+  const rows = concealed ? [] : bucketRows(snapshot, now);
 
   const summary = rows.map((row) => `${escapeXml(row.name)} <match>${row.percentUsed}%</match>`).join(" <dim>·</dim> ");
-  const defaultDescription = rows.length
-    ? `${summary} <dim>— Enter ${escapeXml(action.enter)}</dim>`
-    : `No usage reading yet <dim>— Enter ${escapeXml(action.enter)}</dim>`;
+  const lead = concealed ? "Usage hidden (privacy mode)" : rows.length ? summary : "No usage reading yet";
+  const defaultDescription = `${lead} <dim>— Enter ${escapeXml(action.enter)}</dim>`;
 
   // One row per limit with its reset time (picking one opens the dashboard)…
   const usage = rows.map((row) => ({

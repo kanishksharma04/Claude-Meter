@@ -28,6 +28,7 @@ const colorInputs = [...document.querySelectorAll('.color-inputs input[type="col
 const resetSeverityBtn = document.getElementById("resetSeverityBtn");
 const themeSelect = document.getElementById("themeSelect");
 const accentSwatches = document.getElementById("accentSwatches");
+const privacyModeToggle = document.getElementById("privacyModeToggle");
 const developerModeToggle = document.getElementById("developerModeToggle");
 const clearDataBtn = document.getElementById("clearDataBtn");
 
@@ -154,6 +155,7 @@ async function init() {
   themeSelect.value = settings.theme;
   buildAccentSwatches(settings.accent);
   applyTheme(settings);
+  privacyModeToggle.checked = settings.privacyMode;
 
   developerModeToggle.checked = settings.developerMode;
 }
@@ -272,8 +274,14 @@ document.getElementById("changeShortcutsBtn").addEventListener("click", () => {
 window.addEventListener("focus", renderShortcuts);
 renderShortcuts();
 
+privacyModeToggle.addEventListener("change", async () => {
+  await setSettings({ privacyMode: privacyModeToggle.checked });
+});
+
 onStorageChanged((changes) => {
   if (changes.snoozeUntil) renderSnooze();
+  // Privacy mode can also be flipped from the popup, the shortcut or the icon's menu.
+  if (changes.settings) privacyModeToggle.checked = Boolean(changes.settings.newValue?.privacyMode);
 });
 
 init();

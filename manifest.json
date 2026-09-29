@@ -31,6 +31,10 @@
     "toggle-snooze": {
       "suggested_key": { "default": "Alt+Shift+S" },
       "description": "Snooze alerts for an hour, or resume them"
+    },
+    "toggle-privacy": {
+      "suggested_key": { "default": "Alt+Shift+P" },
+      "description": "Hide or show the numbers (privacy mode)"
     }
   },
   "omnibox": {

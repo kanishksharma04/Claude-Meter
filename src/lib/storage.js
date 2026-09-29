@@ -20,6 +20,7 @@ export const DEFAULT_SETTINGS = {
   severityColors: { ok: null, warn: null, danger: null }, // hex overrides; null = each surface's default
   bucketPrefs: DEFAULT_BUCKET_PREFS, // popup order / hidden / pinned buckets (lib/bucket-prefs.js)
   iconStyle: "gauge", // toolbar icon: "gauge" ring | "badge" text | "both" | "plain"
+  privacyMode: false, // blur/hide every number, for screen sharing
   actionOpens: "popup", // what a click on the toolbar icon opens: "popup" | "sidePanel"
   developerMode: false,
   inlinePill: true, // usage pill next to claude.ai's composer (src/content/page-ui.js)

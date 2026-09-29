@@ -58,9 +58,17 @@ icon and you immediately see:
   A snooze pauses desktop notifications *and* the nudge banners on claude.ai, shows
   in the popup and Options with a Resume button, and ends by itself
 - **Keyboard shortcuts** — `Alt+Shift+U` opens ClaudeMeter, `Alt+Shift+R` refreshes,
-  `Alt+Shift+S` snoozes alerts for an hour (press again to resume). They work from any
-  tab; the toolbar badge flashes ✓, `zz` or `on` to confirm. Options lists the keys
+  `Alt+Shift+S` snoozes alerts for an hour (press again to resume), `Alt+Shift+P`
+  toggles privacy mode. They work from any tab; the toolbar badge flashes a short
+  confirmation (✓, `zz`, `on`, `hide`, `show`). Options lists the keys
   Chrome actually bound and links to where you can change them
+- **Privacy mode** — one switch for screen sharing. Every figure in the popup, side
+  panel and mini window is blurred (chat titles too) and the bars stop encoding the
+  value; the toolbar icon becomes an empty ring with no badge or hover figures; on
+  claude.ai the pill reads "Usage hidden", banner text is blurred and the tab title
+  and favicon go back to normal; notifications and the `cm` dropdown carry no numbers.
+  Flip it from the eye in the popup, `Alt+Shift+P`, the icon's right-click menu,
+  `cm privacy`, or Options
 - **Side panel dashboard** — the same view as a persistent panel that stays open beside
   whatever you're browsing, with a **usage-over-time chart** (one line per limit) drawn
   from the stored history. Open it from the popup's footer, from Chrome's own side
@@ -178,7 +186,7 @@ Nothing is ever sent to any third-party server — everything stays in
   which the service worker draws on an `OffscreenCanvas` and hands to `setIcon()`
 - **`chrome.sidePanel`** — the dashboard; it is the popup page loaded as
   `popup.html?view=panel`, so both surfaces share one renderer
-- **`chrome.commands`** — the three keyboard shortcuts
+- **`chrome.commands`** — the four keyboard shortcuts
 - **`chrome.contextMenus`** — the toolbar icon's right-click menu (`action` context
   only; nothing is added to web pages)
 - **`chrome.omnibox`** — the `cm` keyword; `src/lib/omnibox.js` builds the suggestions
@@ -268,7 +276,7 @@ Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `his
 (last 500 snapshots) that feeds the dashboard chart and the burn-rate maths. Settings
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
 `notifyThresholds`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
-`bucketPrefs`, `actionOpens`, `developerMode`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
+`bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
 `longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300), and the mini window's last position and size
@@ -340,6 +348,9 @@ written when Developer mode is on, from Options.
   isn't confirmed, so the badge is best-effort and often simply hidden.
 - Requires being logged into claude.ai in the same browser profile the extension runs
   in; it cannot establish a session on its own.
+- Privacy mode has to be switched on by you — an extension can't tell that the
+  screen is being shared. It hides what is drawn on screen; screen readers still get
+  the real values, and an OS notification banner still appears (without figures).
 - The mini window is an ordinary window: Chrome gives extensions no way to keep one
   always on top, so it can be covered by other windows.
 - Hiding a bucket only removes it from the popup and side panel. The toolbar icon
@@ -393,6 +404,7 @@ written when Developer mode is on, from Options.
 - **Clicking the icon opens** — the popup (default) or the side panel.
 - **Theme** — Auto (follows the system's `prefers-color-scheme` and
   `prefers-contrast`), Light, Dark, or High contrast.
+- **Privacy mode** — hide every number while you share your screen.
 - **Accent colour** — one of six presets. High contrast uses its own accent so a
   softer preset can't undo the contrast.
 - **Developer mode** — keeps raw request/response captures for the debug page

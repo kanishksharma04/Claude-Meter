@@ -1,6 +1,7 @@
 import {
   getAll,
   getSettings,
+  setSettings,
   getOrgCache,
   setLatestSnapshot,
   setLastError,
@@ -239,20 +240,33 @@ function toolbarTitle(snapshot) {
 /** Paints the toolbar icon for the session %: a drawn gauge, badge text, both, or neither. */
 async function updateToolbar(snapshot) {
   const settings = await getSettings();
-  const { iconStyle } = settings;
+  const { iconStyle, privacyMode } = settings;
   const pct = snapshot?.session?.percentUsed ?? null;
   const showGauge = pct != null && (iconStyle === "gauge" || iconStyle === "both");
-  const showBadge = pct != null && (iconStyle === "badge" || iconStyle === "both");
+  // Privacy mode: no badge text, an empty gauge, and a hover title with no figures in it.
+  const showBadge = pct != null && !privacyMode && (iconStyle === "badge" || iconStyle === "both");
 
-  await chrome.action.setBadgeText({ text: showBadge ? `${pct}%` : "" });
-  if (showBadge) await chrome.action.setBadgeBackgroundColor({ color: severityColor(pct, settings) });
+  // A shortcut's confirmation owns the badge for a moment; flashBadge() repaints when it's done.
+  if (!badgeFlashing) {
+    await chrome.action.setBadgeText({ text: showBadge ? `${pct}%` : "" });
+    if (showBadge) await chrome.action.setBadgeBackgroundColor({ color: severityColor(pct, settings) });
+  }
 
   if (showGauge) {
-    await chrome.action.setIcon({ imageData: gaugeImageData(pct, severityColor(pct, settings)) });
+    const imageData = privacyMode ? gaugeImageData(null) : gaugeImageData(pct, severityColor(pct, settings));
+    await chrome.action.setIcon({ imageData });
   } else {
     await chrome.action.setIcon({ path: DEFAULT_ICON });
   }
-  await chrome.action.setTitle({ title: toolbarTitle(snapshot) });
+  await chrome.action.setTitle({
+    title: privacyMode ? "ClaudeMeter — numbers hidden (privacy mode)" : toolbarTitle(snapshot),
+  });
+}
+
+async function togglePrivacyMode() {
+  const { privacyMode } = await getSettings();
+  await setSettings({ privacyMode: !privacyMode });
+  return !privacyMode;
 }
 
 // ------------------------------------------------------------ notifications --
@@ -282,7 +296,10 @@ async function maybeNotify(previousSnapshot, snapshot) {
       type: "basic",
       iconUrl: chrome.runtime.getURL("src/icons/icon128.png"),
       title: "ClaudeMeter",
-      message: `${bucket.label} usage just crossed ${crossed}% (now ${bucket.percentUsed}%).`,
+      // A notification pops up over whatever is being shared, so it gets no numbers in privacy mode.
+      message: settings.privacyMode
+        ? "A usage alert you set has been reached."
+        : `${bucket.label} usage just crossed ${crossed}% (now ${bucket.percentUsed}%).`,
       priority: 1,
     });
   }
@@ -319,6 +336,8 @@ async function createContextMenu() {
   add({ id: "history", title: "Open history" });
   if (chrome.sidePanel?.open) add({ id: "sidepanel", title: "Open side panel" });
   add({ id: "mini", title: "Open mini window" });
+  const { privacyMode } = await getSettings();
+  add({ id: "privacy", type: "checkbox", title: "Privacy mode (hide numbers)", checked: privacyMode });
 
   await syncSnooze();
 }
@@ -335,6 +354,8 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     openUrl(`${DASHBOARD_URL}#history`);
   } else if (id === "mini") {
     openMiniWindow();
+  } else if (id === "privacy") {
+    setSettings({ privacyMode: Boolean(info.checked) });
   } else if (id === "snooze:off") {
     setSnoozeUntil(0);
   } else if (id.startsWith("snooze:")) {
@@ -371,10 +392,18 @@ async function syncSnooze() {
  * it did something is the toolbar badge: show a mark briefly, then put back
  * whatever the icon style normally shows.
  */
+let badgeFlashing = false;
+
 async function flashBadge(text, color) {
-  await chrome.action.setBadgeBackgroundColor({ color });
-  await chrome.action.setBadgeText({ text });
-  await new Promise((resolve) => setTimeout(resolve, BADGE_FLASH_MS));
+  // Toggling a setting repaints the toolbar; without this flag that repaint would wipe the flash at once.
+  badgeFlashing = true;
+  try {
+    await chrome.action.setBadgeBackgroundColor({ color });
+    await chrome.action.setBadgeText({ text });
+    await new Promise((resolve) => setTimeout(resolve, BADGE_FLASH_MS));
+  } finally {
+    badgeFlashing = false;
+  }
   const { latestSnapshot } = await getAll();
   await updateToolbar(latestSnapshot);
 }
@@ -388,6 +417,9 @@ chrome.commands.onCommand.addListener(async (command) => {
     const resuming = isSnoozed(snoozeUntil);
     await setSnoozeUntil(resuming ? 0 : snoozeEnd(DEFAULT_SNOOZE));
     await flashBadge(resuming ? "on" : "zz", "#7d8ba0");
+  } else if (command === "toggle-privacy") {
+    const hidden = await togglePrivacyMode();
+    await flashBadge(hidden ? "hide" : "show", "#7d8ba0");
   }
 });
 
@@ -407,8 +439,10 @@ chrome.omnibox.onInputStarted.addListener(() => {
 });
 
 chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
-  const { latestSnapshot } = await getAll();
-  const { defaultDescription, suggestions } = buildSuggestions(text, latestSnapshot);
+  const { latestSnapshot, settings } = await getAll();
+  const { defaultDescription, suggestions } = buildSuggestions(text, latestSnapshot, {
+    concealed: settings.privacyMode,
+  });
   chrome.omnibox.setDefaultSuggestion({ description: defaultDescription });
   suggest(suggestions);
 });
@@ -418,6 +452,7 @@ chrome.omnibox.onInputEntered.addListener(async (text, disposition) => {
   const command = resolveCommand(text, Boolean(latestSnapshot));
 
   if (command === "refresh") await refreshUsage();
+  else if (command === "privacy") await togglePrivacyMode();
   else if (command === "options") await chrome.runtime.openOptionsPage();
   else if (command === "claude") await openUrl("https://claude.ai/", disposition);
   else await openUrl(DASHBOARD_URL, disposition);
@@ -512,7 +547,12 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     if (changes.settings.oldValue?.actionOpens !== changes.settings.newValue?.actionOpens) {
       applyActionSurface();
     }
-    const toolbarKeys = ["iconStyle", "warnAt", "dangerAt", "severityColors"];
+    if (changes.settings.oldValue?.privacyMode !== changes.settings.newValue?.privacyMode) {
+      // Keep the menu's tick in step when the mode was switched somewhere else.
+      const checked = Boolean(changes.settings.newValue?.privacyMode);
+      chrome.contextMenus.update("privacy", { checked }).catch(() => {});
+    }
+    const toolbarKeys = ["iconStyle", "warnAt", "dangerAt", "severityColors", "privacyMode"];
     const pick = (settings) => JSON.stringify(toolbarKeys.map((key) => settings?.[key]));
     if (pick(changes.settings.oldValue) !== pick(changes.settings.newValue)) {
       getAll().then(({ latestSnapshot }) => updateToolbar(latestSnapshot));

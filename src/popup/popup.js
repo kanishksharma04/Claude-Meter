@@ -26,6 +26,7 @@ const loadingState = document.getElementById("loadingState");
 const dataState = document.getElementById("dataState");
 const errorBanner = document.getElementById("errorBanner");
 const srStatus = document.getElementById("srStatus");
+const privacyBtn = document.getElementById("privacyBtn");
 const snoozeBanner = document.getElementById("snoozeBanner");
 const snoozeText = document.getElementById("snoozeText");
 const mainEl = document.getElementById("main");
@@ -317,6 +318,10 @@ function render(state) {
   applyTheme(settings);
   applySeverityColors(settings);
 
+  document.documentElement.dataset.privacy = settings.privacyMode ? "on" : "off";
+  privacyBtn.setAttribute("aria-pressed", String(settings.privacyMode));
+  privacyBtn.classList.toggle("active", settings.privacyMode);
+
   const hasData = Boolean(latestSnapshot);
   emptyState.hidden = hasData;
   loadingState.hidden = true;
@@ -346,7 +351,7 @@ function render(state) {
 
   if (VIEW === "mini") {
     // The window title is what shows in the task switcher, so put the number there.
-    const pct = latestSnapshot.session?.percentUsed;
+    const pct = settings.privacyMode ? null : latestSnapshot.session?.percentUsed;
     document.title = pct != null ? `${pct}% · ClaudeMeter` : "ClaudeMeter";
     fitMiniWindow();
   }
@@ -435,6 +440,11 @@ document.getElementById("showHiddenBtn").addEventListener("click", () => {
   arrangeBtn.focus();
 });
 dataState.addEventListener("click", onBucketTool);
+
+privacyBtn.addEventListener("click", async () => {
+  const { privacyMode } = await setSettings({ privacyMode: !latestState?.settings.privacyMode });
+  announce(privacyMode ? "Privacy mode on. Numbers are hidden on screen." : "Privacy mode off.");
+});
 
 document.getElementById("resumeBtn").addEventListener("click", async () => {
   await setSnoozeUntil(0);
