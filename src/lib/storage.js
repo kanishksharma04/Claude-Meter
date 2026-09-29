@@ -13,7 +13,8 @@ export const DEFAULT_SETTINGS = {
   refreshIntervalMinutes: 5,
   notificationsEnabled: false,
   notifyThresholds: [80, 95],
-  theme: "auto",
+  theme: "auto", // "auto" | "light" | "dark" | "contrast"
+  accent: "clay", // preset name from lib/theme.js
   warnAt: 80, // meters turn amber at this %…
   dangerAt: 95, // …and red at this one (see lib/severity.js)
   severityColors: { ok: null, warn: null, danger: null }, // hex overrides; null = each surface's default

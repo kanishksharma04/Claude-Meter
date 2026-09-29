@@ -18,6 +18,15 @@
   const FAVICON_SIZE = 32;
   const SEVERITY_COLORS = { ok: "#7a9b6e", warn: "#d9a452", danger: "#c1554a" };
   const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+  // Mirrors ACCENTS in src/lib/theme.js.
+  const ACCENT_COLORS = {
+    clay: "#cc785c",
+    ocean: "#4a8fd9",
+    forest: "#4f9a6a",
+    violet: "#8b6fd6",
+    rose: "#d6608a",
+    slate: "#7d8ba0",
+  };
   // A reading at least this much newer than a logged limit hit, showing the
   // bucket clearly below full, means the lockout ended early (limits were
   // reset, plan changed) — stop counting down.
@@ -155,6 +164,7 @@
   function effectiveTheme() {
     const theme = state.settings.theme ?? "auto";
     if (theme !== "auto") return theme;
+    if (matchMedia("(prefers-contrast: more)").matches) return "contrast";
     // claude.ai stamps its own resolved theme on <html data-mode>; prefer it so
     // the pill matches the page rather than the OS.
     const pageMode = document.documentElement.getAttribute("data-mode");
@@ -231,6 +241,12 @@
       --bg: #faf9f5; --panel: #f0eee6; --border: #e5e2d9; --text: #30302e; --muted: #82807a;
       --accent: #cc785c; --track: #e5e2d9; --ok: #4f9358; --warn: #b87f2e; --danger: #b54b3f;
     }
+    .dock[data-theme="contrast"] {
+      color-scheme: dark;
+      --bg: #000000; --panel: #0f0f0f; --border: #b3b3b3; --text: #ffffff; --muted: #dcdcdc;
+      --accent: #66d9ff; --track: #2b2b2b; --ok: #5dff8f; --warn: #ffb000; --danger: #ff8080;
+    }
+    .dock[data-theme="contrast"] .track { outline: 1px solid var(--border); }
 
     * { box-sizing: border-box; }
 
@@ -1023,6 +1039,9 @@
 
   function render() {
     dock.dataset.theme = effectiveTheme();
+    // High contrast keeps its own accent; the other themes take the chosen preset.
+    if (dock.dataset.theme === "contrast") dock.style.removeProperty("--accent");
+    else dock.style.setProperty("--accent", ACCENT_COLORS[state.settings.accent] ?? ACCENT_COLORS.clay);
     applySeverityColors();
     renderPill();
     renderCostChip();

@@ -42,6 +42,10 @@ icon and you immediately see:
   open while you work in other apps. It shows just your pinned limits, puts the
   session % in its title (so it reads in the task switcher), sizes itself to fit, and
   remembers where you put it
+- **Themes and accents** — light, dark, or a **high-contrast** theme (pure black and
+  white, every text pair at 7:1 or better, outlined meters), plus six accent colours:
+  Clay, Ocean, Forest, Violet, Rose, Slate. "Auto" follows the system's light/dark
+  and "more contrast" preferences live. The UI drawn on claude.ai follows along
 - **Side panel dashboard** — the same view as a persistent panel that stays open beside
   whatever you're browsing, with a **usage-over-time chart** (one line per limit) drawn
   from the stored history. Open it from the popup's footer, from Chrome's own side
@@ -132,8 +136,9 @@ Nothing is ever sent to any third-party server — everything stays in
 - **Manifest V3** — targets Chrome, Edge, and Brave (any Chromium-based browser)
 - **Vanilla JavaScript (ES modules)** — no framework, no bundler, no build step;
   `src/**/*.js` is loaded and run as-is
-- **Plain HTML/CSS** — hand-written, using CSS custom properties for a single
-  light/dark/auto theme system shared across the popup, options, and debug pages
+- **Plain HTML/CSS** — hand-written; the theme tokens live once in
+  `src/shared/theme.css` as CSS custom properties, and `src/lib/theme.js` picks the
+  theme and accent for every page
 - **`chrome.storage.local`** — the only persistence layer; schema in `src/lib/storage.js`
 - **`chrome.alarms`** — periodic background refresh, independent of any open tab
 - **`chrome.notifications`** — optional desktop alerts on usage-threshold crossings
@@ -173,8 +178,10 @@ claudemeter/
 │   │   ├── gauge-icon.js              # draws the ring-gauge toolbar icon onto any 2D canvas
 │   │   ├── severity.js                # amber/red cut-offs + colours shared by every meter
 │   │   ├── bucket-prefs.js            # popup bucket order / pinned / hidden + the moves between them
+│   │   ├── theme.js                   # resolves auto/light/dark/contrast + accent presets
 │   │   ├── usage-api.js               # org discovery + usage fetch + typed errors
 │   │   └── normalize-usage.js         # raw usage response -> UsageSnapshot
+│   ├── shared/theme.css               # theme tokens for every extension page
 │   └── icons/                         # toolbar/store icon set (16/32/48/128)
 └── README.md
 ```
@@ -219,7 +226,7 @@ UsageSnapshot = {
 Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `history`
 (last 500 snapshots) that feeds the dashboard chart and the burn-rate maths. Settings
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
-`notifyThresholds`, `theme`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
+`notifyThresholds`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `actionOpens`, `developerMode`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
 `longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
@@ -338,7 +345,10 @@ written when Developer mode is on, from Options.
   colours for normal / amber / red. These are separate from the notification
   thresholds above.
 - **Clicking the icon opens** — the popup (default) or the side panel.
-- **Theme** — Auto (follows `prefers-color-scheme`), Light, or Dark.
+- **Theme** — Auto (follows the system's `prefers-color-scheme` and
+  `prefers-contrast`), Light, Dark, or High contrast.
+- **Accent colour** — one of six presets. High contrast uses its own accent so a
+  softer preset can't undo the contrast.
 - **Developer mode** — keeps raw request/response captures for the debug page
   (`src/debug/debug.html`), off by default.
 - **Clear stored data** — wipes snapshot, history, message costs, the limit-hit log,

@@ -6,6 +6,7 @@ import { summarizeLimitHits, claimLabel } from "../lib/limit-hits.js";
 import { chartSeries, linePath, describeChart } from "../lib/history-chart.js";
 import { severityOf, isHexColor } from "../lib/severity.js";
 import { arrangeBuckets, moveBucket, togglePinned, toggleHidden } from "../lib/bucket-prefs.js";
+import { applyTheme, onSystemThemeChange } from "../lib/theme.js";
 
 // This page serves more than one surface: the toolbar popup; as
 // popup.html?view=panel the side panel (or a full tab), which gets the room
@@ -274,7 +275,7 @@ function render(state) {
   latestState = state;
   const { latestSnapshot, settings, lastError, messageLog, limitHits, history } = state;
 
-  applyTheme(settings.theme);
+  applyTheme(settings);
   applySeverityColors(settings);
 
   const hasData = Boolean(latestSnapshot);
@@ -315,11 +316,6 @@ function render(state) {
   } else {
     errorBanner.hidden = true;
   }
-}
-
-function applyTheme(theme) {
-  const effective = theme === "auto" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : theme;
-  document.documentElement.dataset.theme = effective;
 }
 
 let miniFitted = PARAMS.get("fit") !== "1"; // only a first-ever mini window sizes itself
@@ -417,6 +413,10 @@ onStorageChanged((changes) => {
   if (changes.latestSnapshot || changes.settings || changes.lastError || changes.messageLog || changes.limitHits) {
     loadAndRender();
   }
+});
+
+onSystemThemeChange(() => {
+  if (latestState) applyTheme(latestState.settings);
 });
 
 // Keep "Last updated: X ago" fresh without a full re-fetch.

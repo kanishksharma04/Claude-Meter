@@ -2,34 +2,6 @@
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, sans-serif;
 }
 
-[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #262624;
-  --panel: #30302e;
-  --border: #3e3e3a;
-  --text: #f5f4ef;
-  --muted: #a8a6a0;
-  --accent: #cc785c;
-  --track: #3e3e3a;
-  --ok: #7a9b6e;
-  --warn: #d9a452;
-  --danger: #c1554a;
-}
-
-[data-theme="light"] {
-  color-scheme: light;
-  --bg: #faf9f5;
-  --panel: #f0eee6;
-  --border: #e5e2d9;
-  --text: #30302e;
-  --muted: #82807a;
-  --accent: #cc785c;
-  --track: #e5e2d9;
-  --ok: #4f9358;
-  --warn: #b87f2e;
-  --danger: #b54b3f;
-}
-
 * {
   box-sizing: border-box;
 }
@@ -166,6 +138,11 @@ hr {
   background: var(--track);
   border-radius: 999px;
   overflow: hidden;
+}
+
+/* On pure black the track alone is too faint to show how much is left. */
+[data-theme="contrast"] .progress-track {
+  outline: 1px solid var(--border);
 }
 
 .progress-fill {
@@ -445,7 +422,7 @@ html[data-view="mini"] :is(#topChats, #limitHits, #hiddenNote, #lastMessage, .fo
 
 #openClaudeBtn {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   border: none;
   padding: 8px 18px;
   border-radius: 10px;

@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <title>ClaudeMeter — Options</title>
+    <link rel="stylesheet" href="../shared/theme.css" />
     <link rel="stylesheet" href="options.css" />
   </head>
   <body>
@@ -204,8 +205,16 @@
           <option value="auto">Auto (match system)</option>
           <option value="light">Light</option>
           <option value="dark">Dark</option>
+          <option value="contrast">High contrast</option>
         </select>
       </label>
+      <div class="row">
+        <span id="accentLabel">
+          Accent colour
+          <small>Used for bars, links and controls. High contrast keeps its own.</small>
+        </span>
+        <div class="swatches" id="accentSwatches" role="radiogroup" aria-labelledby="accentLabel"></div>
+      </div>
     </section>
 
     <section class="card">

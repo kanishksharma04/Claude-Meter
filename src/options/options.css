@@ -2,28 +2,6 @@
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #262624;
-  --panel: #30302e;
-  --border: #3e3e3a;
-  --text: #f5f4ef;
-  --muted: #a8a6a0;
-  --accent: #cc785c;
-  --danger: #c1554a;
-}
-
-[data-theme="light"] {
-  color-scheme: light;
-  --bg: #faf9f5;
-  --panel: #f0eee6;
-  --border: #e5e2d9;
-  --text: #30302e;
-  --muted: #82807a;
-  --accent: #cc785c;
-  --danger: #b54b3f;
-}
-
 * {
   box-sizing: border-box;
 }
@@ -192,6 +170,46 @@ button.secondary {
 button.secondary:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.swatches {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.swatches label {
+  position: relative;
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--swatch);
+  cursor: pointer;
+}
+
+/* The radio itself is invisible but still focusable and arrow-key navigable. */
+.swatches input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.swatches label:has(input:checked) {
+  box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--text);
+}
+
+.swatches label:has(input:focus-visible) {
+  outline: 2px solid var(--text);
+  outline-offset: 5px;
+}
+
+[data-theme="contrast"] .swatches {
+  opacity: 0.45;
 }
 
 .threshold-checks {

@@ -1,6 +1,7 @@
 import { getAll, getSettings, setSettings, clearAllData } from "../lib/storage.js";
 import { drawGauge } from "../lib/gauge-icon.js";
 import { normalizeCutoffs, severityColor, severityColors } from "../lib/severity.js";
+import { ACCENTS, applyTheme, onSystemThemeChange } from "../lib/theme.js";
 
 const refreshIntervalSlider = document.getElementById("refreshIntervalSlider");
 const refreshIntervalValue = document.getElementById("refreshIntervalValue");
@@ -24,12 +25,28 @@ const dangerAtInput = document.getElementById("dangerAtInput");
 const colorInputs = [...document.querySelectorAll('.color-inputs input[type="color"]')];
 const resetSeverityBtn = document.getElementById("resetSeverityBtn");
 const themeSelect = document.getElementById("themeSelect");
+const accentSwatches = document.getElementById("accentSwatches");
 const developerModeToggle = document.getElementById("developerModeToggle");
 const clearDataBtn = document.getElementById("clearDataBtn");
 
-function applyTheme(theme) {
-  const effective = theme === "auto" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : theme;
-  document.documentElement.dataset.theme = effective;
+/** One radio per accent preset, drawn as a colour swatch. */
+function buildAccentSwatches(selected) {
+  accentSwatches.replaceChildren(
+    ...Object.entries(ACCENTS).map(([id, { label, color }]) => {
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = "accent";
+      input.value = id;
+      input.checked = id === selected;
+      input.setAttribute("aria-label", label);
+
+      const swatch = document.createElement("label");
+      swatch.title = label;
+      swatch.style.setProperty("--swatch", color);
+      swatch.append(input);
+      return swatch;
+    })
+  );
 }
 
 /** Shows what the gauge icon looks like right now (or a sample reading before there is any data). */
@@ -96,7 +113,8 @@ async function init() {
   actionOpensSelect.querySelector('[value="sidePanel"]').disabled = !chrome.sidePanel;
 
   themeSelect.value = settings.theme;
-  applyTheme(settings.theme);
+  buildAccentSwatches(settings.accent);
+  applyTheme(settings);
 
   developerModeToggle.checked = settings.developerMode;
 }
@@ -184,9 +202,14 @@ actionOpensSelect.addEventListener("change", async () => {
 });
 
 themeSelect.addEventListener("change", async () => {
-  applyTheme(themeSelect.value);
-  await setSettings({ theme: themeSelect.value });
+  applyTheme(await setSettings({ theme: themeSelect.value }));
 });
+
+accentSwatches.addEventListener("change", async (event) => {
+  applyTheme(await setSettings({ accent: event.target.value }));
+});
+
+onSystemThemeChange(async () => applyTheme(await getSettings()));
 
 developerModeToggle.addEventListener("change", async () => {
   await setSettings({ developerMode: developerModeToggle.checked });
