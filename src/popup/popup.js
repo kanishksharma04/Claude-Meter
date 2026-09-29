@@ -8,6 +8,7 @@ import { chartSeries, linePath, describeChart } from "../lib/history-chart.js";
 import { severityOf, isHexColor } from "../lib/severity.js";
 import { arrangeBuckets, moveBucket, togglePinned, toggleHidden } from "../lib/bucket-prefs.js";
 import { applyTheme, onSystemThemeChange } from "../lib/theme.js";
+import { shareRows, buildShareText, shareCardSize, drawShareCard } from "../lib/share.js";
 
 // This page serves more than one surface: the toolbar popup; as
 // popup.html?view=panel the side panel (or a full tab), which gets the room
@@ -27,6 +28,9 @@ const dataState = document.getElementById("dataState");
 const errorBanner = document.getElementById("errorBanner");
 const srStatus = document.getElementById("srStatus");
 const privacyBtn = document.getElementById("privacyBtn");
+const shareBtn = document.getElementById("shareBtn");
+const shareMenu = document.getElementById("shareMenu");
+const shareStatus = document.getElementById("shareStatus");
 const snoozeBanner = document.getElementById("snoozeBanner");
 const snoozeText = document.getElementById("snoozeText");
 const mainEl = document.getElementById("main");
@@ -440,6 +444,97 @@ document.getElementById("showHiddenBtn").addEventListener("click", () => {
   arrangeBtn.focus();
 });
 dataState.addEventListener("click", onBucketTool);
+
+// ------------------------------------------------------------------ share --
+
+function setShareMenuOpen(open) {
+  shareMenu.hidden = !open;
+  shareBtn.setAttribute("aria-expanded", String(open));
+  shareBtn.classList.toggle("active", open);
+  if (open) {
+    shareStatus.textContent = "";
+    shareMenu.querySelector("button").focus();
+  }
+}
+
+/** Draws the card in the popup's current colours and returns it as a PNG blob. */
+function renderShareImage() {
+  const { latestSnapshot, settings } = latestState;
+  const rows = shareRows(latestSnapshot, settings.bucketPrefs);
+  const styles = getComputedStyle(document.documentElement);
+  const token = (name) => styles.getPropertyValue(name).trim();
+  const fills = { ok: token("--ok-fill") || token("--accent"), warn: token("--warn"), danger: token("--danger") };
+
+  const scale = 2;
+  const { width, height } = shareCardSize(rows.length);
+  // OffscreenCanvas, not a <canvas>: HTMLCanvasElement.toBlob() waits for an idle
+  // period and can take over a second when the window isn't being painted.
+  const canvas = new OffscreenCanvas(width * scale, height * scale);
+  drawShareCard(canvas.getContext("2d"), {
+    rows,
+    scale,
+    palette: {
+      bg: token("--bg"),
+      border: token("--border"),
+      text: token("--text"),
+      muted: token("--muted"),
+      track: token("--track"),
+    },
+    fillFor: (pct) => fills[severityOf(pct, settings)],
+  });
+  return canvas.convertToBlob({ type: "image/png" });
+}
+
+async function share(kind) {
+  const { latestSnapshot, settings } = latestState;
+  if (kind === "text") {
+    await navigator.clipboard.writeText(buildShareText(latestSnapshot, { bucketPrefs: settings.bucketPrefs }));
+    return "Summary copied as text.";
+  }
+
+  const image = await renderShareImage();
+  if (kind === "image") {
+    await navigator.clipboard.write([new ClipboardItem({ [image.type]: image })]);
+    return "Summary copied as an image.";
+  }
+
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(image);
+  link.download = `claudemeter-usage-${new Date().toISOString().slice(0, 10)}.png`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+  return "Image saved to your downloads.";
+}
+
+shareBtn.addEventListener("click", () => setShareMenuOpen(shareMenu.hidden));
+
+shareMenu.addEventListener("click", async (event) => {
+  const kind = event.target.closest("[data-share]")?.dataset.share;
+  if (!kind || !latestState?.latestSnapshot) return;
+
+  let message;
+  try {
+    message = await share(kind);
+  } catch (err) {
+    console.warn("[ClaudeMeter] share failed", err);
+    // The clipboard can refuse (no focus, blocked by policy); saving the file always works.
+    message = "Couldn't copy. Try Save image instead.";
+  }
+  shareStatus.textContent = message;
+  announce(message);
+});
+
+// Click elsewhere, or Escape, puts the menu away and hands focus back to its button.
+document.addEventListener("pointerdown", (event) => {
+  if (!shareMenu.hidden && !event.target.closest(".share")) setShareMenuOpen(false);
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !shareMenu.hidden) {
+    event.preventDefault();
+    setShareMenuOpen(false);
+    shareBtn.focus();
+  }
+});
 
 privacyBtn.addEventListener("click", async () => {
   const { privacyMode } = await setSettings({ privacyMode: !latestState?.settings.privacyMode });

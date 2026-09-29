@@ -145,6 +145,28 @@
             <path d="M10 3v10" />
           </svg>
         </button>
+        <div class="share">
+          <button
+            id="shareBtn"
+            class="icon-btn"
+            type="button"
+            title="Share a usage summary"
+            aria-label="Share a usage summary"
+            aria-expanded="false"
+            aria-controls="shareMenu"
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M8 10V2.5M5.5 5 8 2.5 10.5 5" />
+              <path d="M3.5 8.5v4a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-4" />
+            </svg>
+          </button>
+          <div id="shareMenu" class="share-menu" role="group" aria-label="Share a usage summary" hidden>
+            <button type="button" data-share="text">Copy as text</button>
+            <button type="button" data-share="image">Copy as image</button>
+            <button type="button" data-share="save">Save image…</button>
+            <p class="share-status" id="shareStatus"></p>
+          </div>
+        </div>
         <button
           id="miniBtn"
           class="icon-btn"

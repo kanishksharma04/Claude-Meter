@@ -207,6 +207,56 @@ hr {
   font-size: 11px;
 }
 
+/* ----------------------------------------------------------- share menu -- */
+
+.share {
+  position: relative;
+  display: flex;
+}
+
+.share-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
+}
+
+.share-menu button {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.share-menu button:hover {
+  background: var(--panel);
+}
+
+.share-status {
+  margin: 0;
+  padding: 4px 10px 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.share-status:empty {
+  display: none;
+}
+
 /* -------------------------------------------------------- privacy mode -- */
 /* For screen sharing: every figure is blurred past reading, and bars lose the
    width and colour that would give the number away. Screen readers still get

@@ -69,6 +69,10 @@ icon and you immediately see:
   and favicon go back to normal; notifications and the `cm` dropdown carry no numbers.
   Flip it from the eye in the popup, `Alt+Shift+P`, the icon's right-click menu,
   `cm privacy`, or Options
+- **Share card** — the share button in the footer copies a usage summary as plain
+  text (one line per limit, dated) or as a PNG card drawn in your current theme,
+  accent and warning colours, or saves that PNG. It contains only the limits you
+  haven't hidden, in your order — never anything about individual chats
 - **Side panel dashboard** — the same view as a persistent panel that stays open beside
   whatever you're browsing, with a **usage-over-time chart** (one line per limit) drawn
   from the stored history. Open it from the popup's footer, from Chrome's own side
@@ -227,6 +231,7 @@ claudemeter/
 │   │   ├── theme.js                   # resolves auto/light/dark/contrast + accent presets
 │   │   ├── omnibox.js                 # "cm" keyword: suggestion rows + command resolution
 │   │   ├── snooze.js                  # snooze options -> end time, and the "is it snoozed" check
+│   │   ├── share.js                   # usage summary as text, and as a card drawn on a canvas
 │   │   ├── usage-api.js               # org discovery + usage fetch + typed errors
 │   │   └── normalize-usage.js         # raw usage response -> UsageSnapshot
 │   ├── shared/theme.css               # theme tokens for every extension page
@@ -348,6 +353,9 @@ written when Developer mode is on, from Options.
   isn't confirmed, so the badge is best-effort and often simply hidden.
 - Requires being logged into claude.ai in the same browser profile the extension runs
   in; it cannot establish a session on its own.
+- Sharing is deliberate, so it works with privacy mode on and copies the real numbers.
+  If the browser refuses the clipboard (it can when the window isn't focused), the
+  menu says so and "Save image" still works.
 - Privacy mode has to be switched on by you — an extension can't tell that the
   screen is being shared. It hides what is drawn on screen; screen readers still get
   the real values, and an OS notification banner still appears (without figures).
