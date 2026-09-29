@@ -8,6 +8,7 @@ import { applyTheme, onSystemThemeChange } from "../lib/theme.js";
 const signinStatus = document.getElementById("signinStatus");
 const openClaudeBtn = document.getElementById("openClaudeBtn");
 const recheckBtn = document.getElementById("recheckBtn");
+const demoBtn = document.getElementById("demoBtn");
 const permissionList = document.getElementById("permissionList");
 const notificationsToggle = document.getElementById("notificationsToggle");
 const thresholds = document.getElementById("thresholds");
@@ -53,6 +54,9 @@ function setSigninStatus(state, text) {
   signinStatus.dataset.state = state;
   signinStatus.textContent = text;
   openClaudeBtn.hidden = state !== "problem";
+  // Not signed in shouldn't be a dead end: demo data lets you see what you'd get.
+  demoBtn.hidden = state === "ok" || state === "checking";
+  demoBtn.textContent = state === "demo" ? "Turn demo data off" : "Look around with demo data";
 }
 
 async function checkSignin() {
@@ -64,7 +68,13 @@ async function checkSignin() {
     // The background worker was restarting; treated like any other failed check below.
   }
 
-  if (result?.ok) {
+  if (result?.demo) {
+    // A demo "refresh" always succeeds, so it says nothing about being signed in.
+    setSigninStatus(
+      "demo",
+      "Demo data is on, so ClaudeMeter is showing made-up numbers and not contacting claude.ai. Turn it off to check your sign-in."
+    );
+  } else if (result?.ok) {
     const pct = result.snapshot?.session?.percentUsed;
     setSigninStatus(
       "ok",
@@ -128,6 +138,11 @@ document.getElementById("testNotificationBtn").addEventListener("click", () => {
 
 openClaudeBtn.addEventListener("click", () => chrome.tabs.create({ url: "https://claude.ai/" }));
 recheckBtn.addEventListener("click", checkSignin);
+demoBtn.addEventListener("click", async () => {
+  await setSettings({ demoMode: signinStatus.dataset.state !== "demo" });
+  // Give the worker a beat to swap datasets before asking it again.
+  setTimeout(checkSignin, 400);
+});
 document.getElementById("optionsBtn").addEventListener("click", () => chrome.runtime.openOptionsPage());
 
 // Coming back to this tab after signing in elsewhere should just work.

@@ -1200,11 +1200,20 @@
     limitHits: ["limitHits", []],
     snoozeUntil: ["snoozeUntil", 0],
   };
+  // In demo mode these come from the made-up dataset the background worker
+  // writes under `demoState` instead (mirrors getAll() in src/lib/storage.js).
+  const DEMO_KEYS = ["latestSnapshot", "messageLog", "modelHint", "limitHits"];
+  const raw = {}; // last value seen for each storage key, demoState included
 
   function applyStored(key, value) {
-    if (!STORAGE_KEYS[key]) return false;
-    const [field, fallback] = STORAGE_KEYS[key];
-    state[field] = value ?? fallback;
+    if (!STORAGE_KEYS[key] && key !== "demoState") return false;
+    raw[key] = value;
+
+    const demo = raw.settings?.demoMode ? raw.demoState : null;
+    for (const [storageKey, [field, fallback]] of Object.entries(STORAGE_KEYS)) {
+      const demoValue = demo && DEMO_KEYS.includes(storageKey) ? demo[storageKey] : undefined;
+      state[field] = demoValue ?? raw[storageKey] ?? fallback;
+    }
     if (key === "messageLog") onMessageLogChanged();
     return true;
   }
@@ -1212,11 +1221,11 @@
   async function init() {
     let stored = {};
     try {
-      stored = await chrome.storage.local.get(Object.keys(STORAGE_KEYS));
+      stored = await chrome.storage.local.get([...Object.keys(STORAGE_KEYS), "demoState"]);
     } catch (err) {
       console.warn(LOG_PREFIX, "could not read storage", err);
     }
-    for (const key of Object.keys(STORAGE_KEYS)) applyStored(key, stored[key]);
+    for (const key of [...Object.keys(STORAGE_KEYS), "demoState"]) applyStored(key, stored[key]);
 
     try {
       chrome.storage.onChanged.addListener((changes, areaName) => {

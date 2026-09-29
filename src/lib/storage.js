@@ -4,6 +4,7 @@
 import { appendMessage, prunePending } from "./message-cost.js";
 import { addLimitHit } from "./limit-hits.js";
 import { DEFAULT_BUCKET_PREFS } from "./bucket-prefs.js";
+import { buildDemoState } from "./demo-data.js";
 
 export const MAX_DEBUG_CAPTURES = 20;
 // Enough for the dashboard chart to cover about a day at the default refresh interval.
@@ -23,6 +24,8 @@ export const DEFAULT_SETTINGS = {
   privacyMode: false, // blur/hide every number, for screen sharing
   actionOpens: "popup", // what a click on the toolbar icon opens: "popup" | "sidePanel"
   developerMode: false,
+  demoMode: false, // show made-up usage everywhere and fetch nothing (lib/demo-data.js)
+  demoLabel: true, // mark the popup with a "Demo" badge while demo mode is on
   inlinePill: true, // usage pill next to claude.ai's composer (src/content/page-ui.js)
   tabIndicator: "title", // usage % on the claude.ai tab: "off" | "title" | "favicon" | "both"
   preSendWarnPercent: 80, // warn above the composer while drafting at/above this %; 0 = off
@@ -48,20 +51,33 @@ export const DEFAULT_STATE = {
 };
 
 export async function getAll() {
-  const stored = await chrome.storage.local.get(Object.keys(DEFAULT_STATE));
+  const stored = await chrome.storage.local.get([...Object.keys(DEFAULT_STATE), "demoState"]);
+  const settings = withDefaults(stored.settings);
+  // Demo mode swaps made-up readings in here, at read time. The real ones stay
+  // in storage untouched, so switching it off shows exactly what was there before.
+  const data = settings.demoMode ? { ...stored, ...(stored.demoState ?? buildDemoState()) } : stored;
   return {
-    latestSnapshot: stored.latestSnapshot ?? DEFAULT_STATE.latestSnapshot,
-    history: stored.history ?? DEFAULT_STATE.history,
-    settings: withDefaults(stored.settings),
+    latestSnapshot: data.latestSnapshot ?? DEFAULT_STATE.latestSnapshot,
+    history: data.history ?? DEFAULT_STATE.history,
+    settings,
     __debug_captures: stored.__debug_captures ?? DEFAULT_STATE.__debug_captures,
     orgCache: stored.orgCache ?? DEFAULT_STATE.orgCache,
-    lastError: stored.lastError ?? DEFAULT_STATE.lastError,
-    modelHint: stored.modelHint ?? DEFAULT_STATE.modelHint,
-    messageLog: stored.messageLog ?? DEFAULT_STATE.messageLog,
+    lastError: data.lastError ?? DEFAULT_STATE.lastError,
+    modelHint: data.modelHint ?? DEFAULT_STATE.modelHint,
+    messageLog: data.messageLog ?? DEFAULT_STATE.messageLog,
     pendingMessages: stored.pendingMessages ?? DEFAULT_STATE.pendingMessages,
-    limitHits: stored.limitHits ?? DEFAULT_STATE.limitHits,
+    limitHits: data.limitHits ?? DEFAULT_STATE.limitHits,
     snoozeUntil: stored.snoozeUntil ?? DEFAULT_STATE.snoozeUntil,
   };
+}
+
+/**
+ * The demo dataset is also written to storage (and removed again) so the page
+ * script on claude.ai — which can't import lib/demo-data.js — can read it.
+ */
+export async function setDemoState(demoState) {
+  if (demoState) await chrome.storage.local.set({ demoState });
+  else await chrome.storage.local.remove("demoState");
 }
 
 /** Stores a new snapshot as the latest, and appends it to the capped rolling history. */

@@ -29,6 +29,8 @@ const resetSeverityBtn = document.getElementById("resetSeverityBtn");
 const themeSelect = document.getElementById("themeSelect");
 const accentSwatches = document.getElementById("accentSwatches");
 const privacyModeToggle = document.getElementById("privacyModeToggle");
+const demoModeToggle = document.getElementById("demoModeToggle");
+const demoLabelToggle = document.getElementById("demoLabelToggle");
 const developerModeToggle = document.getElementById("developerModeToggle");
 const clearDataBtn = document.getElementById("clearDataBtn");
 
@@ -78,6 +80,13 @@ function renderSeverity(settings) {
   dangerAtInput.value = dangerAt;
   for (const input of colorInputs) input.value = colors[input.dataset.level];
   renderGaugePreview();
+}
+
+function renderDemo(settings) {
+  demoModeToggle.checked = settings.demoMode;
+  demoLabelToggle.checked = settings.demoLabel;
+  demoLabelToggle.disabled = !settings.demoMode;
+  document.getElementById("demoLabelRow").classList.toggle("disabled", !settings.demoMode);
 }
 
 async function renderSnooze() {
@@ -156,6 +165,7 @@ async function init() {
   buildAccentSwatches(settings.accent);
   applyTheme(settings);
   privacyModeToggle.checked = settings.privacyMode;
+  renderDemo(settings);
 
   developerModeToggle.checked = settings.developerMode;
 }
@@ -278,8 +288,18 @@ privacyModeToggle.addEventListener("change", async () => {
   await setSettings({ privacyMode: privacyModeToggle.checked });
 });
 
+demoModeToggle.addEventListener("change", async () => {
+  renderDemo(await setSettings({ demoMode: demoModeToggle.checked }));
+});
+
+demoLabelToggle.addEventListener("change", async () => {
+  await setSettings({ demoLabel: demoLabelToggle.checked });
+});
+
 onStorageChanged((changes) => {
   if (changes.snoozeUntil) renderSnooze();
+  // Demo data changes what the gauge preview should show.
+  if (changes.demoState || changes.settings) renderGaugePreview();
   // Privacy mode can also be flipped from the popup, the shortcut or the icon's menu.
   if (changes.settings) privacyModeToggle.checked = Boolean(changes.settings.newValue?.privacyMode);
 });

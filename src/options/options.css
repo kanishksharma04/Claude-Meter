@@ -307,7 +307,8 @@ button.secondary:hover {
   transition: opacity 0.15s ease;
 }
 
-#thresholdsRow.disabled {
+#thresholdsRow.disabled,
+#demoLabelRow.disabled {
   opacity: 0.4;
 }
 

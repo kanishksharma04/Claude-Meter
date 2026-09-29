@@ -12,6 +12,7 @@ import {
   setModelHint,
   pushLimitHit,
   setSnoozeUntil,
+  setDemoState,
 } from "../lib/storage.js";
 import { fetchUsageSnapshot, UsageApiError } from "../lib/usage-api.js";
 import { normalizeUsageResponse } from "../lib/normalize-usage.js";
@@ -21,6 +22,7 @@ import { resolveResetsAt } from "../lib/limit-hits.js";
 import { gaugeImageData } from "../lib/gauge-icon.js";
 import { severityColor } from "../lib/severity.js";
 import { buildSuggestions, resolveCommand } from "../lib/omnibox.js";
+import { buildDemoState } from "../lib/demo-data.js";
 import { formatDuration, formatClock } from "../lib/time-format.js";
 import { SNOOZE_OPTIONS, DEFAULT_SNOOZE, snoozeEnd, isSnoozed } from "../lib/snooze.js";
 
@@ -83,6 +85,7 @@ async function handlePassiveCapture(capture, sender) {
     // request (e.g. user opened claude.ai's own usage panel), reuse that
     // response instead of waiting for the next active refresh.
     if (
+      !settings.demoMode &&
       USAGE_ENDPOINT_PATTERN.test(capture.url) &&
       capture.responseBody &&
       typeof capture.responseBody === "object"
@@ -108,9 +111,11 @@ const startsInFlight = new Map();
 
 async function handleChatEvent(event) {
   try {
+    const settings = await getSettings();
+    // Demo mode shows made-up numbers; measuring real messages against them would be nonsense.
+    if (settings.demoMode) return;
     if (event?.kind === "limit_hit") return await recordLimitHit(event);
 
-    const settings = await getSettings();
     if (!settings.messageCost || !event?.requestId) return;
 
     if (event.kind === "completion_start") {
@@ -193,6 +198,8 @@ async function recordLimitHit(event) {
 
 async function refreshUsage() {
   try {
+    if ((await getSettings()).demoMode) return await refreshDemo();
+
     const { latestSnapshot: previous } = await getAll();
     const snapshot = await fetchUsageSnapshot();
     await applySnapshot(snapshot);
@@ -208,6 +215,27 @@ async function refreshUsage() {
   }
 }
 
+/**
+ * Demo mode's stand-in for a refresh: rebuild the made-up dataset around the
+ * current time (so "resets in…" and "last updated" stay fresh) and repaint.
+ * Nothing is fetched, and none of the real stored readings are touched.
+ */
+async function refreshDemo() {
+  const demo = buildDemoState();
+  await setDemoState(demo);
+  await updateToolbar(demo.latestSnapshot);
+  return { ok: true, snapshot: demo.latestSnapshot, demo: true };
+}
+
+/** Called when the demoMode setting flips. */
+async function applyDemoMode(on) {
+  if (on) return refreshDemo();
+  await setDemoState(null);
+  // Back to reality: show what was stored before, then try for a fresh reading.
+  await updateToolbar((await getAll()).latestSnapshot);
+  await refreshUsage();
+}
+
 /** Everything that has to happen whenever a new reading lands, whichever way it arrived. */
 async function applySnapshot(snapshot) {
   await setLatestSnapshot(snapshot);
@@ -219,6 +247,7 @@ async function applySnapshot(snapshot) {
 
 async function updateModelHint() {
   const { history, settings } = await getAll();
+  if (settings.demoMode) return; // the demo dataset brings its own hint; don't overwrite the real one from it
   const hint =
     settings.modelHintPercent > 0 ? modelSwitchHint(history, { minPercent: settings.modelHintPercent }) : null;
   await setModelHint(hint);
@@ -546,6 +575,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     }
     if (changes.settings.oldValue?.actionOpens !== changes.settings.newValue?.actionOpens) {
       applyActionSurface();
+    }
+    if (Boolean(changes.settings.oldValue?.demoMode) !== Boolean(changes.settings.newValue?.demoMode)) {
+      applyDemoMode(Boolean(changes.settings.newValue?.demoMode));
     }
     if (changes.settings.oldValue?.privacyMode !== changes.settings.newValue?.privacyMode) {
       // Keep the menu's tick in step when the mode was switched somewhere else.

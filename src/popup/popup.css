@@ -81,6 +81,13 @@ header {
   letter-spacing: 0.04em;
 }
 
+.badge.demo {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--muted);
+  color: var(--muted);
+}
+
 .icon-btn {
   background: none;
   border: none;

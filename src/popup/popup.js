@@ -35,6 +35,7 @@ const snoozeBanner = document.getElementById("snoozeBanner");
 const snoozeText = document.getElementById("snoozeText");
 const mainEl = document.getElementById("main");
 const planBadge = document.getElementById("planBadge");
+const demoBadge = document.getElementById("demoBadge");
 const lastUpdatedEl = document.getElementById("lastUpdated");
 const refreshBtn = document.getElementById("refreshBtn");
 const pinnedList = document.getElementById("pinnedList");
@@ -322,6 +323,7 @@ function render(state) {
   applyTheme(settings);
   applySeverityColors(settings);
 
+  demoBadge.hidden = !(settings.demoMode && settings.demoLabel);
   document.documentElement.dataset.privacy = settings.privacyMode ? "on" : "off";
   privacyBtn.setAttribute("aria-pressed", String(settings.privacyMode));
   privacyBtn.classList.toggle("active", settings.privacyMode);
@@ -584,7 +586,7 @@ if (location.hash === "#history") {
 }
 
 onStorageChanged((changes) => {
-  const watched = ["latestSnapshot", "settings", "lastError", "messageLog", "limitHits", "snoozeUntil"];
+  const watched = ["latestSnapshot", "settings", "lastError", "messageLog", "limitHits", "snoozeUntil", "demoState"];
   if (watched.some((key) => key in changes)) {
     loadAndRender();
   }

@@ -73,6 +73,12 @@ icon and you immediately see:
   text (one line per limit, dated) or as a PNG card drawn in your current theme,
   accent and warning colours, or saves that PNG. It contains only the limits you
   haven't hidden, in your order — never anything about individual chats
+- **Demo mode** — made-up but coherent usage on every surface (popup, side panel,
+  mini window, toolbar icon, the pill on claude.ai, the `cm` dropdown, the share
+  card): a session at 62%, two weekly limits, a 12-hour history, a few chats and two
+  past limit hits. It's for trying ClaudeMeter before signing in — the welcome page
+  offers it when you aren't — and for screenshots (the "Demo" badge can be switched
+  off). Nothing is fetched while it's on and your real readings are left as they were
 - **Side panel dashboard** — the same view as a persistent panel that stays open beside
   whatever you're browsing, with a **usage-over-time chart** (one line per limit) drawn
   from the stored history. Open it from the popup's footer, from Chrome's own side
@@ -232,6 +238,7 @@ claudemeter/
 │   │   ├── omnibox.js                 # "cm" keyword: suggestion rows + command resolution
 │   │   ├── snooze.js                  # snooze options -> end time, and the "is it snoozed" check
 │   │   ├── share.js                   # usage summary as text, and as a card drawn on a canvas
+│   │   ├── demo-data.js               # the deterministic made-up dataset behind demo mode
 │   │   ├── usage-api.js               # org discovery + usage fetch + typed errors
 │   │   └── normalize-usage.js         # raw usage response -> UsageSnapshot
 │   ├── shared/theme.css               # theme tokens for every extension page
@@ -281,7 +288,7 @@ Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `his
 (last 500 snapshots) that feeds the dashboard chart and the burn-rate maths. Settings
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
 `notifyThresholds`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
-`bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
+`bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
 `longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300), and the mini window's last position and size
@@ -315,6 +322,11 @@ LimitHit = {
   model: string | null,
 }
 ```
+
+Demo mode never overwrites any of this. `getAll()` in `src/lib/storage.js` swaps the
+made-up dataset in at read time, and the same dataset is written to a separate
+`demoState` key (removed again when demo mode goes off) so the page script on
+claude.ai can read it.
 
 A snooze is a single top-level `snoozeUntil` timestamp (0 when alerts aren't paused);
 an alarm at that time clears it, so it ends even if the browser was closed meanwhile.
@@ -353,6 +365,8 @@ written when Developer mode is on, from Options.
   isn't confirmed, so the badge is best-effort and often simply hidden.
 - Requires being logged into claude.ai in the same browser profile the extension runs
   in; it cannot establish a session on its own.
+- While demo mode is on, real usage isn't tracked at all: no refreshes, no per-message
+  costs, no limit-hit logging, no notifications. Turn it off to get real numbers back.
 - Sharing is deliberate, so it works with privacy mode on and copies the real numbers.
   If the browser refuses the clipboard (it can when the window isn't focused), the
   menu says so and "Save image" still works.
@@ -415,6 +429,7 @@ written when Developer mode is on, from Options.
 - **Privacy mode** — hide every number while you share your screen.
 - **Accent colour** — one of six presets. High contrast uses its own accent so a
   softer preset can't undo the contrast.
+- **Demo mode** — show the demo dataset everywhere, with or without the "Demo" badge.
 - **Developer mode** — keeps raw request/response captures for the debug page
   (`src/debug/debug.html`), off by default.
 - **Clear stored data** — wipes snapshot, history, message costs, the limit-hit log,

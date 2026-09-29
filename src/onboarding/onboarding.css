@@ -98,7 +98,8 @@ h2 {
   border-left-color: var(--ok);
 }
 
-.status[data-state="problem"] {
+.status[data-state="problem"],
+.status[data-state="demo"] {
   border-left-color: var(--warn);
 }
 
