@@ -17,6 +17,17 @@ export function timeAgo(epochMs) {
   return `${day} day${day === 1 ? "" : "s"} ago`;
 }
 
+/** Wall-clock time of an epoch-ms timestamp — "4:30 PM", or "Tue 8:00 AM" when it isn't today. */
+export function formatClock(epochMs, now = Date.now()) {
+  const date = new Date(epochMs);
+  const sameDay = date.toDateString() === new Date(now).toDateString();
+  return date.toLocaleString([], {
+    ...(sameDay ? {} : { weekday: "short" }),
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 /** Format the ms until a future epoch-ms timestamp as "X hr Y min" (or "X day Y hr" beyond a day). */
 export function formatDuration(fromMs, toMs) {
   if (toMs == null) return null;

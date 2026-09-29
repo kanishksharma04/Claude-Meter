@@ -208,6 +208,11 @@ button.secondary {
   cursor: pointer;
 }
 
+button.secondary.inline {
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
 button.secondary:hover {
   border-color: var(--accent);
   color: var(--accent);

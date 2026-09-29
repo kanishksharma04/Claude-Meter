@@ -75,6 +75,7 @@
     threads: new Map(), // conversationId -> { messages, chars } for the active thread
     modelHint: null, // computed by the background worker (lib/burn-rate.js)
     limitHits: [], // "limit reached" log (lib/limit-hits.js)
+    snoozeUntil: 0, // epoch ms until which nudges are paused (lib/snooze.js)
     pendingFiles: [], // { name, size, tokens } added to the draft since the last message was sent
     projects: new Map(), // projectId -> { docs, chars } of project knowledge
     threadProjects: new Map(), // conversationId -> projectId
@@ -529,6 +530,7 @@
         conversationLine(),
         threadLine(),
         limitHitsLine(),
+      snoozeLine(),
         el("div", { class: "panel-foot", text: `Updated ${timeAgo(snapshot?.fetchedAt)}` })
       )
     );
@@ -962,6 +964,21 @@
     applyFavicon();
   }
 
+  // ------------------------------------------------------------------ snooze --
+
+  // The nudges "Snooze alerts" silences. The lockout card isn't one of them:
+  // it answers "when can I use this again", which a snooze shouldn't hide.
+  const SNOOZABLE_BANNERS = ["presend", "model", "longctx", "attach", "project"];
+
+  function isSnoozed() {
+    return state.snoozeUntil > Date.now();
+  }
+
+  function snoozeLine() {
+    if (!isSnoozed()) return null;
+    return el("div", { class: "sub", text: `Alerts snoozed until ${formatClock(state.snoozeUntil)}` });
+  }
+
   // -------------------------------------------------------------- limit hits --
 
   function limitHitsLine() {
@@ -1112,6 +1129,7 @@
     updateLongContextNudge();
     updateAttachmentWarning();
     updateProjectWarning();
+    if (isSnoozed()) SNOOZABLE_BANNERS.forEach((id) => bannerSpecs.delete(id));
     renderBanners();
     updateTabIndicator();
   }
@@ -1157,6 +1175,7 @@
     messageLog: ["messageLog", []],
     modelHint: ["modelHint", null],
     limitHits: ["limitHits", []],
+    snoozeUntil: ["snoozeUntil", 0],
   };
 
   function applyStored(key, value) {

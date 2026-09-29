@@ -1,5 +1,6 @@
-import { getAll, setSettings, onStorageChanged } from "../lib/storage.js";
-import { timeAgo, formatDuration } from "../lib/time-format.js";
+import { getAll, setSettings, setSnoozeUntil, onStorageChanged } from "../lib/storage.js";
+import { timeAgo, formatDuration, formatClock } from "../lib/time-format.js";
+import { isSnoozed } from "../lib/snooze.js";
 import { formatCost } from "../lib/message-cost.js";
 import { rankConversations } from "../lib/conversation-costs.js";
 import { summarizeLimitHits, claimLabel } from "../lib/limit-hits.js";
@@ -25,6 +26,8 @@ const loadingState = document.getElementById("loadingState");
 const dataState = document.getElementById("dataState");
 const errorBanner = document.getElementById("errorBanner");
 const srStatus = document.getElementById("srStatus");
+const snoozeBanner = document.getElementById("snoozeBanner");
+const snoozeText = document.getElementById("snoozeText");
 const mainEl = document.getElementById("main");
 const planBadge = document.getElementById("planBadge");
 const lastUpdatedEl = document.getElementById("lastUpdated");
@@ -309,7 +312,7 @@ function renderHistory(history) {
 
 function render(state) {
   latestState = state;
-  const { latestSnapshot, settings, lastError, messageLog, limitHits, history } = state;
+  const { latestSnapshot, settings, lastError, messageLog, limitHits, history, snoozeUntil } = state;
 
   applyTheme(settings);
   applySeverityColors(settings);
@@ -330,6 +333,9 @@ function render(state) {
   } else {
     planBadge.hidden = true;
   }
+
+  snoozeBanner.hidden = !isSnoozed(snoozeUntil);
+  snoozeText.textContent = `Alerts snoozed until ${formatClock(snoozeUntil)}`;
 
   renderBuckets(latestSnapshot, settings, settings.messageCost ? messageLog : []);
   renderTopChats(settings.messageCost ? messageLog : []);
@@ -430,6 +436,11 @@ document.getElementById("showHiddenBtn").addEventListener("click", () => {
 });
 dataState.addEventListener("click", onBucketTool);
 
+document.getElementById("resumeBtn").addEventListener("click", async () => {
+  await setSnoozeUntil(0);
+  announce("Alerts resumed.");
+});
+
 document.getElementById("miniBtn").addEventListener("click", async () => {
   await chrome.runtime.sendMessage({ type: "CLAUDEMETER_OPEN_MINI" });
   // The toolbar popup would only sit on top of the window it just opened.
@@ -462,7 +473,8 @@ if (location.hash === "#history") {
 }
 
 onStorageChanged((changes) => {
-  if (changes.latestSnapshot || changes.settings || changes.lastError || changes.messageLog || changes.limitHits) {
+  const watched = ["latestSnapshot", "settings", "lastError", "messageLog", "limitHits", "snoozeUntil"];
+  if (watched.some((key) => key in changes)) {
     loadAndRender();
   }
 });

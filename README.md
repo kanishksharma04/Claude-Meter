@@ -53,6 +53,10 @@ icon and you immediately see:
 - **`cm` in the address bar** — type `cm`, then a space: the dropdown shows every
   limit and its reset time without opening anything. Enter opens the dashboard;
   `cm refresh`, `cm open` (claude.ai) and `cm options` do what they say
+- **Right-click the icon** — Refresh now, **Snooze alerts** (1 hour, 4 hours, until
+  tomorrow morning, or resume), Open history, Open side panel, Open mini window.
+  A snooze pauses desktop notifications *and* the nudge banners on claude.ai, shows
+  in the popup and Options with a Resume button, and ends by itself
 - **Side panel dashboard** — the same view as a persistent panel that stays open beside
   whatever you're browsing, with a **usage-over-time chart** (one line per limit) drawn
   from the stored history. Open it from the popup's footer, from Chrome's own side
@@ -170,6 +174,8 @@ Nothing is ever sent to any third-party server — everything stays in
   which the service worker draws on an `OffscreenCanvas` and hands to `setIcon()`
 - **`chrome.sidePanel`** — the dashboard; it is the popup page loaded as
   `popup.html?view=panel`, so both surfaces share one renderer
+- **`chrome.contextMenus`** — the toolbar icon's right-click menu (`action` context
+  only; nothing is added to web pages)
 - **`chrome.omnibox`** — the `cm` keyword; `src/lib/omnibox.js` builds the suggestions
   and maps what was typed to a command
 - **`chrome.windows`** — the mini window is the same page again (`?view=mini`) in a
@@ -207,6 +213,7 @@ claudemeter/
 │   │   ├── bucket-prefs.js            # popup bucket order / pinned / hidden + the moves between them
 │   │   ├── theme.js                   # resolves auto/light/dark/contrast + accent presets
 │   │   ├── omnibox.js                 # "cm" keyword: suggestion rows + command resolution
+│   │   ├── snooze.js                  # snooze options -> end time, and the "is it snoozed" check
 │   │   ├── usage-api.js               # org discovery + usage fetch + typed errors
 │   │   └── normalize-usage.js         # raw usage response -> UsageSnapshot
 │   ├── shared/theme.css               # theme tokens for every extension page
@@ -291,6 +298,9 @@ LimitHit = {
 }
 ```
 
+A snooze is a single top-level `snoozeUntil` timestamp (0 when alerts aren't paused);
+an alarm at that time clears it, so it ends even if the browser was closed meanwhile.
+
 Per-conversation totals aren't stored — `src/lib/conversation-costs.js` derives them
 from `messageLog` on demand, so they only cover the messages still in that log.
  Raw request/response captures (`__debug_captures`, last 20) are only
@@ -358,7 +368,7 @@ written when Developer mode is on, from Options.
 - **Refresh interval** — 1–30 minutes, default 5.
 - **Notifications** — desktop notification when session or weekly usage crosses 80%
   and/or 95% (configurable), only fires on the transition, not on every fetch above
-  threshold.
+  threshold. While alerts are snoozed this card says until when and offers Resume.
 - **Usage pill next to the composer** — show/hide the in-page pill on claude.ai.
 - **Usage in the tab** — Off, title prefix (default), favicon, or both.
 - **Warn before sending** — Off, or 50 / 70 / 80 / 90 / 95%; the usage level at which

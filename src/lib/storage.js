@@ -43,6 +43,7 @@ export const DEFAULT_STATE = {
   messageLog: [], // per-message cost entries, oldest first (see lib/message-cost.js)
   pendingMessages: {}, // requestId -> { before snapshot, ... } for replies still streaming
   limitHits: [], // "limit reached" events, oldest first (see lib/limit-hits.js)
+  snoozeUntil: 0, // epoch ms until which alerts are paused; 0 = not snoozed (see lib/snooze.js)
 };
 
 export async function getAll() {
@@ -58,6 +59,7 @@ export async function getAll() {
     messageLog: stored.messageLog ?? DEFAULT_STATE.messageLog,
     pendingMessages: stored.pendingMessages ?? DEFAULT_STATE.pendingMessages,
     limitHits: stored.limitHits ?? DEFAULT_STATE.limitHits,
+    snoozeUntil: stored.snoozeUntil ?? DEFAULT_STATE.snoozeUntil,
   };
 }
 
@@ -146,6 +148,11 @@ export async function pushLimitHit(hit) {
   const next = addLimitHit(limitHits, hit);
   await chrome.storage.local.set({ limitHits: next });
   return next;
+}
+
+/** Pause alerts until the given time; 0 resumes them. */
+export async function setSnoozeUntil(epochMs) {
+  await chrome.storage.local.set({ snoozeUntil: epochMs });
 }
 
 export async function clearDebugCaptures() {

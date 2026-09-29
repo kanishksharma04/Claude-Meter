@@ -1,4 +1,6 @@
-import { getAll, getSettings, setSettings, clearAllData } from "../lib/storage.js";
+import { getAll, getSettings, setSettings, setSnoozeUntil, clearAllData, onStorageChanged } from "../lib/storage.js";
+import { formatClock } from "../lib/time-format.js";
+import { isSnoozed } from "../lib/snooze.js";
 import { drawGauge } from "../lib/gauge-icon.js";
 import { normalizeCutoffs, severityColor, severityColors } from "../lib/severity.js";
 import { ACCENTS, applyTheme, onSystemThemeChange } from "../lib/theme.js";
@@ -77,6 +79,12 @@ function renderSeverity(settings) {
   renderGaugePreview();
 }
 
+async function renderSnooze() {
+  const { snoozeUntil } = await getAll();
+  document.getElementById("snoozeRow").hidden = !isSnoozed(snoozeUntil);
+  document.getElementById("snoozeInfo").textContent = `Alerts are snoozed until ${formatClock(snoozeUntil)}`;
+}
+
 function updateThresholdsRowState(enabled) {
   thresholdsRow.classList.toggle("disabled", !enabled);
   // Really disabled, not just dimmed — otherwise the keyboard can still reach and flip them.
@@ -96,6 +104,7 @@ async function init() {
 
   notificationsToggle.checked = settings.notificationsEnabled;
   updateThresholdsRowState(settings.notificationsEnabled);
+  renderSnooze();
 
   for (const check of thresholdChecks) {
     check.checked = settings.notifyThresholds.includes(Number(check.value));
@@ -229,6 +238,12 @@ clearDataBtn.addEventListener("click", async () => {
   clearDataBtn.textContent = "Cleared!";
   document.getElementById("clearStatus").textContent = "Stored data cleared.";
   setTimeout(() => (clearDataBtn.textContent = "Clear stored data"), 1200);
+});
+
+document.getElementById("resumeAlertsBtn").addEventListener("click", () => setSnoozeUntil(0));
+
+onStorageChanged((changes) => {
+  if (changes.snoozeUntil) renderSnooze();
 });
 
 init();

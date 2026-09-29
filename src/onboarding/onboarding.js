@@ -37,6 +37,10 @@ const PERMISSION_REASONS = {
     name: "Side panel",
     why: "Offer the dashboard in Chrome's side panel.",
   },
+  contextMenus: {
+    name: "Context menu",
+    why: "Add Refresh, Snooze and a few shortcuts to the menu you get by right-clicking the ClaudeMeter icon. Nothing is added to web pages' own menus.",
+  },
 };
 
 const SIGNIN_PROBLEMS = {

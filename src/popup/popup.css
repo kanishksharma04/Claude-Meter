@@ -244,6 +244,19 @@ hr {
   margin-top: 10px;
 }
 
+.snooze-banner {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .link-btn {
   padding: 0;
   border: none;

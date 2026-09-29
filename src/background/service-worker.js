@@ -10,6 +10,7 @@ import {
   pushMessageCost,
   setModelHint,
   pushLimitHit,
+  setSnoozeUntil,
 } from "../lib/storage.js";
 import { fetchUsageSnapshot, UsageApiError } from "../lib/usage-api.js";
 import { normalizeUsageResponse } from "../lib/normalize-usage.js";
@@ -19,10 +20,12 @@ import { resolveResetsAt } from "../lib/limit-hits.js";
 import { gaugeImageData } from "../lib/gauge-icon.js";
 import { severityColor } from "../lib/severity.js";
 import { buildSuggestions, resolveCommand } from "../lib/omnibox.js";
-import { formatDuration } from "../lib/time-format.js";
+import { formatDuration, formatClock } from "../lib/time-format.js";
+import { SNOOZE_OPTIONS, snoozeEnd, isSnoozed } from "../lib/snooze.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
 const ALARM_NAME = "claudemeter-refresh-check";
+const SNOOZE_ALARM_NAME = "claudemeter-snooze-end";
 const USAGE_ENDPOINT_PATTERN = /\/api\/organizations\/[^/]+\/usage(?:[/?]|$)/;
 // A "before" reading this fresh is reused rather than re-fetched when a message is sent.
 const BEFORE_MAX_AGE_MS = 20_000;
@@ -260,10 +263,10 @@ function bucketsOf(snapshot) {
 }
 
 async function maybeNotify(previousSnapshot, snapshot) {
-  const settings = await getSettings();
+  const { settings, snoozeUntil } = await getAll();
   // Skip the very first successful fetch — there's no prior reading to
   // compare against, so "crossing" a threshold isn't meaningful yet.
-  if (!settings.notificationsEnabled || !previousSnapshot) return;
+  if (!settings.notificationsEnabled || !previousSnapshot || isSnoozed(snoozeUntil)) return;
 
   const thresholds = [...settings.notifyThresholds].sort((a, b) => a - b);
   const previousByLabel = new Map(bucketsOf(previousSnapshot).map((b) => [b.label, b.percentUsed]));
@@ -293,6 +296,69 @@ async function applyActionSurface() {
   // Both are needed: a registered popup would otherwise still win the click.
   await chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: usePanel });
   await chrome.action.setPopup({ popup: usePanel ? "" : chrome.runtime.getURL("src/popup/popup.html") });
+}
+
+// ------------------------------------------------------------ context menu --
+// Right-clicking the toolbar icon. Chrome allows six top-level items here.
+
+const MENU_CONTEXTS = ["action"];
+
+async function createContextMenu() {
+  await chrome.contextMenus.removeAll();
+  const add = (properties) => chrome.contextMenus.create({ contexts: MENU_CONTEXTS, ...properties });
+
+  add({ id: "refresh", title: "Refresh now" });
+  add({ id: "snooze", title: "Snooze alerts" });
+  for (const option of SNOOZE_OPTIONS) {
+    add({ id: `snooze:${option.id}`, parentId: "snooze", title: option.label });
+  }
+  add({ id: "snooze:separator", parentId: "snooze", type: "separator" });
+  add({ id: "snooze:off", parentId: "snooze", title: "Resume alerts", enabled: false });
+  add({ id: "history", title: "Open history" });
+  if (chrome.sidePanel?.open) add({ id: "sidepanel", title: "Open side panel" });
+  add({ id: "mini", title: "Open mini window" });
+
+  await syncSnooze();
+}
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  const id = String(info.menuItemId);
+
+  if (id === "sidepanel") {
+    // Must be called straight from the click — an await first would drop the user gesture.
+    chrome.sidePanel.open({ windowId: tab.windowId }).catch((err) => console.warn(LOG_PREFIX, "side panel:", err));
+  } else if (id === "refresh") {
+    refreshUsage();
+  } else if (id === "history") {
+    openUrl(`${DASHBOARD_URL}#history`);
+  } else if (id === "mini") {
+    openMiniWindow();
+  } else if (id === "snooze:off") {
+    setSnoozeUntil(0);
+  } else if (id.startsWith("snooze:")) {
+    setSnoozeUntil(snoozeEnd(id.slice("snooze:".length)));
+  }
+});
+
+// ------------------------------------------------------------------ snooze --
+
+/** Brings the menu and the wake-up alarm in line with the stored snooze. Runs whenever it changes. */
+async function syncSnooze() {
+  const { snoozeUntil } = await getAll();
+  const snoozed = isSnoozed(snoozeUntil);
+
+  // An alarm, not a timer: the worker won't be alive when a 4-hour snooze runs out.
+  if (snoozed) chrome.alarms.create(SNOOZE_ALARM_NAME, { when: snoozeUntil });
+  else chrome.alarms.clear(SNOOZE_ALARM_NAME);
+
+  try {
+    await chrome.contextMenus.update("snooze", {
+      title: snoozed ? `Alerts snoozed until ${formatClock(snoozeUntil)}` : "Snooze alerts",
+    });
+    await chrome.contextMenus.update("snooze:off", { enabled: snoozed });
+  } catch {
+    // The menu isn't built yet (first run before onInstalled) — createContextMenu() calls back here.
+  }
 }
 
 // ----------------------------------------------------------------- omnibox --
@@ -382,6 +448,7 @@ chrome.runtime.onInstalled.addListener((details) => {
   console.log(LOG_PREFIX, "extension installed");
   ensureAlarm();
   applyActionSurface();
+  createContextMenu();
   // A brand-new install gets the welcome page; updates and reloads don't.
   if (details.reason === "install") {
     chrome.tabs.create({ url: chrome.runtime.getURL("src/onboarding/onboarding.html") });
@@ -392,15 +459,18 @@ chrome.runtime.onInstalled.addListener((details) => {
 chrome.runtime.onStartup.addListener(() => {
   ensureAlarm();
   applyActionSurface(); // action.setPopup() doesn't survive a browser restart
+  syncSnooze(); // a snooze may have run out while the browser was closed
   refreshUsage();
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name !== ALARM_NAME) return;
-  refreshUsage();
+  if (alarm.name === SNOOZE_ALARM_NAME) setSnoozeUntil(0);
+  if (alarm.name === ALARM_NAME) refreshUsage();
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === "local" && changes.snoozeUntil) syncSnooze();
+
   if (areaName === "local" && changes.settings) {
     const before = changes.settings.oldValue?.refreshIntervalMinutes;
     const after = changes.settings.newValue?.refreshIntervalMinutes;
