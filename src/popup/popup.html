@@ -38,31 +38,37 @@
 
       <!-- Data state -->
       <section id="dataState" hidden>
-        <div class="usage-row">
-          <div class="usage-row-head">
-            <span class="usage-label" id="sessionLabel">Current session</span>
-            <span class="usage-pct" id="sessionPct"></span>
+        <!-- Pinned buckets: no heading, straight under the header -->
+        <div id="pinnedList" class="bucket-list"></div>
+        <p class="usage-sub" id="sessionMissing" hidden>Session usage isn't available right now.</p>
+
+        <div id="restGroup">
+          <hr id="restDivider" />
+          <div class="weekly-header">
+            <span id="restTitle">Weekly limits</span>
+            <a
+              id="learnMoreLink"
+              href="https://support.claude.com/en/articles/11647753-how-do-usage-and-length-limits-work"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Learn more</a
+            >
           </div>
-          <div class="progress-track">
-            <div class="progress-fill" id="sessionFill"></div>
-          </div>
-          <p class="usage-sub" id="sessionResets"></p>
-          <p class="usage-sub" id="lastMessage" hidden></p>
+          <div id="restList" class="bucket-list"></div>
+          <p class="usage-sub" id="noWeekly" hidden>No weekly limit data available.</p>
         </div>
 
-        <hr />
-
-        <div class="weekly-header">
-          <span>Weekly limits</span>
-          <a
-            id="learnMoreLink"
-            href="https://support.claude.com/en/articles/11647753-how-do-usage-and-length-limits-work"
-            target="_blank"
-            rel="noopener noreferrer"
-            >Learn more</a
-          >
+        <!-- Only while arranging: the buckets the user has hidden -->
+        <div id="hiddenGroup" hidden>
+          <hr />
+          <div class="weekly-header"><span>Hidden</span></div>
+          <div id="hiddenList" class="bucket-list"></div>
         </div>
-        <div id="weeklyList"></div>
+
+        <p class="usage-sub hidden-note" id="hiddenNote" hidden>
+          <span id="hiddenCount"></span>
+          <button type="button" class="link-btn" id="showHiddenBtn">Manage</button>
+        </p>
 
         <div id="topChats" hidden>
           <hr />
@@ -112,6 +118,18 @@
             <path d="M10 3v10" />
           </svg>
         </button>
+        <button
+          id="arrangeBtn"
+          class="icon-btn"
+          type="button"
+          title="Arrange limits: reorder, pin, hide"
+          aria-label="Arrange limits: reorder, pin, hide"
+          aria-pressed="false"
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M11.5 2.5l2 2L6 12l-2.8.8.8-2.8z" />
+          </svg>
+        </button>
         <button id="settingsLink" class="icon-btn" type="button" title="Settings" aria-label="Settings">
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <path d="M2 4h6M12 4h2M2 8h2M8 8h6M2 12h7M13 12h1" />
@@ -123,7 +141,7 @@
       </div>
     </footer>
 
-    <template id="weeklyRowTemplate">
+    <template id="bucketRowTemplate">
       <div class="usage-row">
         <div class="usage-row-head">
           <span class="usage-label"></span>
@@ -133,6 +151,12 @@
           <div class="progress-fill"></div>
         </div>
         <p class="usage-sub"></p>
+        <div class="bucket-tools" hidden>
+          <button type="button" class="tool-btn" data-action="up">&uarr;</button>
+          <button type="button" class="tool-btn" data-action="down">&darr;</button>
+          <button type="button" class="tool-btn" data-action="pin"></button>
+          <button type="button" class="tool-btn" data-action="hide"></button>
+        </div>
       </div>
     </template>
 

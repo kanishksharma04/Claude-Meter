@@ -190,6 +190,66 @@ hr {
   font-size: 11px;
 }
 
+/* --------------------------------------------------- arranging buckets -- */
+
+.usage-row.is-hidden {
+  opacity: 0.55;
+}
+
+.bucket-tools {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tool-btn {
+  min-width: 28px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.tool-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.tool-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tool-btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.icon-btn.active {
+  color: var(--accent);
+  background: var(--panel);
+}
+
+.hidden-note {
+  margin-top: 10px;
+}
+
+.link-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.link-btn:hover {
+  text-decoration: underline;
+}
+
 .weekly-header {
   display: flex;
   justify-content: space-between;

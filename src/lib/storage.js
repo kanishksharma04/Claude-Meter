@@ -3,6 +3,7 @@
 
 import { appendMessage, prunePending } from "./message-cost.js";
 import { addLimitHit } from "./limit-hits.js";
+import { DEFAULT_BUCKET_PREFS } from "./bucket-prefs.js";
 
 export const MAX_DEBUG_CAPTURES = 20;
 // Enough for the dashboard chart to cover about a day at the default refresh interval.
@@ -16,6 +17,7 @@ export const DEFAULT_SETTINGS = {
   warnAt: 80, // meters turn amber at this %…
   dangerAt: 95, // …and red at this one (see lib/severity.js)
   severityColors: { ok: null, warn: null, danger: null }, // hex overrides; null = each surface's default
+  bucketPrefs: DEFAULT_BUCKET_PREFS, // popup order / hidden / pinned buckets (lib/bucket-prefs.js)
   iconStyle: "gauge", // toolbar icon: "gauge" ring | "badge" text | "both" | "plain"
   actionOpens: "popup", // what a click on the toolbar icon opens: "popup" | "sidePanel"
   developerMode: false,
@@ -85,6 +87,7 @@ function withDefaults(stored) {
     ...DEFAULT_SETTINGS,
     ...(stored ?? {}),
     severityColors: { ...DEFAULT_SETTINGS.severityColors, ...(stored?.severityColors ?? {}) },
+    bucketPrefs: { ...DEFAULT_SETTINGS.bucketPrefs, ...(stored?.bucketPrefs ?? {}) },
   };
 }
 

@@ -1,10 +1,11 @@
-import { getAll, onStorageChanged } from "../lib/storage.js";
+import { getAll, setSettings, onStorageChanged } from "../lib/storage.js";
 import { timeAgo, formatDuration } from "../lib/time-format.js";
 import { formatCost } from "../lib/message-cost.js";
 import { rankConversations } from "../lib/conversation-costs.js";
 import { summarizeLimitHits, claimLabel } from "../lib/limit-hits.js";
 import { chartSeries, linePath, describeChart } from "../lib/history-chart.js";
 import { severityOf, isHexColor } from "../lib/severity.js";
+import { arrangeBuckets, moveBucket, togglePinned, toggleHidden } from "../lib/bucket-prefs.js";
 
 // This page serves more than one surface: the toolbar popup, and — as
 // popup.html?view=panel — the side panel (or a full tab), which gets the
@@ -23,16 +24,22 @@ const errorBanner = document.getElementById("errorBanner");
 const planBadge = document.getElementById("planBadge");
 const lastUpdatedEl = document.getElementById("lastUpdated");
 const refreshBtn = document.getElementById("refreshBtn");
-const sessionLabel = document.getElementById("sessionLabel");
-const sessionPct = document.getElementById("sessionPct");
-const sessionFill = document.getElementById("sessionFill");
-const sessionResets = document.getElementById("sessionResets");
-const lastMessageEl = document.getElementById("lastMessage");
+const pinnedList = document.getElementById("pinnedList");
+const restList = document.getElementById("restList");
+const hiddenList = document.getElementById("hiddenList");
+const restGroup = document.getElementById("restGroup");
+const restDivider = document.getElementById("restDivider");
+const restTitle = document.getElementById("restTitle");
+const hiddenGroup = document.getElementById("hiddenGroup");
+const hiddenNote = document.getElementById("hiddenNote");
+const hiddenCount = document.getElementById("hiddenCount");
+const sessionMissing = document.getElementById("sessionMissing");
+const noWeekly = document.getElementById("noWeekly");
+const arrangeBtn = document.getElementById("arrangeBtn");
+const bucketRowTemplate = document.getElementById("bucketRowTemplate");
 const topChats = document.getElementById("topChats");
 const topChatsList = document.getElementById("topChatsList");
 const limitHitsEl = document.getElementById("limitHits");
-const weeklyList = document.getElementById("weeklyList");
-const weeklyRowTemplate = document.getElementById("weeklyRowTemplate");
 const sidePanelBtn = document.getElementById("sidePanelBtn");
 const historySection = document.getElementById("history");
 const historyBody = document.getElementById("historyBody");
@@ -43,6 +50,8 @@ const historyFrom = document.getElementById("historyFrom");
 const historyEmpty = document.getElementById("historyEmpty");
 
 let latestState = null;
+let arranging = false; // the popup's "reorder / pin / hide" mode
+let refocus = null; // { id, action } — the tool button to put focus back on after a re-render
 
 function severityClass(pct) {
   const severity = severityOf(pct, latestState?.settings);
@@ -59,22 +68,125 @@ function applySeverityColors(settings) {
   }
 }
 
-function renderBucketRow({ labelEl, pctEl, fillEl, subEl }, bucket) {
-  labelEl.textContent = bucket.label;
-  pctEl.textContent = `${bucket.percentUsed}% used`;
-  fillEl.style.width = `${bucket.percentUsed}%`;
-  fillEl.className = `progress-fill ${severityClass(bucket.percentUsed)}`.trim();
-
-  const liveLabel = bucket.resetsAt != null ? formatDuration(Date.now(), bucket.resetsAt) : null;
-  subEl.textContent = liveLabel ? `Resets in ${liveLabel}` : `Resets in ${bucket.resetsInLabel}`;
+/** "Last message: 3% of session · 2 min ago", or null when there's nothing to say. */
+function lastMessageText(messageLog) {
+  const last = messageLog.findLast((m) => m.session != null);
+  if (!last) return null;
+  const approx = last.shared ? "about " : "";
+  return `Last message: ${approx}${formatCost(last.session)} of session · ${timeAgo(last.at)}`;
 }
 
-function renderLastMessage(messageLog) {
-  const last = messageLog.findLast((m) => m.session != null);
-  lastMessageEl.hidden = !last;
-  if (!last) return;
-  const approx = last.shared ? "about " : "";
-  lastMessageEl.textContent = `Last message: ${approx}${formatCost(last.session)} of session · ${timeAgo(last.at)}`;
+/**
+ * One bucket row. `group` is where it is being shown ("pinned" | "rest" | "hidden"),
+ * `position` its index and group size — both only matter for the arrange tools.
+ */
+function buildBucketRow(entry, group, position, messageLog) {
+  const { id, kind, bucket } = entry;
+  const row = bucketRowTemplate.content.firstElementChild.cloneNode(true);
+  row.dataset.bucketId = id;
+  row.classList.toggle("is-hidden", group === "hidden");
+
+  // "Opus" on its own is ambiguous once it sits above the "Weekly limits" heading.
+  const name = kind === "weekly" && group !== "rest" ? `${bucket.label} · weekly` : bucket.label;
+  row.querySelector(".usage-label").textContent = name;
+  row.querySelector(".usage-pct").textContent = `${bucket.percentUsed}% used`;
+
+  const fill = row.querySelector(".progress-fill");
+  fill.style.width = `${bucket.percentUsed}%`;
+  fill.className = `progress-fill ${severityClass(bucket.percentUsed)}`.trim();
+
+  const liveLabel = bucket.resetsAt != null ? formatDuration(Date.now(), bucket.resetsAt) : null;
+  row.querySelector(".usage-sub").textContent = `Resets in ${liveLabel ?? bucket.resetsInLabel}`;
+
+  const lastMessage = kind === "session" ? lastMessageText(messageLog) : null;
+  if (lastMessage) {
+    const line = document.createElement("p");
+    line.className = "usage-sub";
+    line.id = "lastMessage";
+    line.textContent = lastMessage;
+    row.querySelector(".bucket-tools").before(line);
+  }
+
+  if (arranging) {
+    const tools = row.querySelector(".bucket-tools");
+    tools.hidden = false;
+    const pinned = group === "pinned";
+    const hidden = group === "hidden";
+    const set = (action, { text, label, disabled = false, pressed }) => {
+      const button = tools.querySelector(`[data-action="${action}"]`);
+      if (text) button.textContent = text;
+      button.setAttribute("aria-label", label);
+      button.title = label;
+      button.disabled = disabled;
+      if (pressed != null) button.setAttribute("aria-pressed", String(pressed));
+    };
+    set("up", { label: `Move ${name} up`, disabled: position.index === 0 });
+    set("down", { label: `Move ${name} down`, disabled: position.index === position.count - 1 });
+    set("pin", {
+      text: pinned ? "Unpin" : "Pin",
+      label: pinned ? `Unpin ${name}` : `Pin ${name} to the top`,
+      disabled: hidden,
+      pressed: pinned,
+    });
+    set("hide", { text: hidden ? "Show" : "Hide", label: hidden ? `Show ${name}` : `Hide ${name}`, pressed: hidden });
+  }
+
+  return row;
+}
+
+function renderBuckets(snapshot, settings, messageLog) {
+  const groups = arrangeBuckets(snapshot, settings.bucketPrefs);
+  const fill = (container, group) =>
+    container.replaceChildren(
+      ...groups[group].map((entry, index) =>
+        buildBucketRow(entry, group, { index, count: groups[group].length }, messageLog)
+      )
+    );
+
+  fill(pinnedList, "pinned");
+  fill(restList, "rest");
+  fill(hiddenList, "hidden");
+
+  // Say so when the session reading is missing, rather than silently dropping its row.
+  sessionMissing.hidden = Boolean(snapshot.session);
+  noWeekly.hidden = snapshot.weekly.length > 0;
+
+  restGroup.hidden = groups.rest.length === 0 && noWeekly.hidden;
+  restDivider.hidden = groups.pinned.length === 0 && sessionMissing.hidden;
+  restTitle.textContent = groups.rest.some((entry) => entry.kind === "session") ? "Limits" : "Weekly limits";
+
+  hiddenGroup.hidden = !arranging || groups.hidden.length === 0;
+  hiddenNote.hidden = arranging || groups.hidden.length === 0;
+  hiddenCount.textContent = `${groups.hidden.length} limit${groups.hidden.length === 1 ? "" : "s"} hidden ·`;
+
+  arrangeBtn.setAttribute("aria-pressed", String(arranging));
+  arrangeBtn.classList.toggle("active", arranging);
+
+  if (refocus) {
+    document.querySelector(`[data-bucket-id="${CSS.escape(refocus.id)}"] [data-action="${refocus.action}"]`)?.focus();
+    refocus = null;
+  }
+}
+
+/** Arrange-mode buttons: every one of them is "change bucketPrefs, save, let the storage listener redraw". */
+async function onBucketTool(event) {
+  const button = event.target.closest(".tool-btn");
+  const id = button?.closest("[data-bucket-id]")?.dataset.bucketId;
+  if (!id || !latestState?.latestSnapshot) return;
+
+  const prefs = latestState.settings.bucketPrefs;
+  const action = button.dataset.action;
+  const next =
+    action === "up"
+      ? moveBucket(latestState.latestSnapshot, prefs, id, -1)
+      : action === "down"
+        ? moveBucket(latestState.latestSnapshot, prefs, id, 1)
+        : action === "pin"
+          ? togglePinned(prefs, id)
+          : toggleHidden(prefs, id);
+
+  refocus = { id, action };
+  await setSettings({ bucketPrefs: next });
 }
 
 function renderTopChats(messageLog) {
@@ -178,42 +290,10 @@ function render(state) {
     planBadge.hidden = true;
   }
 
-  if (latestSnapshot.session) {
-    renderBucketRow(
-      { labelEl: sessionLabel, pctEl: sessionPct, fillEl: sessionFill, subEl: sessionResets },
-      latestSnapshot.session
-    );
-  } else {
-    sessionPct.textContent = "not available";
-    sessionFill.style.width = "0%";
-    sessionResets.textContent = "";
-  }
-  renderLastMessage(settings.messageCost ? messageLog : []);
+  renderBuckets(latestSnapshot, settings, settings.messageCost ? messageLog : []);
   renderTopChats(settings.messageCost ? messageLog : []);
   renderLimitHits(limitHits);
   renderHistory(history);
-
-  weeklyList.innerHTML = "";
-  if (latestSnapshot.weekly.length === 0) {
-    const p = document.createElement("p");
-    p.className = "usage-sub";
-    p.textContent = "No weekly limit data available.";
-    weeklyList.appendChild(p);
-  } else {
-    for (const bucket of latestSnapshot.weekly) {
-      const node = weeklyRowTemplate.content.cloneNode(true);
-      renderBucketRow(
-        {
-          labelEl: node.querySelector(".usage-label"),
-          pctEl: node.querySelector(".usage-pct"),
-          fillEl: node.querySelector(".progress-fill"),
-          subEl: node.querySelector(".usage-sub"),
-        },
-        bucket
-      );
-      weeklyList.appendChild(node);
-    }
-  }
 
   lastUpdatedEl.textContent = `Last updated: ${timeAgo(latestSnapshot.fetchedAt)}`;
 
@@ -261,6 +341,18 @@ refreshBtn.addEventListener("click", () => refresh({ silent: false }));
 document.getElementById("openClaudeBtn").addEventListener("click", () => {
   chrome.tabs.create({ url: "https://claude.ai" });
 });
+
+function setArranging(on) {
+  arranging = on;
+  if (latestState) render(latestState);
+}
+
+arrangeBtn.addEventListener("click", () => setArranging(!arranging));
+document.getElementById("showHiddenBtn").addEventListener("click", () => {
+  setArranging(true);
+  arrangeBtn.focus();
+});
+dataState.addEventListener("click", onBucketTool);
 
 document.getElementById("settingsLink").addEventListener("click", () => {
   chrome.runtime.openOptionsPage();

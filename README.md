@@ -34,6 +34,10 @@ icon and you immediately see:
 - **Your own warning levels** — choose the percentages at which meters turn amber and
   red (80 / 95 by default) and, if you like, the three colours. One setting drives
   the toolbar icon, the popup bars, and the pill and favicon on claude.ai
+- **Arrange your limits** — the pencil in the popup footer turns on arrange mode:
+  move any bucket up or down, **pin** the ones you care about to the top block, and
+  **hide** the ones you don't. It works by keyboard, is remembered, and applies to the
+  side panel too
 - **Side panel dashboard** — the same view as a persistent panel that stays open beside
   whatever you're browsing, with a **usage-over-time chart** (one line per limit) drawn
   from the stored history. Open it from the popup's footer, from Chrome's own side
@@ -162,6 +166,7 @@ claudemeter/
 │   │   ├── history-chart.js           # snapshot history -> line-chart series + SVG paths
 │   │   ├── gauge-icon.js              # draws the ring-gauge toolbar icon onto any 2D canvas
 │   │   ├── severity.js                # amber/red cut-offs + colours shared by every meter
+│   │   ├── bucket-prefs.js            # popup bucket order / pinned / hidden + the moves between them
 │   │   ├── usage-api.js               # org discovery + usage fetch + typed errors
 │   │   └── normalize-usage.js         # raw usage response -> UsageSnapshot
 │   └── icons/                         # toolbar/store icon set (16/32/48/128)
@@ -209,7 +214,7 @@ Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `his
 (last 500 snapshots) that feeds the dashboard chart and the burn-rate maths. Settings
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
 `notifyThresholds`, `theme`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
-`actionOpens`, `developerMode`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
+`bucketPrefs`, `actionOpens`, `developerMode`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
 `longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300):
@@ -277,6 +282,9 @@ written when Developer mode is on, from Options.
   isn't confirmed, so the badge is best-effort and often simply hidden.
 - Requires being logged into claude.ai in the same browser profile the extension runs
   in; it cannot establish a session on its own.
+- Hiding a bucket only removes it from the popup and side panel. The toolbar icon
+  still tracks the session, and the pill on claude.ai still shows your fullest weekly
+  limit even if that bucket is hidden.
 - Per-message cost is an estimate. The endpoint reports whole percentages, so a small
   message reads as "under 1%", and anything else using your plan in the same seconds
   (another tab, Claude Code, another device) is counted in the same delta. Only
