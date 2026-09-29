@@ -7,10 +7,12 @@ import { chartSeries, linePath, describeChart } from "../lib/history-chart.js";
 import { severityOf, isHexColor } from "../lib/severity.js";
 import { arrangeBuckets, moveBucket, togglePinned, toggleHidden } from "../lib/bucket-prefs.js";
 
-// This page serves more than one surface: the toolbar popup, and — as
-// popup.html?view=panel — the side panel (or a full tab), which gets the
-// room for the dashboard extras.
-const VIEW = new URLSearchParams(location.search).get("view") ?? "popup";
+// This page serves more than one surface: the toolbar popup; as
+// popup.html?view=panel the side panel (or a full tab), which gets the room
+// for the dashboard extras; and as ?view=mini a small detached window that
+// shows just the pinned limits.
+const PARAMS = new URLSearchParams(location.search);
+const VIEW = PARAMS.get("view") ?? "popup";
 document.documentElement.dataset.view = VIEW;
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -151,7 +153,9 @@ function renderBuckets(snapshot, settings, messageLog) {
   sessionMissing.hidden = Boolean(snapshot.session);
   noWeekly.hidden = snapshot.weekly.length > 0;
 
-  restGroup.hidden = groups.rest.length === 0 && noWeekly.hidden;
+  // The mini window is the pinned block and nothing else — unless nothing is pinned.
+  const pinnedOnly = VIEW === "mini" && groups.pinned.length > 0;
+  restGroup.hidden = pinnedOnly || (groups.rest.length === 0 && noWeekly.hidden);
   restDivider.hidden = groups.pinned.length === 0 && sessionMissing.hidden;
   restTitle.textContent = groups.rest.some((entry) => entry.kind === "session") ? "Limits" : "Weekly limits";
 
@@ -297,6 +301,13 @@ function render(state) {
 
   lastUpdatedEl.textContent = `Last updated: ${timeAgo(latestSnapshot.fetchedAt)}`;
 
+  if (VIEW === "mini") {
+    // The window title is what shows in the task switcher, so put the number there.
+    const pct = latestSnapshot.session?.percentUsed;
+    document.title = pct != null ? `${pct}% · ClaudeMeter` : "ClaudeMeter";
+    fitMiniWindow();
+  }
+
   const errorIsNewer = lastError && lastError.timestamp > latestSnapshot.fetchedAt;
   if (errorIsNewer) {
     errorBanner.hidden = false;
@@ -309,6 +320,23 @@ function render(state) {
 function applyTheme(theme) {
   const effective = theme === "auto" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : theme;
   document.documentElement.dataset.theme = effective;
+}
+
+let miniFitted = PARAMS.get("fit") !== "1"; // only a first-ever mini window sizes itself
+
+/** Shrink or grow the mini window to its content, once, so it opens without dead space or a scrollbar. */
+async function fitMiniWindow() {
+  if (miniFitted) return;
+  miniFitted = true;
+  const frame = window.outerHeight - window.innerHeight;
+  const height = Math.ceil(document.body.getBoundingClientRect().height) + frame;
+  try {
+    const win = await chrome.windows.getCurrent();
+    if (Math.abs(win.height - height) > 4) await chrome.windows.update(win.id, { height });
+  } catch (err) {
+    // Chrome refuses sizes that would push the window off-screen; the default size is fine then.
+    console.warn("[ClaudeMeter] could not fit the mini window", err);
+  }
 }
 
 async function loadAndRender() {
@@ -353,6 +381,12 @@ document.getElementById("showHiddenBtn").addEventListener("click", () => {
   arrangeBtn.focus();
 });
 dataState.addEventListener("click", onBucketTool);
+
+document.getElementById("miniBtn").addEventListener("click", async () => {
+  await chrome.runtime.sendMessage({ type: "CLAUDEMETER_OPEN_MINI" });
+  // The toolbar popup would only sit on top of the window it just opened.
+  if (VIEW === "popup") window.close();
+});
 
 document.getElementById("settingsLink").addEventListener("click", () => {
   chrome.runtime.openOptionsPage();

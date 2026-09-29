@@ -38,6 +38,10 @@ icon and you immediately see:
   move any bucket up or down, **pin** the ones you care about to the top block, and
   **hide** the ones you don't. It works by keyboard, is remembered, and applies to the
   side panel too
+- **Mini window** — pop the meters out into a small window of their own that stays
+  open while you work in other apps. It shows just your pinned limits, puts the
+  session % in its title (so it reads in the task switcher), sizes itself to fit, and
+  remembers where you put it
 - **Side panel dashboard** — the same view as a persistent panel that stays open beside
   whatever you're browsing, with a **usage-over-time chart** (one line per limit) drawn
   from the stored history. Open it from the popup's footer, from Chrome's own side
@@ -137,6 +141,8 @@ Nothing is ever sent to any third-party server — everything stays in
   which the service worker draws on an `OffscreenCanvas` and hands to `setIcon()`
 - **`chrome.sidePanel`** — the dashboard; it is the popup page loaded as
   `popup.html?view=panel`, so both surfaces share one renderer
+- **`chrome.windows`** — the mini window is the same page again (`?view=mini`) in a
+  `popup`-type window; its id is kept in `storage.session`, its bounds in `storage.local`
 - Content scripts split across the **MAIN** and **isolated** JS worlds (see
   `src/content/inject-hook.js` and `src/content/relay.js`) to safely observe the
   page's own network calls without touching page state
@@ -153,7 +159,7 @@ claudemeter/
 │   │   ├── inject-hook.js             # MAIN world: patches fetch/XHR, dispatches captures + chat events
 │   │   ├── relay.js                   # ISOLATED world: forwards both to the background worker
 │   │   └── page-ui.js                 # ISOLATED world: in-page UI (pill, banners, lockout timer) in a shadow root
-│   ├── popup/                         # toolbar popup and (?view=panel) side panel dashboard
+│   ├── popup/                         # toolbar popup, ?view=panel side panel dashboard, ?view=mini window
 │   ├── options/                       # refresh interval, notifications, theme, developer mode
 │   ├── debug/                         # debug.html — raw capture viewer (developer mode only)
 │   ├── lib/
@@ -217,7 +223,8 @@ live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
 `bucketPrefs`, `actionOpens`, `developerMode`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
 `longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
-are appended to `messageLog` (last 300):
+are appended to `messageLog` (last 300), and the mini window's last position and size
+are kept under `miniWindowBounds`:
 
 ```js
 MessageCost = {
@@ -282,6 +289,8 @@ written when Developer mode is on, from Options.
   isn't confirmed, so the badge is best-effort and often simply hidden.
 - Requires being logged into claude.ai in the same browser profile the extension runs
   in; it cannot establish a session on its own.
+- The mini window is an ordinary window: Chrome gives extensions no way to keep one
+  always on top, so it can be covered by other windows.
 - Hiding a bucket only removes it from the popup and side panel. The toolbar icon
   still tracks the session, and the pill on claude.ai still shows your fullest weekly
   limit even if that bucket is hidden.

@@ -391,6 +391,36 @@ html[data-view="panel"] main {
   flex: 1;
 }
 
+/* ----------------------------------------------------------- mini window -- */
+
+html[data-view="mini"] body {
+  width: auto;
+  min-width: 220px;
+}
+
+html[data-view="mini"] header {
+  padding: 8px 12px;
+}
+
+html[data-view="mini"] .wordmark {
+  font-size: 12.5px;
+}
+
+html[data-view="mini"] main {
+  padding: 10px 12px 4px;
+  min-height: 0;
+}
+
+html[data-view="mini"] footer {
+  padding: 6px 12px 8px;
+  border-top: none;
+}
+
+/* Everything that isn't a meter stays in the popup and the side panel. */
+html[data-view="mini"] :is(#topChats, #limitHits, #hiddenNote, #lastMessage, .footer-actions, #learnMoreLink) {
+  display: none;
+}
+
 .state {
   text-align: center;
   padding: 20px 8px;

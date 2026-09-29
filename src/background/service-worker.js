@@ -47,6 +47,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
+  if (message?.type === "CLAUDEMETER_OPEN_MINI") {
+    openMiniWindow();
+    return false;
+  }
+
   if (message?.type === "CLAUDEMETER_REFRESH") {
     refreshUsage().then(sendResponse);
     return true; // keep the message channel open for the async response
@@ -288,6 +293,50 @@ async function applyActionSurface() {
   await chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: usePanel });
   await chrome.action.setPopup({ popup: usePanel ? "" : chrome.runtime.getURL("src/popup/popup.html") });
 }
+
+// ------------------------------------------------------------- mini window --
+
+// A small detached window that stays open while you work. The open window's
+// id lives in storage.session (ids mean nothing after a browser restart); the
+// place and size the user last gave it live in storage.local.
+const MINI_URL = chrome.runtime.getURL("src/popup/popup.html?view=mini");
+const MINI_DEFAULT_SIZE = { width: 320, height: 200 };
+
+async function openMiniWindow() {
+  const { miniWindowId } = await chrome.storage.session.get("miniWindowId");
+  if (miniWindowId != null) {
+    try {
+      await chrome.windows.update(miniWindowId, { focused: true });
+      return;
+    } catch {
+      // It was closed without us hearing about it — fall through and open a new one.
+    }
+  }
+
+  const { miniWindowBounds: bounds } = await chrome.storage.local.get("miniWindowBounds");
+  // Until the user has sized it themselves, let the page fit the window to its content.
+  const options = { url: bounds ? MINI_URL : `${MINI_URL}&fit=1`, type: "popup", focused: true };
+  let created;
+  try {
+    created = await chrome.windows.create({ ...options, ...MINI_DEFAULT_SIZE, ...bounds });
+  } catch {
+    // Remembered position is off-screen now (monitor unplugged): keep the size, let Chrome place it.
+    created = await chrome.windows.create({ ...options, width: bounds?.width, height: bounds?.height });
+  }
+  await chrome.storage.session.set({ miniWindowId: created.id });
+}
+
+chrome.windows.onBoundsChanged.addListener(async (win) => {
+  const { miniWindowId } = await chrome.storage.session.get("miniWindowId");
+  if (win.id !== miniWindowId) return;
+  const { left, top, width, height } = win;
+  await chrome.storage.local.set({ miniWindowBounds: { left, top, width, height } });
+});
+
+chrome.windows.onRemoved.addListener(async (windowId) => {
+  const { miniWindowId } = await chrome.storage.session.get("miniWindowId");
+  if (windowId === miniWindowId) await chrome.storage.session.remove("miniWindowId");
+});
 
 // ------------------------------------------------------------------- alarm --
 
