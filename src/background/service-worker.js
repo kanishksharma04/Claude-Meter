@@ -18,6 +18,7 @@ import { modelSwitchHint } from "../lib/burn-rate.js";
 import { resolveResetsAt } from "../lib/limit-hits.js";
 import { gaugeImageData } from "../lib/gauge-icon.js";
 import { severityColor } from "../lib/severity.js";
+import { buildSuggestions, resolveCommand } from "../lib/omnibox.js";
 import { formatDuration } from "../lib/time-format.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
@@ -293,6 +294,38 @@ async function applyActionSurface() {
   await chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: usePanel });
   await chrome.action.setPopup({ popup: usePanel ? "" : chrome.runtime.getURL("src/popup/popup.html") });
 }
+
+// ----------------------------------------------------------------- omnibox --
+// "cm" + space in the address bar: the dropdown shows usage, Enter runs a command.
+
+const DASHBOARD_URL = chrome.runtime.getURL("src/popup/popup.html?view=panel");
+
+function openUrl(url, disposition = "newForegroundTab") {
+  if (disposition === "currentTab") return chrome.tabs.update({ url });
+  return chrome.tabs.create({ url, active: disposition !== "newBackgroundTab" });
+}
+
+chrome.omnibox.onInputStarted.addListener(() => {
+  // The numbers in the dropdown should be current by the time the user has typed the space.
+  refreshUsage();
+});
+
+chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
+  const { latestSnapshot } = await getAll();
+  const { defaultDescription, suggestions } = buildSuggestions(text, latestSnapshot);
+  chrome.omnibox.setDefaultSuggestion({ description: defaultDescription });
+  suggest(suggestions);
+});
+
+chrome.omnibox.onInputEntered.addListener(async (text, disposition) => {
+  const { latestSnapshot } = await getAll();
+  const command = resolveCommand(text, Boolean(latestSnapshot));
+
+  if (command === "refresh") await refreshUsage();
+  else if (command === "options") await chrome.runtime.openOptionsPage();
+  else if (command === "claude") await openUrl("https://claude.ai/", disposition);
+  else await openUrl(DASHBOARD_URL, disposition);
+});
 
 // ------------------------------------------------------------- mini window --
 

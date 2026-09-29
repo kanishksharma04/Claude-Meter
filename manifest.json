@@ -19,6 +19,9 @@
     }
   },
   "options_page": "src/options/options.html",
+  "omnibox": {
+    "keyword": "cm"
+  },
   "side_panel": {
     "default_path": "src/popup/popup.html?view=panel"
   },

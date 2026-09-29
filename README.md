@@ -50,6 +50,9 @@ icon and you immediately see:
   claude.ai (and re-checks when you come back from signing in), explains every
   permission in plain words straight from the manifest, and lets you pick your alerts
   and fire a test notification. Reopen it any time from Options
+- **`cm` in the address bar** — type `cm`, then a space: the dropdown shows every
+  limit and its reset time without opening anything. Enter opens the dashboard;
+  `cm refresh`, `cm open` (claude.ai) and `cm options` do what they say
 - **Side panel dashboard** — the same view as a persistent panel that stays open beside
   whatever you're browsing, with a **usage-over-time chart** (one line per limit) drawn
   from the stored history. Open it from the popup's footer, from Chrome's own side
@@ -167,6 +170,8 @@ Nothing is ever sent to any third-party server — everything stays in
   which the service worker draws on an `OffscreenCanvas` and hands to `setIcon()`
 - **`chrome.sidePanel`** — the dashboard; it is the popup page loaded as
   `popup.html?view=panel`, so both surfaces share one renderer
+- **`chrome.omnibox`** — the `cm` keyword; `src/lib/omnibox.js` builds the suggestions
+  and maps what was typed to a command
 - **`chrome.windows`** — the mini window is the same page again (`?view=mini`) in a
   `popup`-type window; its id is kept in `storage.session`, its bounds in `storage.local`
 - Content scripts split across the **MAIN** and **isolated** JS worlds (see
@@ -201,6 +206,7 @@ claudemeter/
 │   │   ├── severity.js                # amber/red cut-offs + colours shared by every meter
 │   │   ├── bucket-prefs.js            # popup bucket order / pinned / hidden + the moves between them
 │   │   ├── theme.js                   # resolves auto/light/dark/contrast + accent presets
+│   │   ├── omnibox.js                 # "cm" keyword: suggestion rows + command resolution
 │   │   ├── usage-api.js               # org discovery + usage fetch + typed errors
 │   │   └── normalize-usage.js         # raw usage response -> UsageSnapshot
 │   ├── shared/theme.css               # theme tokens for every extension page
