@@ -21,11 +21,13 @@ import { gaugeImageData } from "../lib/gauge-icon.js";
 import { severityColor } from "../lib/severity.js";
 import { buildSuggestions, resolveCommand } from "../lib/omnibox.js";
 import { formatDuration, formatClock } from "../lib/time-format.js";
-import { SNOOZE_OPTIONS, snoozeEnd, isSnoozed } from "../lib/snooze.js";
+import { SNOOZE_OPTIONS, DEFAULT_SNOOZE, snoozeEnd, isSnoozed } from "../lib/snooze.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
 const ALARM_NAME = "claudemeter-refresh-check";
 const SNOOZE_ALARM_NAME = "claudemeter-snooze-end";
+// How long a keyboard shortcut's confirmation stays on the toolbar badge.
+const BADGE_FLASH_MS = 1500;
 const USAGE_ENDPOINT_PATTERN = /\/api\/organizations\/[^/]+\/usage(?:[/?]|$)/;
 // A "before" reading this fresh is reused rather than re-fetched when a message is sent.
 const BEFORE_MAX_AGE_MS = 20_000;
@@ -360,6 +362,34 @@ async function syncSnooze() {
     // The menu isn't built yet (first run before onInstalled) — createContextMenu() calls back here.
   }
 }
+
+// --------------------------------------------------------------- shortcuts --
+// Declared under "commands" in the manifest; rebindable at chrome://extensions/shortcuts.
+
+/**
+ * A shortcut fires with no window of ours open, so the only place to confirm
+ * it did something is the toolbar badge: show a mark briefly, then put back
+ * whatever the icon style normally shows.
+ */
+async function flashBadge(text, color) {
+  await chrome.action.setBadgeBackgroundColor({ color });
+  await chrome.action.setBadgeText({ text });
+  await new Promise((resolve) => setTimeout(resolve, BADGE_FLASH_MS));
+  const { latestSnapshot } = await getAll();
+  await updateToolbar(latestSnapshot);
+}
+
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command === "refresh-usage") {
+    const result = await refreshUsage();
+    await flashBadge(result.ok ? "\u2713" : "!", result.ok ? "#3fb950" : "#e5484d");
+  } else if (command === "toggle-snooze") {
+    const { snoozeUntil } = await getAll();
+    const resuming = isSnoozed(snoozeUntil);
+    await setSnoozeUntil(resuming ? 0 : snoozeEnd(DEFAULT_SNOOZE));
+    await flashBadge(resuming ? "on" : "zz", "#7d8ba0");
+  }
+});
 
 // ----------------------------------------------------------------- omnibox --
 // "cm" + space in the address bar: the dropdown shows usage, Enter runs a command.

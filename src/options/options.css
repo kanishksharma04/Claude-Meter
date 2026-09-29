@@ -258,6 +258,32 @@ button.secondary:hover {
   opacity: 0.45;
 }
 
+.shortcuts {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 16px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.shortcuts dt,
+.shortcuts dd {
+  margin: 0;
+}
+
+.shortcuts kbd {
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  font: inherit;
+  font-size: 12px;
+}
+
+.shortcuts .unset {
+  color: var(--muted);
+}
+
 .threshold-checks {
   display: flex;
   gap: 14px;

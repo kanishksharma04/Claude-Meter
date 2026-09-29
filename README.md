@@ -57,6 +57,10 @@ icon and you immediately see:
   tomorrow morning, or resume), Open history, Open side panel, Open mini window.
   A snooze pauses desktop notifications *and* the nudge banners on claude.ai, shows
   in the popup and Options with a Resume button, and ends by itself
+- **Keyboard shortcuts** — `Alt+Shift+U` opens ClaudeMeter, `Alt+Shift+R` refreshes,
+  `Alt+Shift+S` snoozes alerts for an hour (press again to resume). They work from any
+  tab; the toolbar badge flashes ✓, `zz` or `on` to confirm. Options lists the keys
+  Chrome actually bound and links to where you can change them
 - **Side panel dashboard** — the same view as a persistent panel that stays open beside
   whatever you're browsing, with a **usage-over-time chart** (one line per limit) drawn
   from the stored history. Open it from the popup's footer, from Chrome's own side
@@ -174,6 +178,7 @@ Nothing is ever sent to any third-party server — everything stays in
   which the service worker draws on an `OffscreenCanvas` and hands to `setIcon()`
 - **`chrome.sidePanel`** — the dashboard; it is the popup page loaded as
   `popup.html?view=panel`, so both surfaces share one renderer
+- **`chrome.commands`** — the three keyboard shortcuts
 - **`chrome.contextMenus`** — the toolbar icon's right-click menu (`action` context
   only; nothing is added to web pages)
 - **`chrome.omnibox`** — the `cm` keyword; `src/lib/omnibox.js` builds the suggestions
@@ -380,6 +385,8 @@ written when Developer mode is on, from Options.
 - **Measure what each message costs** — on by default; turning it off also stops the
   two extra usage reads around each message.
 - **Icon shows** — gauge ring (default), badge text, both, or nothing.
+- **Keyboard shortcuts** — shows the current bindings; "Change shortcuts…" opens
+  `chrome://extensions/shortcuts`.
 - **Warning levels** — the % at which meters turn amber and red, and optional custom
   colours for normal / amber / red. These are separate from the notification
   thresholds above.

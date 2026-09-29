@@ -85,6 +85,29 @@ async function renderSnooze() {
   document.getElementById("snoozeInfo").textContent = `Alerts are snoozed until ${formatClock(snoozeUntil)}`;
 }
 
+/** Lists the manifest's commands with whatever keys Chrome actually bound — it may have dropped a clash. */
+async function renderShortcuts() {
+  const commands = await chrome.commands.getAll();
+  document.getElementById("shortcutList").replaceChildren(
+    ...commands.flatMap((command) => {
+      const term = document.createElement("dt");
+      // Chrome gives the built-in "open the popup" command no description of its own.
+      term.textContent = command.description || "Open ClaudeMeter";
+
+      const keys = document.createElement("dd");
+      if (command.shortcut) {
+        const kbd = document.createElement("kbd");
+        kbd.textContent = command.shortcut;
+        keys.append(kbd);
+      } else {
+        keys.className = "unset";
+        keys.textContent = "Not set";
+      }
+      return [term, keys];
+    })
+  );
+}
+
 function updateThresholdsRowState(enabled) {
   thresholdsRow.classList.toggle("disabled", !enabled);
   // Really disabled, not just dimmed — otherwise the keyboard can still reach and flip them.
@@ -241,6 +264,13 @@ clearDataBtn.addEventListener("click", async () => {
 });
 
 document.getElementById("resumeAlertsBtn").addEventListener("click", () => setSnoozeUntil(0));
+
+document.getElementById("changeShortcutsBtn").addEventListener("click", () => {
+  chrome.tabs.create({ url: "chrome://extensions/shortcuts" });
+});
+// Coming back from Chrome's shortcut page should show the new bindings.
+window.addEventListener("focus", renderShortcuts);
+renderShortcuts();
 
 onStorageChanged((changes) => {
   if (changes.snoozeUntil) renderSnooze();

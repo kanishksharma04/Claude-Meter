@@ -19,6 +19,20 @@
     }
   },
   "options_page": "src/options/options.html",
+  "commands": {
+    "_execute_action": {
+      "suggested_key": { "default": "Alt+Shift+U" },
+      "description": "Open ClaudeMeter"
+    },
+    "refresh-usage": {
+      "suggested_key": { "default": "Alt+Shift+R" },
+      "description": "Refresh usage now"
+    },
+    "toggle-snooze": {
+      "suggested_key": { "default": "Alt+Shift+S" },
+      "description": "Snooze alerts for an hour, or resume them"
+    }
+  },
   "omnibox": {
     "keyword": "cm"
   },

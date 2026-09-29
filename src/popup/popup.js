@@ -467,6 +467,12 @@ sidePanelBtn.addEventListener("click", () => {
     .catch((err) => console.warn("[ClaudeMeter] could not open the side panel", err));
 });
 
+// Teach the shortcut where the button is: "Refresh now (Alt+Shift+R)".
+chrome.commands?.getAll().then((commands) => {
+  const shortcut = commands.find((command) => command.name === "refresh-usage")?.shortcut;
+  if (shortcut) refreshBtn.title = `Refresh now (${shortcut})`;
+});
+
 // "…/popup.html?view=panel#history" (e.g. opened in a tab) lands on the chart.
 if (location.hash === "#history") {
   requestAnimationFrame(() => historySection.scrollIntoView());
