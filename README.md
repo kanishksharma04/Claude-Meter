@@ -46,6 +46,10 @@ icon and you immediately see:
   white, every text pair at 7:1 or better, outlined meters), plus six accent colours:
   Clay, Ocean, Forest, Violet, Rose, Slate. "Auto" follows the system's light/dark
   and "more contrast" preferences live. The UI drawn on claude.ai follows along
+- **Welcome page on first install** — checks that this browser is signed in to
+  claude.ai (and re-checks when you come back from signing in), explains every
+  permission in plain words straight from the manifest, and lets you pick your alerts
+  and fire a test notification. Reopen it any time from Options
 - **Side panel dashboard** — the same view as a persistent panel that stays open beside
   whatever you're browsing, with a **usage-over-time chart** (one line per limit) drawn
   from the stored history. Open it from the popup's footer, from Chrome's own side
@@ -166,6 +170,7 @@ claudemeter/
 │   │   └── page-ui.js                 # ISOLATED world: in-page UI (pill, banners, lockout timer) in a shadow root
 │   ├── popup/                         # toolbar popup, ?view=panel side panel dashboard, ?view=mini window
 │   ├── options/                       # refresh interval, notifications, theme, developer mode
+│   ├── onboarding/                    # first-run welcome page: sign-in check, permissions, alerts
 │   ├── debug/                         # debug.html — raw capture viewer (developer mode only)
 │   ├── lib/
 │   │   ├── storage.js                 # chrome.storage.local schema + helpers
@@ -196,8 +201,9 @@ Requires a **Chromium 111+** based browser — the content script uses the
 2. Enable **Developer mode** (top-right toggle).
 3. Click **Load unpacked** and select this `claudemeter/` folder.
 4. Make sure you're logged into `claude.ai` in that same browser.
-5. Click the ClaudeMeter toolbar icon. On first load it kicks off a background fetch
-   automatically — give it a second, then click the refresh icon if it's still empty.
+5. A welcome tab opens on first install and tells you whether it can read your usage.
+   After that, click the ClaudeMeter toolbar icon — it fetches in the background as
+   soon as it loads.
 
 The side panel needs **Chromium 116+**; on older builds the extension still works and
 simply doesn't offer it.

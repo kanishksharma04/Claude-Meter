@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Welcome to ClaudeMeter</title>
+    <link rel="stylesheet" href="../shared/theme.css" />
+    <link rel="stylesheet" href="onboarding.css" />
+  </head>
+  <body>
+    <main>
+      <header class="intro">
+        <img src="../icons/icon128.png" alt="" width="56" height="56" />
+        <div>
+          <h1>Welcome to ClaudeMeter</h1>
+          <p>Your claude.ai session and weekly limits, one glance away. Three quick things and you're set.</p>
+        </div>
+      </header>
+
+      <section class="step" aria-labelledby="signinTitle">
+        <span class="step-number" aria-hidden="true">1</span>
+        <div class="step-body">
+          <h2 id="signinTitle">Sign in to claude.ai</h2>
+          <p>
+            ClaudeMeter reads your usage with the session this browser already has. It has no login of its own and
+            never sees your password.
+          </p>
+          <p class="status" id="signinStatus" role="status" data-state="checking">Checking…</p>
+          <div class="actions">
+            <button type="button" id="openClaudeBtn" class="primary" hidden>Open claude.ai</button>
+            <button type="button" id="recheckBtn">Check again</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="step" aria-labelledby="accessTitle">
+        <span class="step-number" aria-hidden="true">2</span>
+        <div class="step-body">
+          <h2 id="accessTitle">What ClaudeMeter can access</h2>
+          <p>Chrome listed these when you installed it. Here is what each one is for.</p>
+          <dl class="permissions" id="permissionList"></dl>
+          <p class="note">
+            Nothing leaves your browser: no account, no analytics, no server. Readings and settings stay in this
+            browser's extension storage, and you can wipe them from Options at any time.
+          </p>
+        </div>
+      </section>
+
+      <section class="step" aria-labelledby="alertsTitle">
+        <span class="step-number" aria-hidden="true">3</span>
+        <div class="step-body">
+          <h2 id="alertsTitle">Choose your alerts</h2>
+          <p>Alerts are off until you turn them on. You can change this later in Options.</p>
+          <label class="check">
+            <input type="checkbox" id="notificationsToggle" />
+            Send a desktop notification when a limit crosses
+          </label>
+          <div class="thresholds" id="thresholds">
+            <label class="check"><input type="checkbox" class="threshold-check" value="80" /> 80%</label>
+            <label class="check"><input type="checkbox" class="threshold-check" value="95" /> 95%</label>
+          </div>
+          <div class="actions">
+            <button type="button" id="testNotificationBtn">Send a test notification</button>
+          </div>
+          <p class="note" id="testNote" role="status"></p>
+        </div>
+      </section>
+
+      <section class="step done" aria-labelledby="doneTitle">
+        <span class="step-number" aria-hidden="true">&#10003;</span>
+        <div class="step-body">
+          <h2 id="doneTitle">That's it</h2>
+          <ul class="tips">
+            <li>
+              <strong>Pin the icon.</strong> Click the puzzle piece in the toolbar, then the pin next to ClaudeMeter. The
+              ring on the icon fills as your session does.
+            </li>
+            <li><strong>Click the icon</strong> for every limit and its reset time.</li>
+            <li><strong>On claude.ai</strong> a small pill above the message box shows the same numbers while you type.</li>
+          </ul>
+          <div class="actions">
+            <a class="button primary" href="https://claude.ai/" target="_blank" rel="noopener noreferrer">Open claude.ai</a>
+            <button type="button" id="optionsBtn">More settings</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="onboarding.js"></script>
+  </body>
+</html>

@@ -345,10 +345,14 @@ async function ensureAlarm() {
   chrome.alarms.create(ALARM_NAME, { periodInMinutes: settings.refreshIntervalMinutes });
 }
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   console.log(LOG_PREFIX, "extension installed");
   ensureAlarm();
   applyActionSurface();
+  // A brand-new install gets the welcome page; updates and reloads don't.
+  if (details.reason === "install") {
+    chrome.tabs.create({ url: chrome.runtime.getURL("src/onboarding/onboarding.html") });
+  }
   refreshUsage(); // best-effort initial fetch; silently no-ops if not logged in
 });
 

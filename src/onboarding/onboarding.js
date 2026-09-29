@@ -1,0 +1,140 @@
+// First-run page: opened once by the service worker when the extension is
+// installed, and reachable again from Options. It checks that claude.ai is
+// signed in, explains each permission, and offers the alert settings.
+
+import { getSettings, setSettings } from "../lib/storage.js";
+import { applyTheme, onSystemThemeChange } from "../lib/theme.js";
+
+const signinStatus = document.getElementById("signinStatus");
+const openClaudeBtn = document.getElementById("openClaudeBtn");
+const recheckBtn = document.getElementById("recheckBtn");
+const permissionList = document.getElementById("permissionList");
+const notificationsToggle = document.getElementById("notificationsToggle");
+const thresholds = document.getElementById("thresholds");
+const thresholdChecks = [...document.querySelectorAll(".threshold-check")];
+const testNote = document.getElementById("testNote");
+
+// Why ClaudeMeter asks for each thing in its manifest. Keyed by the manifest
+// string, so the list on the page is always the list Chrome actually granted.
+const PERMISSION_REASONS = {
+  "https://claude.ai/*": {
+    name: "Your data on claude.ai",
+    why: "Read your usage numbers from claude.ai with the session you're already signed in with, and draw the usage pill on claude.ai pages. Your cookies and messages are never read or stored.",
+  },
+  storage: {
+    name: "Storage",
+    why: "Keep your settings and recent usage readings in this browser.",
+  },
+  alarms: {
+    name: "Alarms",
+    why: "Wake up every few minutes to refresh your usage, even with no claude.ai tab open.",
+  },
+  notifications: {
+    name: "Notifications",
+    why: "Show the alerts you choose in step 3. None are sent unless you turn them on.",
+  },
+  sidePanel: {
+    name: "Side panel",
+    why: "Offer the dashboard in Chrome's side panel.",
+  },
+};
+
+const SIGNIN_PROBLEMS = {
+  NOT_LOGGED_IN: "You're not signed in to claude.ai in this browser. Sign in, then come back to this tab.",
+  NETWORK_ERROR: "Couldn't reach claude.ai. Check your connection and try again.",
+  NO_ORGS: "claude.ai didn't return an account to read usage from. Sign in to claude.ai and try again.",
+};
+
+function setSigninStatus(state, text) {
+  signinStatus.dataset.state = state;
+  signinStatus.textContent = text;
+  openClaudeBtn.hidden = state !== "problem";
+}
+
+async function checkSignin() {
+  setSigninStatus("checking", "Checking…");
+  let result = null;
+  try {
+    result = await chrome.runtime.sendMessage({ type: "CLAUDEMETER_REFRESH" });
+  } catch {
+    // The background worker was restarting; treated like any other failed check below.
+  }
+
+  if (result?.ok) {
+    const pct = result.snapshot?.session?.percentUsed;
+    setSigninStatus(
+      "ok",
+      pct != null ? `Signed in. Your current session is at ${pct}%.` : "Signed in. ClaudeMeter can read your usage."
+    );
+  } else {
+    const code = result?.error?.code;
+    setSigninStatus("problem", SIGNIN_PROBLEMS[code] ?? "Couldn't read your usage from claude.ai just now. Try again in a moment.");
+  }
+}
+
+function renderPermissions() {
+  const manifest = chrome.runtime.getManifest();
+  const granted = [...(manifest.host_permissions ?? []), ...(manifest.permissions ?? [])];
+
+  permissionList.replaceChildren(
+    ...granted.flatMap((permission) => {
+      const reason = PERMISSION_REASONS[permission];
+      const term = document.createElement("dt");
+      const code = document.createElement("code");
+      code.textContent = permission;
+      term.append(reason?.name ?? permission, code);
+
+      const detail = document.createElement("dd");
+      detail.textContent = reason?.why ?? "Used by a ClaudeMeter feature.";
+      return [term, detail];
+    })
+  );
+}
+
+function renderAlerts(settings) {
+  notificationsToggle.checked = settings.notificationsEnabled;
+  thresholds.classList.toggle("disabled", !settings.notificationsEnabled);
+  for (const check of thresholdChecks) {
+    check.checked = settings.notifyThresholds.includes(Number(check.value));
+    check.disabled = !settings.notificationsEnabled;
+  }
+}
+
+notificationsToggle.addEventListener("change", async () => {
+  renderAlerts(await setSettings({ notificationsEnabled: notificationsToggle.checked }));
+});
+
+for (const check of thresholdChecks) {
+  check.addEventListener("change", async () => {
+    const notifyThresholds = thresholdChecks.filter((c) => c.checked).map((c) => Number(c.value));
+    await setSettings({ notifyThresholds });
+  });
+}
+
+document.getElementById("testNotificationBtn").addEventListener("click", () => {
+  chrome.notifications.create(`claudemeter-test-${Date.now()}`, {
+    type: "basic",
+    iconUrl: chrome.runtime.getURL("src/icons/icon128.png"),
+    title: "ClaudeMeter",
+    message: "This is what a usage alert looks like.",
+  });
+  testNote.textContent =
+    "Sent. If nothing appeared, your system's notification settings are blocking this browser — alerts won't show until that's allowed.";
+});
+
+openClaudeBtn.addEventListener("click", () => chrome.tabs.create({ url: "https://claude.ai/" }));
+recheckBtn.addEventListener("click", checkSignin);
+document.getElementById("optionsBtn").addEventListener("click", () => chrome.runtime.openOptionsPage());
+
+// Coming back to this tab after signing in elsewhere should just work.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && signinStatus.dataset.state === "problem") checkSignin();
+});
+
+onSystemThemeChange(async () => applyTheme(await getSettings()));
+
+const settings = await getSettings();
+applyTheme(settings);
+renderPermissions();
+renderAlerts(settings);
+checkSignin();
