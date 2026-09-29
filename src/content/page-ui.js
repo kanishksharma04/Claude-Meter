@@ -267,7 +267,7 @@
       box-shadow: 0 1px 4px rgb(0 0 0 / 0.18);
     }
     .pill:hover { background: var(--panel); }
-    .pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    :is(button, a):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
     .pill.warn .dot { background: var(--warn); }
     .pill.danger .dot { background: var(--danger); }
@@ -362,7 +362,13 @@
   shadow.adoptedStyleSheets = [sheet];
 
   const panel = el("div", { class: "panel", role: "dialog", "aria-label": "ClaudeMeter usage", hidden: true });
-  const pill = el("button", { class: "pill", type: "button", "aria-expanded": "false", onclick: togglePanel });
+  const pill = el("button", {
+    class: "pill",
+    type: "button",
+    "aria-expanded": "false",
+    "aria-haspopup": "dialog",
+    onclick: () => togglePanel(),
+  });
   const costChip = el("span", { class: "chip", hidden: true });
   const lockoutChip = el("button", { class: "chip locked", type: "button", hidden: true });
   const pillRow = el("div", { class: "pill-row" }, lockoutChip, costChip, pill);
@@ -370,6 +376,17 @@
   const lockoutCard = el("div", { class: "lockout", role: "timer", "aria-label": "Limit reached", hidden: true });
   const dock = el("div", { class: "dock" }, banners, lockoutCard, panel, pillRow);
   shadow.append(dock);
+
+  /**
+   * Re-rendering replaces nodes. If keyboard focus was on one of them, put it
+   * back on the control in the same position instead of dropping it to <body>.
+   */
+  function keepingFocus(container, rebuild) {
+    const active = shadow.activeElement;
+    const index = active && container.contains(active) ? [...container.querySelectorAll("a, button")].indexOf(active) : -1;
+    rebuild();
+    if (index >= 0) [...container.querySelectorAll("a, button")][index]?.focus();
+  }
 
   function mountHost() {
     // Attach to <html>, not <body>: claude.ai re-renders body children freely.
@@ -439,6 +456,18 @@
 
     pill.className = `pill ${severityClass(worstPct)}`.trim();
     pill.title = "ClaudeMeter — click for details";
+    // Spelled out, because "Session 42% · Week 31%" reads poorly and says nothing about what the button does.
+    pill.setAttribute(
+      "aria-label",
+      [
+        "ClaudeMeter usage.",
+        session ? `Session ${session.percentUsed}% used.` : "",
+        weekly ? `Fullest weekly limit, ${weekly.label}, ${weekly.percentUsed}% used.` : "",
+        "Show details.",
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
     pill.replaceChildren(...parts);
   }
 
@@ -446,6 +475,7 @@
     const resetsIn = bucket.resetsAt != null ? formatDuration(Date.now(), bucket.resetsAt) : null;
     const fill = el("div", { class: `fill ${severityClass(bucket.percentUsed)}`.trim() });
     fill.style.width = `${bucket.percentUsed}%`;
+    const resetText = `Resets in ${resetsIn ?? bucket.resetsInLabel ?? "unknown"}`;
 
     return el(
       "div",
@@ -456,8 +486,20 @@
         el("span", { class: "bucket-label", text: bucket.label }),
         el("span", { class: "bucket-pct", text: `${bucket.percentUsed}% used` })
       ),
-      el("div", { class: "track" }, fill),
-      el("div", { class: "sub", text: `Resets in ${resetsIn ?? bucket.resetsInLabel ?? "unknown"}` })
+      el(
+        "div",
+        {
+          class: "track",
+          role: "progressbar",
+          "aria-label": bucket.label,
+          "aria-valuemin": "0",
+          "aria-valuemax": "100",
+          "aria-valuenow": String(bucket.percentUsed),
+          "aria-valuetext": `${bucket.percentUsed}% used. ${resetText}`,
+        },
+        fill
+      ),
+      el("div", { class: "sub", text: resetText })
     );
   }
 
@@ -467,26 +509,28 @@
     if (!state.panelOpen) return;
 
     const { snapshot } = state;
-    panel.replaceChildren(
-      el(
-        "div",
-        { class: "panel-head" },
-        el("span", { class: "panel-title", text: "ClaudeMeter" }),
-        el("button", {
-          class: "icon-btn",
-          type: "button",
-          title: "Refresh now",
-          "aria-label": "Refresh now",
-          text: "↻",
-          onclick: () => sendToBackground({ type: "CLAUDEMETER_REFRESH" }),
-        })
-      ),
-      ...bucketsOf(snapshot).map(renderBucket),
-      lastMessageLine(),
-      conversationLine(),
-      threadLine(),
-      limitHitsLine(),
-      el("div", { class: "panel-foot", text: `Updated ${timeAgo(snapshot?.fetchedAt)}` })
+    keepingFocus(panel, () =>
+      panel.replaceChildren(
+        el(
+          "div",
+          { class: "panel-head" },
+          el("span", { class: "panel-title", text: "ClaudeMeter" }),
+          el("button", {
+            class: "icon-btn",
+            type: "button",
+            title: "Refresh now",
+            "aria-label": "Refresh now",
+            text: "↻",
+            onclick: () => sendToBackground({ type: "CLAUDEMETER_REFRESH" }),
+          })
+        ),
+        ...bucketsOf(snapshot).map(renderBucket),
+        lastMessageLine(),
+        conversationLine(),
+        threadLine(),
+        limitHitsLine(),
+        el("div", { class: "panel-foot", text: `Updated ${timeAgo(snapshot?.fetchedAt)}` })
+      )
     );
   }
 
@@ -561,9 +605,13 @@
     render();
   });
 
-  function togglePanel() {
+  /** Opening moves focus into the panel; closing hands it back to the pill, so keyboard users never lose their place. */
+  function togglePanel({ restoreFocus = true } = {}) {
+    const focusWasInPanel = panel.contains(shadow.activeElement);
     state.panelOpen = !state.panelOpen;
     renderPanel();
+    if (state.panelOpen) panel.querySelector("button")?.focus();
+    else if (restoreFocus && focusWasInPanel) pill.focus();
   }
 
   // ----------------------------------------------------------------- banners --
@@ -578,7 +626,17 @@
     else bannerSpecs.delete(id);
   }
 
+  let bannersShown = ""; // signature of what is in the DOM
+
   function renderBanners() {
+    // The stack is a live region: rebuilding it with identical content would make
+    // a screen reader read every banner again on each refresh. Only touch it on a real change.
+    const signature = JSON.stringify(
+      [...bannerSpecs.entries()].map(([id, s]) => [id, s.key, s.tone, s.lead, s.text, (s.actions ?? []).map((a) => a.label)])
+    );
+    if (signature === bannersShown) return;
+    bannersShown = signature;
+
     banners.replaceChildren(
       ...[...bannerSpecs.entries()].map(([id, spec]) =>
         el(
@@ -594,7 +652,7 @@
             class: "icon-btn",
             type: "button",
             title: "Dismiss",
-            "aria-label": "Dismiss",
+            "aria-label": `Dismiss: ${spec.lead}`,
             text: "\u00d7",
             onclick: () => {
               state.dismissed.add(spec.key);
@@ -696,25 +754,27 @@
     };
 
     lockoutCountEl = el("div", { class: "lockout-count", text: formatCountdown(lockout.until - Date.now()) });
-    lockoutCard.replaceChildren(
-      el(
-        "div",
-        { class: "lockout-main" },
-        el("div", { class: "lockout-title", text: `Limit reached — back at ${backAt}` }),
-        el("div", { class: "lockout-sub", text: `${lockout.label} resets then. ClaudeMeter will refresh as soon as it does.` })
-      ),
-      lockoutCountEl,
-      el("button", {
-        class: "icon-btn",
-        type: "button",
-        title: "Minimise",
-        "aria-label": "Minimise",
-        text: "\u00d7",
-        onclick: () => {
-          state.dismissed.add(key);
-          render();
-        },
-      })
+    keepingFocus(lockoutCard, () =>
+      lockoutCard.replaceChildren(
+        el(
+          "div",
+          { class: "lockout-main" },
+          el("div", { class: "lockout-title", text: `Limit reached — back at ${backAt}` }),
+          el("div", { class: "lockout-sub", text: `${lockout.label} resets then. ClaudeMeter will refresh as soon as it does.` })
+        ),
+        lockoutCountEl,
+        el("button", {
+          class: "icon-btn",
+          type: "button",
+          title: "Minimise",
+          "aria-label": "Minimise",
+          text: "\u00d7",
+          onclick: () => {
+            state.dismissed.add(key);
+            render();
+          },
+        })
+      )
     );
 
     if (!lockoutTimer) lockoutTimer = setInterval(tickLockout, 1000);
@@ -1084,7 +1144,8 @@
     if (event.key === "Escape" && state.panelOpen) togglePanel();
   });
   document.addEventListener("pointerdown", (event) => {
-    if (state.panelOpen && !event.composedPath().includes(host)) togglePanel();
+    // A click elsewhere on the page means focus is going there — don't yank it back.
+    if (state.panelOpen && !event.composedPath().includes(host)) togglePanel({ restoreFocus: false });
   });
 
   // ----------------------------------------------------------------- storage --

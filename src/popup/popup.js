@@ -24,6 +24,8 @@ const emptyState = document.getElementById("emptyState");
 const loadingState = document.getElementById("loadingState");
 const dataState = document.getElementById("dataState");
 const errorBanner = document.getElementById("errorBanner");
+const srStatus = document.getElementById("srStatus");
+const mainEl = document.getElementById("main");
 const planBadge = document.getElementById("planBadge");
 const lastUpdatedEl = document.getElementById("lastUpdated");
 const refreshBtn = document.getElementById("refreshBtn");
@@ -55,6 +57,14 @@ const historyEmpty = document.getElementById("historyEmpty");
 let latestState = null;
 let arranging = false; // the popup's "reorder / pin / hide" mode
 let refocus = null; // { id, action } — the tool button to put focus back on after a re-render
+let rowSerial = 0; // makes each rendered row's label/description ids unique
+
+/** Says something through the polite live region — for changes a sighted user would simply see. */
+function announce(message) {
+  // Clearing first makes a repeated message ("Opus moved up" twice) get read again.
+  srStatus.textContent = "";
+  requestAnimationFrame(() => (srStatus.textContent = message));
+}
 
 function severityClass(pct) {
   const severity = severityOf(pct, latestState?.settings);
@@ -91,7 +101,8 @@ function buildBucketRow(entry, group, position, messageLog) {
 
   // "Opus" on its own is ambiguous once it sits above the "Weekly limits" heading.
   const name = kind === "weekly" && group !== "rest" ? `${bucket.label} · weekly` : bucket.label;
-  row.querySelector(".usage-label").textContent = name;
+  const label = row.querySelector(".usage-label");
+  label.textContent = name;
   row.querySelector(".usage-pct").textContent = `${bucket.percentUsed}% used`;
 
   const fill = row.querySelector(".progress-fill");
@@ -99,7 +110,19 @@ function buildBucketRow(entry, group, position, messageLog) {
   fill.className = `progress-fill ${severityClass(bucket.percentUsed)}`.trim();
 
   const liveLabel = bucket.resetsAt != null ? formatDuration(Date.now(), bucket.resetsAt) : null;
-  row.querySelector(".usage-sub").textContent = `Resets in ${liveLabel ?? bucket.resetsInLabel}`;
+  const sub = row.querySelector(".usage-sub");
+  sub.textContent = `Resets in ${liveLabel ?? bucket.resetsInLabel}`;
+
+  // The bar is the meter: name it after its label, give it a spoken value, and
+  // hang the reset time off it as its description.
+  const serial = ++rowSerial;
+  label.id = `bucket-label-${serial}`;
+  sub.id = `bucket-sub-${serial}`;
+  const track = row.querySelector(".progress-track");
+  track.setAttribute("aria-labelledby", label.id);
+  track.setAttribute("aria-describedby", sub.id);
+  track.setAttribute("aria-valuenow", String(bucket.percentUsed));
+  track.setAttribute("aria-valuetext", `${bucket.percentUsed}% used`);
 
   const lastMessage = kind === "session" ? lastMessageText(messageLog) : null;
   if (lastMessage) {
@@ -113,6 +136,7 @@ function buildBucketRow(entry, group, position, messageLog) {
   if (arranging) {
     const tools = row.querySelector(".bucket-tools");
     tools.hidden = false;
+    tools.setAttribute("aria-label", `Arrange ${name}`);
     const pinned = group === "pinned";
     const hidden = group === "hidden";
     const set = (action, { text, label, disabled = false, pressed }) => {
@@ -189,6 +213,18 @@ async function onBucketTool(event) {
         : action === "pin"
           ? togglePinned(prefs, id)
           : toggleHidden(prefs, id);
+
+  const name = button.closest("[data-bucket-id]").querySelector(".usage-label").textContent;
+  const wasOn = button.getAttribute("aria-pressed") === "true";
+  announce(
+    action === "up"
+      ? `${name} moved up`
+      : action === "down"
+        ? `${name} moved down`
+        : action === "pin"
+          ? `${name} ${wasOn ? "unpinned" : "pinned to the top"}`
+          : `${name} ${wasOn ? "shown" : "hidden"}`
+  );
 
   refocus = { id, action };
   await setSettings({ bucketPrefs: next });
@@ -344,20 +380,35 @@ async function loadAndRender() {
 async function refresh({ silent } = {}) {
   if (!silent) {
     refreshBtn.classList.add("spinning");
+    refreshBtn.setAttribute("aria-busy", "true");
   } else if (!latestState?.latestSnapshot) {
     loadingState.hidden = false;
     emptyState.hidden = true;
     dataState.hidden = true;
+    mainEl.setAttribute("aria-busy", "true");
   }
 
+  let result = null;
   try {
-    await chrome.runtime.sendMessage({ type: "CLAUDEMETER_REFRESH" });
+    result = await chrome.runtime.sendMessage({ type: "CLAUDEMETER_REFRESH" });
   } catch (err) {
     console.warn("[ClaudeMeter] refresh message failed", err);
   }
 
-  await loadAndRender();
+  const state = await loadAndRender();
   refreshBtn.classList.remove("spinning");
+  refreshBtn.removeAttribute("aria-busy");
+  mainEl.removeAttribute("aria-busy");
+
+  // Only a refresh the user asked for gets announced; the quiet one on open would just be noise.
+  if (!silent) {
+    const pct = state.latestSnapshot?.session?.percentUsed;
+    announce(
+      result?.ok
+        ? `Usage updated.${pct != null ? ` Session ${pct}% used.` : ""}`
+        : "Couldn't refresh usage. Showing the last reading."
+    );
+  }
 }
 
 refreshBtn.addEventListener("click", () => refresh({ silent: false }));
@@ -369,6 +420,7 @@ document.getElementById("openClaudeBtn").addEventListener("click", () => {
 function setArranging(on) {
   arranging = on;
   if (latestState) render(latestState);
+  announce(on ? "Arranging limits. Each limit now has move, pin and hide buttons." : "Done arranging.");
 }
 
 arrangeBtn.addEventListener("click", () => setArranging(!arranging));

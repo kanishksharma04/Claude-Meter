@@ -104,6 +104,23 @@ alone — the one exception is the tab indicator, which has to edit the page's `
 and icon `<link>`s and restores them when switched off. Each piece can be turned off
 in Options.
 
+## Accessibility
+
+- Every meter is a real `progressbar` with a name, a spoken value ("86% used") and
+  its reset time as the description — in the popup, the side panel, the mini window
+  and the panel on claude.ai.
+- The popup has a proper heading outline, and a polite live region announces what a
+  sighted user would simply see: a manual refresh finishing or failing, and each
+  move, pin or hide in arrange mode. Refresh failures are also an `alert`.
+- Everything is reachable and operable from the keyboard, with one visible focus ring
+  in every theme. Focus is kept through re-renders: arrange-mode buttons keep it after
+  each move, the pill's panel takes it on open and returns it on Escape, and a
+  background refresh no longer drops it.
+- The banner stack on claude.ai is a live region, so it is only rebuilt when its
+  content actually changes — a refresh doesn't make a screen reader repeat it.
+- `prefers-reduced-motion` turns off the spinner, the loading shimmer and bar
+  transitions; the high-contrast theme follows `prefers-contrast` on its own.
+
 ## How it works (and its limits)
 
 There's no documented, public API for this data — claude.ai's own frontend calls an

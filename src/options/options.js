@@ -79,12 +79,19 @@ function renderSeverity(settings) {
 
 function updateThresholdsRowState(enabled) {
   thresholdsRow.classList.toggle("disabled", !enabled);
+  // Really disabled, not just dimmed — otherwise the keyboard can still reach and flip them.
+  for (const check of thresholdChecks) check.disabled = !enabled;
+}
+
+function describeInterval(minutes) {
+  return `${minutes} minute${Number(minutes) === 1 ? "" : "s"}`;
 }
 
 async function init() {
   const settings = await getSettings();
 
   refreshIntervalSlider.value = settings.refreshIntervalMinutes;
+  refreshIntervalSlider.setAttribute("aria-valuetext", describeInterval(settings.refreshIntervalMinutes));
   refreshIntervalValue.textContent = `${settings.refreshIntervalMinutes} min`;
 
   notificationsToggle.checked = settings.notificationsEnabled;
@@ -121,6 +128,7 @@ async function init() {
 
 refreshIntervalSlider.addEventListener("input", () => {
   refreshIntervalValue.textContent = `${refreshIntervalSlider.value} min`;
+  refreshIntervalSlider.setAttribute("aria-valuetext", describeInterval(refreshIntervalSlider.value));
 });
 
 refreshIntervalSlider.addEventListener("change", async () => {
@@ -219,6 +227,7 @@ clearDataBtn.addEventListener("click", async () => {
   if (!confirm("Clear all stored ClaudeMeter data (captures + usage snapshot + history + message costs + limit-hit log)?")) return;
   await clearAllData();
   clearDataBtn.textContent = "Cleared!";
+  document.getElementById("clearStatus").textContent = "Stored data cleared.";
   setTimeout(() => (clearDataBtn.textContent = "Clear stored data"), 1200);
 });
 

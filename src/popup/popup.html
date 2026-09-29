@@ -9,7 +9,7 @@
   <body>
     <header>
       <div class="header-left">
-        <span class="wordmark">ClaudeMeter</span>
+        <h1 class="wordmark">ClaudeMeter</h1>
         <span class="badge" id="planBadge" hidden></span>
       </div>
       <button id="refreshBtn" class="icon-btn" type="button" title="Refresh now" aria-label="Refresh now">
@@ -20,10 +20,13 @@
       </button>
     </header>
 
-    <main>
+    <main id="main">
+      <!-- Announcements for screen readers: refresh results and arrange-mode moves -->
+      <p id="srStatus" class="sr-only" role="status" aria-live="polite"></p>
+
       <!-- Empty state: no data ever captured -->
       <section id="emptyState" class="state" hidden>
-        <p class="empty-icon">&#9711;</p>
+        <p class="empty-icon" aria-hidden="true">&#9711;</p>
         <p class="empty-title">No usage data yet</p>
         <p class="empty-body">Open claude.ai in a tab to start tracking your usage.</p>
         <button id="openClaudeBtn">Open claude.ai</button>
@@ -31,10 +34,13 @@
 
       <!-- Loading state: first-ever fetch in flight, nothing to show yet -->
       <section id="loadingState" class="state" hidden>
-        <div class="skeleton-row"></div>
-        <div class="skeleton-bar"></div>
-        <div class="skeleton-row" style="width: 60%"></div>
-        <div class="skeleton-bar"></div>
+        <p class="sr-only">Loading your usage…</p>
+        <div aria-hidden="true">
+          <div class="skeleton-row"></div>
+          <div class="skeleton-bar"></div>
+          <div class="skeleton-row" style="width: 60%"></div>
+          <div class="skeleton-bar"></div>
+        </div>
       </section>
 
       <!-- Data state -->
@@ -46,13 +52,13 @@
         <div id="restGroup">
           <hr id="restDivider" />
           <div class="weekly-header">
-            <span id="restTitle">Weekly limits</span>
+            <h2 id="restTitle">Weekly limits</h2>
             <a
               id="learnMoreLink"
               href="https://support.claude.com/en/articles/11647753-how-do-usage-and-length-limits-work"
               target="_blank"
               rel="noopener noreferrer"
-              >Learn more</a
+              >Learn more<span class="sr-only"> about usage limits (opens in a new tab)</span></a
             >
           </div>
           <div id="restList" class="bucket-list"></div>
@@ -62,7 +68,7 @@
         <!-- Only while arranging: the buckets the user has hidden -->
         <div id="hiddenGroup" hidden>
           <hr />
-          <div class="weekly-header"><span>Hidden</span></div>
+          <div class="weekly-header"><h2>Hidden</h2></div>
           <div id="hiddenList" class="bucket-list"></div>
         </div>
 
@@ -74,7 +80,7 @@
         <div id="topChats" hidden>
           <hr />
           <div class="weekly-header">
-            <span>Most expensive chats</span>
+            <h2>Most expensive chats</h2>
             <span class="header-note">% of a session</span>
           </div>
           <ol id="topChatsList" class="chat-list"></ol>
@@ -86,7 +92,7 @@
         <div id="history" class="history" hidden>
           <hr />
           <div class="weekly-header">
-            <span>Usage over time</span>
+            <h2>Usage over time</h2>
             <span class="header-note" id="historyRange"></span>
           </div>
           <div id="historyBody">
@@ -100,7 +106,7 @@
         </div>
       </section>
 
-      <p id="errorBanner" class="error-banner" hidden></p>
+      <p id="errorBanner" class="error-banner" role="alert" hidden></p>
     </main>
 
     <footer>
@@ -160,11 +166,11 @@
           <span class="usage-label"></span>
           <span class="usage-pct"></span>
         </div>
-        <div class="progress-track">
+        <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100">
           <div class="progress-fill"></div>
         </div>
         <p class="usage-sub"></p>
-        <div class="bucket-tools" hidden>
+        <div class="bucket-tools" role="group" hidden>
           <button type="button" class="tool-btn" data-action="up">&uarr;</button>
           <button type="button" class="tool-btn" data-action="down">&darr;</button>
           <button type="button" class="tool-btn" data-action="pin"></button>

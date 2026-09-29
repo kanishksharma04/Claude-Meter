@@ -14,12 +14,12 @@
 
     <section class="card">
       <h2>Refresh</h2>
-      <label class="row">
-        <span>
+      <label class="row" for="refreshIntervalSlider">
+        <span id="refreshIntervalLabel">
           Refresh interval
           <small>How often the background worker fetches usage in the background.</small>
         </span>
-        <span class="slider-value" id="refreshIntervalValue">5 min</span>
+        <span class="slider-value" id="refreshIntervalValue" aria-hidden="true">5 min</span>
       </label>
       <input type="range" id="refreshIntervalSlider" min="1" max="30" step="1" />
     </section>
@@ -33,8 +33,8 @@
         </span>
         <input type="checkbox" id="notificationsToggle" />
       </label>
-      <div class="row" id="thresholdsRow">
-        <span>Thresholds</span>
+      <div class="row" id="thresholdsRow" role="group" aria-labelledby="thresholdsLabel">
+        <span id="thresholdsLabel">Thresholds</span>
         <div class="threshold-checks">
           <label><input type="checkbox" class="threshold-check" value="80" /> 80%</label>
           <label><input type="checkbox" class="threshold-check" value="95" /> 95%</label>
@@ -232,7 +232,8 @@
 
     <section class="card">
       <h2>Data</h2>
-      <button id="clearDataBtn" class="danger">Clear stored data</button>
+      <button id="clearDataBtn" class="danger" type="button">Clear stored data</button>
+      <span class="sr-only" id="clearStatus" role="status"></span>
       <p class="hint">Removes all captured requests, usage history, and org lookup cache.</p>
     </section>
 
