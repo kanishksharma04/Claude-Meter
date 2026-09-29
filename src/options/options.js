@@ -1,4 +1,5 @@
-import { getSettings, setSettings, clearAllData } from "../lib/storage.js";
+import { getAll, getSettings, setSettings, clearAllData } from "../lib/storage.js";
+import { drawGauge } from "../lib/gauge-icon.js";
 
 const refreshIntervalSlider = document.getElementById("refreshIntervalSlider");
 const refreshIntervalValue = document.getElementById("refreshIntervalValue");
@@ -13,6 +14,8 @@ const longContextSelect = document.getElementById("longContextSelect");
 const attachmentWarnSelect = document.getElementById("attachmentWarnSelect");
 const lockoutOverlayToggle = document.getElementById("lockoutOverlayToggle");
 const messageCostToggle = document.getElementById("messageCostToggle");
+const iconStyleSelect = document.getElementById("iconStyleSelect");
+const gaugePreview = document.getElementById("gaugePreview");
 const actionOpensSelect = document.getElementById("actionOpensSelect");
 const themeSelect = document.getElementById("themeSelect");
 const developerModeToggle = document.getElementById("developerModeToggle");
@@ -21,6 +24,16 @@ const clearDataBtn = document.getElementById("clearDataBtn");
 function applyTheme(theme) {
   const effective = theme === "auto" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : theme;
   document.documentElement.dataset.theme = effective;
+}
+
+/** Shows what the gauge icon looks like right now (or a sample reading before there is any data). */
+async function renderGaugePreview() {
+  const { latestSnapshot } = await getAll();
+  const percent = latestSnapshot?.session?.percentUsed ?? 62;
+  const color = percent >= 95 ? "#e5484d" : percent >= 80 ? "#e5a02e" : "#3fb950";
+  drawGauge(gaugePreview.getContext("2d"), gaugePreview.width, { percent, color });
+  gaugePreview.setAttribute("aria-label", `Gauge icon preview at ${percent}%`);
+  gaugePreview.style.opacity = iconStyleSelect.value === "gauge" || iconStyleSelect.value === "both" ? "1" : "0.35";
 }
 
 function updateThresholdsRowState(enabled) {
@@ -48,6 +61,9 @@ async function init() {
   attachmentWarnSelect.value = String(settings.attachmentWarnTokens);
   lockoutOverlayToggle.checked = settings.lockoutOverlay;
   messageCostToggle.checked = settings.messageCost;
+
+  iconStyleSelect.value = settings.iconStyle;
+  renderGaugePreview();
 
   actionOpensSelect.value = settings.actionOpens;
   // Older Chromium builds have no side panel; don't offer what can't work.
@@ -109,6 +125,11 @@ lockoutOverlayToggle.addEventListener("change", async () => {
 
 messageCostToggle.addEventListener("change", async () => {
   await setSettings({ messageCost: messageCostToggle.checked });
+});
+
+iconStyleSelect.addEventListener("change", async () => {
+  renderGaugePreview();
+  await setSettings({ iconStyle: iconStyleSelect.value });
 });
 
 actionOpensSelect.addEventListener("change", async () => {

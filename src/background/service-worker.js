@@ -16,6 +16,8 @@ import { normalizeUsageResponse } from "../lib/normalize-usage.js";
 import { computeMessageCost } from "../lib/message-cost.js";
 import { modelSwitchHint } from "../lib/burn-rate.js";
 import { resolveResetsAt } from "../lib/limit-hits.js";
+import { gaugeImageData } from "../lib/gauge-icon.js";
+import { formatDuration } from "../lib/time-format.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
 const ALARM_NAME = "claudemeter-refresh-check";
@@ -24,6 +26,12 @@ const USAGE_ENDPOINT_PATTERN = /\/api\/organizations\/[^/]+\/usage(?:[/?]|$)/;
 const BEFORE_MAX_AGE_MS = 20_000;
 // The usage endpoint lags the end of a reply slightly; wait before the "after" reading.
 const AFTER_SETTLE_MS = 1500;
+const DEFAULT_ICON = {
+  16: "/src/icons/icon16.png",
+  32: "/src/icons/icon32.png",
+  48: "/src/icons/icon48.png",
+  128: "/src/icons/icon128.png",
+};
 
 // ---------------------------------------------------------------- messages --
 
@@ -190,7 +198,7 @@ async function refreshUsage() {
 /** Everything that has to happen whenever a new reading lands, whichever way it arrived. */
 async function applySnapshot(snapshot) {
   await setLatestSnapshot(snapshot);
-  await updateBadge(snapshot);
+  await updateToolbar(snapshot);
   await updateModelHint();
 }
 
@@ -203,16 +211,39 @@ async function updateModelHint() {
   await setModelHint(hint);
 }
 
-// ------------------------------------------------------------------ badge --
+// ---------------------------------------------------------------- toolbar --
 
-async function updateBadge(snapshot) {
-  const pct = snapshot?.session?.percentUsed;
-  if (pct == null) {
-    chrome.action.setBadgeText({ text: "" });
-    return;
+function severityColor(pct) {
+  return pct >= 95 ? "#e5484d" : pct >= 80 ? "#e5a02e" : "#3fb950";
+}
+
+/** Hover text for the toolbar icon — the exact numbers the gauge can only hint at. */
+function toolbarTitle(snapshot) {
+  const parts = [];
+  if (snapshot?.session) {
+    const resetsIn = formatDuration(Date.now(), snapshot.session.resetsAt);
+    parts.push(`Session ${snapshot.session.percentUsed}%` + (resetsIn ? ` (resets in ${resetsIn})` : ""));
   }
-  chrome.action.setBadgeText({ text: `${pct}%` });
-  chrome.action.setBadgeBackgroundColor({ color: pct >= 95 ? "#e5484d" : pct >= 80 ? "#e5a02e" : "#3fb950" });
+  for (const bucket of snapshot?.weekly ?? []) parts.push(`${bucket.label} ${bucket.percentUsed}%`);
+  return parts.length > 0 ? `ClaudeMeter — ${parts.join(" · ")}` : "ClaudeMeter";
+}
+
+/** Paints the toolbar icon for the session %: a drawn gauge, badge text, both, or neither. */
+async function updateToolbar(snapshot) {
+  const { iconStyle } = await getSettings();
+  const pct = snapshot?.session?.percentUsed ?? null;
+  const showGauge = pct != null && (iconStyle === "gauge" || iconStyle === "both");
+  const showBadge = pct != null && (iconStyle === "badge" || iconStyle === "both");
+
+  await chrome.action.setBadgeText({ text: showBadge ? `${pct}%` : "" });
+  if (showBadge) await chrome.action.setBadgeBackgroundColor({ color: severityColor(pct) });
+
+  if (showGauge) {
+    await chrome.action.setIcon({ imageData: gaugeImageData(pct, severityColor(pct)) });
+  } else {
+    await chrome.action.setIcon({ path: DEFAULT_ICON });
+  }
+  await chrome.action.setTitle({ title: toolbarTitle(snapshot) });
 }
 
 // ------------------------------------------------------------ notifications --
@@ -296,6 +327,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     }
     if (changes.settings.oldValue?.actionOpens !== changes.settings.newValue?.actionOpens) {
       applyActionSurface();
+    }
+    if (changes.settings.oldValue?.iconStyle !== changes.settings.newValue?.iconStyle) {
+      getAll().then(({ latestSnapshot }) => updateToolbar(latestSnapshot));
     }
   }
 });

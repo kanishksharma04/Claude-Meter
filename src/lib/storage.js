@@ -13,6 +13,7 @@ export const DEFAULT_SETTINGS = {
   notificationsEnabled: false,
   notifyThresholds: [80, 95],
   theme: "auto",
+  iconStyle: "gauge", // toolbar icon: "gauge" ring | "badge" text | "both" | "plain"
   actionOpens: "popup", // what a click on the toolbar icon opens: "popup" | "sidePanel"
   developerMode: false,
   inlinePill: true, // usage pill next to claude.ai's composer (src/content/page-ui.js)

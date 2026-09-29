@@ -102,6 +102,18 @@ select {
   font-size: 13px;
 }
 
+.icon-style {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.gauge-preview {
+  width: 32px;
+  height: 32px;
+}
+
 .threshold-checks {
   display: flex;
   gap: 14px;

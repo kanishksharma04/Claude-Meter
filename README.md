@@ -27,6 +27,10 @@ icon and you immediately see:
   label that keeps itself current
 - Empty/loading/error states that never wipe out the last good reading — a failed
   refresh shows an inline warning, not a blank popup
+- **Gauge toolbar icon** — the icon itself is redrawn as a ring that fills with your
+  session and changes colour as it gets close, with the number in the middle on
+  high-density displays. Hovering it gives the exact figures for every limit. Badge
+  text ("42%"), both, or the plain icon are one setting away
 - **Side panel dashboard** — the same view as a persistent panel that stays open beside
   whatever you're browsing, with a **usage-over-time chart** (one line per limit) drawn
   from the stored history. Open it from the popup's footer, from Chrome's own side
@@ -122,7 +126,8 @@ Nothing is ever sent to any third-party server — everything stays in
 - **`chrome.storage.local`** — the only persistence layer; schema in `src/lib/storage.js`
 - **`chrome.alarms`** — periodic background refresh, independent of any open tab
 - **`chrome.notifications`** — optional desktop alerts on usage-threshold crossings
-- **`chrome.action`** — toolbar icon, popup, and color-coded usage badge text
+- **`chrome.action`** — toolbar popup, hover title, badge text, and the gauge icon,
+  which the service worker draws on an `OffscreenCanvas` and hands to `setIcon()`
 - **`chrome.sidePanel`** — the dashboard; it is the popup page loaded as
   `popup.html?view=panel`, so both surfaces share one renderer
 - Content scripts split across the **MAIN** and **isolated** JS worlds (see
@@ -152,6 +157,7 @@ claudemeter/
 │   │   ├── burn-rate.js               # weekly %/hr from history + the model-switch hint
 │   │   ├── limit-hits.js              # "limit reached" log: dedupe per lockout + summary
 │   │   ├── history-chart.js           # snapshot history -> line-chart series + SVG paths
+│   │   ├── gauge-icon.js              # draws the ring-gauge toolbar icon onto any 2D canvas
 │   │   ├── usage-api.js               # org discovery + usage fetch + typed errors
 │   │   └── normalize-usage.js         # raw usage response -> UsageSnapshot
 │   └── icons/                         # toolbar/store icon set (16/32/48/128)
@@ -198,7 +204,7 @@ UsageSnapshot = {
 Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `history`
 (last 500 snapshots) that feeds the dashboard chart and the burn-rate maths. Settings
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
-`notifyThresholds`, `theme`, `actionOpens`, `developerMode`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
+`notifyThresholds`, `theme`, `iconStyle`, `actionOpens`, `developerMode`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
 `longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300):
@@ -305,6 +311,7 @@ written when Developer mode is on, from Options.
 - **Lockout countdown** — show/hide the "back at …" timer while a limit is exhausted.
 - **Measure what each message costs** — on by default; turning it off also stops the
   two extra usage reads around each message.
+- **Icon shows** — gauge ring (default), badge text, both, or nothing.
 - **Clicking the icon opens** — the popup (default) or the side panel.
 - **Theme** — Auto (follows `prefers-color-scheme`), Light, or Dark.
 - **Developer mode** — keeps raw request/response captures for the debug page

@@ -137,6 +137,23 @@
       <h2>Toolbar icon</h2>
       <label class="row">
         <span>
+          Icon shows
+          <small>
+            The gauge redraws the icon as a ring that fills with your session. Hover the icon for exact numbers.
+          </small>
+        </span>
+        <span class="icon-style">
+          <canvas id="gaugePreview" class="gauge-preview" width="64" height="64" role="img"></canvas>
+          <select id="iconStyleSelect">
+            <option value="gauge">Gauge ring</option>
+            <option value="badge">Badge text — 42%</option>
+            <option value="both">Gauge ring and badge</option>
+            <option value="plain">Nothing (plain icon)</option>
+          </select>
+        </span>
+      </label>
+      <label class="row">
+        <span>
           Clicking the icon opens
           <small>The side panel stays open next to the page while you browse; the popup closes when you click away.</small>
         </span>
