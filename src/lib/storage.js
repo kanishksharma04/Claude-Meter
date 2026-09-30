@@ -37,6 +37,8 @@ export const DEFAULT_SETTINGS = {
   messageCost: true, // measure session % before/after each reply (two extra usage fetches per message)
   weeklyBudget: true, // "12% a day until reset · 9% used today" under each weekly limit (lib/budget.js)
   forecast: "profile", // where each limit is heading: "profile" (your usual week) | "linear" | "off" (lib/forecast.js)
+  workdayStart: 9, // assumed working hours (0–24), for the window-start suggestion until the
+  workdayEnd: 17, // usage log has a week to learn from (lib/window-start.js)
 };
 
 export const DEFAULT_STATE = {

@@ -169,6 +169,20 @@
           <option value="off">Off</option>
         </select>
       </label>
+      <div class="row" role="group" aria-labelledby="workdayLabel">
+        <span id="workdayLabel">
+          Working hours
+          <small>
+            Used to suggest when to send your first message so the 5-hour session resets mid-workday. Once there is
+            a week of your own usage on record, that is used instead.
+          </small>
+        </span>
+        <span class="hour-range">
+          <select id="workdayStartSelect" aria-label="Working hours start"></select>
+          <span aria-hidden="true">–</span>
+          <select id="workdayEndSelect" aria-label="Working hours end"></select>
+        </span>
+      </div>
     </section>
 
     <section class="card">

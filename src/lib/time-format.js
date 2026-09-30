@@ -28,9 +28,14 @@ export function formatClock(epochMs, now = Date.now()) {
   });
 }
 
-/** An hour of the day (0–23) as a clock time in the user's locale — "2:00 PM" or "14:00". */
+/** Minutes since midnight as a clock time in the user's locale — "2:30 PM" or "14:30". */
+export function formatTimeOfDay(minutes) {
+  return new Date(2026, 0, 1, 0, minutes).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+/** An hour of the day (0–23) as a clock time — "2:00 PM" or "14:00". */
 export function formatHour(hour) {
-  return new Date(2026, 0, 1, hour).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return formatTimeOfDay(hour * 60);
 }
 
 /** Format the ms until a future epoch-ms timestamp as "X hr Y min" (or "X day Y hr" beyond a day). */

@@ -339,3 +339,10 @@ button.danger {
   font-size: 11px;
   margin: 8px 0 0;
 }
+
+.hour-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}

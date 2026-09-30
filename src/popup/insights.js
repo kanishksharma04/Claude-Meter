@@ -3,6 +3,7 @@
 // them — and each hides itself until there is enough data to say something.
 
 import { buildHeatmap, describeHeatmap, describeSlot, WEEKDAYS } from "../lib/heatmap.js";
+import { nextStart, describeStart } from "../lib/window-start.js";
 import { formatHour } from "../lib/time-format.js";
 
 const $ = (id) => document.getElementById(id);
@@ -48,8 +49,24 @@ function renderHeatmap({ usageLog }) {
   heatmap.replaceChildren(...cells);
 }
 
+// ----------------------------------------------------------- window start --
+
+function renderWindowStart({ usageLog, settings }) {
+  const suggestion = nextStart(usageLog, settings);
+  const section = $("startSection");
+  section.hidden = !suggestion;
+  if (!suggestion) return;
+
+  const { lead, windows, basis } = describeStart(suggestion);
+  $("startNote").textContent = `${suggestion.when} · ${WEEKDAYS[suggestion.day]}`;
+  $("startLead").textContent = lead;
+  $("startPlan").replaceChildren(...windows.map((text) => el("li", {}, text)));
+  $("startBasis").textContent = basis;
+}
+
 // ------------------------------------------------------------------------
 
 export function renderInsights(state) {
   renderHeatmap(state);
+  renderWindowStart(state);
 }

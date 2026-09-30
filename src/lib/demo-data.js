@@ -127,7 +127,7 @@ const LOG_SPAN = 35 * DAY;
 /** The made-up browser is open from this hour until midnight. */
 const FIRST_HOUR = 7;
 /** Session %-points used in each hour of a working day, and of a weekend day. */
-const WORKDAY_HOURS = [0, 0, 0, 0, 0, 0, 0, 0, 2, 9, 16, 14, 6, 4, 12, 17, 13, 8, 3, 1, 0, 4, 3, 0];
+const WORKDAY_HOURS = [0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 19, 17, 11, 4, 9, 13, 10, 6, 3, 1, 0, 4, 3, 0];
 const WEEKEND_HOURS = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 5, 2, 0, 0, 4, 2, 0, 0, 0, 0, 3, 1, 0];
 
 /** A repeatable stand-in for randomness: the same seed always gives the same 0–1 value. */

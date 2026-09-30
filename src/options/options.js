@@ -1,5 +1,5 @@
 import { getAll, getSettings, setSettings, setSnoozeUntil, clearAllData, onStorageChanged } from "../lib/storage.js";
-import { formatClock } from "../lib/time-format.js";
+import { formatClock, formatHour } from "../lib/time-format.js";
 import { isSnoozed } from "../lib/snooze.js";
 import { drawGauge } from "../lib/gauge-icon.js";
 import { normalizeCutoffs, severityColor, severityColors } from "../lib/severity.js";
@@ -20,6 +20,8 @@ const lockoutOverlayToggle = document.getElementById("lockoutOverlayToggle");
 const messageCostToggle = document.getElementById("messageCostToggle");
 const weeklyBudgetToggle = document.getElementById("weeklyBudgetToggle");
 const forecastSelect = document.getElementById("forecastSelect");
+const workdayStartSelect = document.getElementById("workdayStartSelect");
+const workdayEndSelect = document.getElementById("workdayEndSelect");
 const iconStyleSelect = document.getElementById("iconStyleSelect");
 const gaugePreview = document.getElementById("gaugePreview");
 const actionOpensSelect = document.getElementById("actionOpensSelect");
@@ -82,6 +84,15 @@ function renderSeverity(settings) {
   dangerAtInput.value = dangerAt;
   for (const input of colorInputs) input.value = colors[input.dataset.level];
   renderGaugePreview();
+}
+
+/** Start offers 0:00–23:00, end 1:00–24:00; the end is always kept after the start. */
+function renderWorkday(settings) {
+  const option = (hour) => new Option(formatHour(hour % 24), String(hour));
+  workdayStartSelect.replaceChildren(...Array.from({ length: 24 }, (_, hour) => option(hour)));
+  workdayEndSelect.replaceChildren(...Array.from({ length: 24 }, (_, index) => option(index + 1)));
+  workdayStartSelect.value = String(settings.workdayStart);
+  workdayEndSelect.value = String(settings.workdayEnd);
 }
 
 function renderDemo(settings) {
@@ -156,6 +167,7 @@ async function init() {
 
   weeklyBudgetToggle.checked = settings.weeklyBudget;
   forecastSelect.value = settings.forecast;
+  renderWorkday(settings);
 
   iconStyleSelect.value = settings.iconStyle;
   renderGaugePreview();
@@ -235,6 +247,19 @@ weeklyBudgetToggle.addEventListener("change", async () => {
 forecastSelect.addEventListener("change", async () => {
   await setSettings({ forecast: forecastSelect.value });
 });
+
+for (const select of [workdayStartSelect, workdayEndSelect]) {
+  select.addEventListener("change", async () => {
+    let start = Number(workdayStartSelect.value);
+    let end = Number(workdayEndSelect.value);
+    // Whichever end was just moved wins; the other steps out of its way.
+    if (end <= start) {
+      if (select === workdayStartSelect) end = start + 1;
+      else start = end - 1;
+    }
+    renderWorkday(await setSettings({ workdayStart: start, workdayEnd: end }));
+  });
+}
 
 iconStyleSelect.addEventListener("change", async () => {
   renderGaugePreview();

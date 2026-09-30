@@ -151,6 +151,13 @@ record per hour, eight weeks deep — and builds its analytics from that:
   assumes you'll keep going all night and all weekend — it adds up what you
   *typically* use in each coming hour of the week, and scales the rest of today by
   how today compares with a usual one. Hover it for the reasoning.
+- **Window-start optimiser** — the 5-hour session opens with your first message and
+  resets five hours later, so *when* you send it decides where the reset falls. The
+  dashboard works out the start that puts a reset inside your busiest stretch, so no
+  one window has to carry it all: "Send your first message around 7:00 AM — any short
+  one will do. Your session then resets at 12:00 PM…", with the resulting windows and
+  how full each would get. It plans for today until that time has passed, then for
+  tomorrow, and says so when your usual start is already fine.
 
 ## Accessibility
 
@@ -255,6 +262,7 @@ claudemeter/
 │   │   ├── heatmap.js                 # usage log -> weekday × hour averages
 │   │   ├── budget.js                  # weekly limit -> % a day until reset, and today's share used
 │   │   ├── forecast.js                # level at reset from the typical hourly profile (or a straight line)
+│   │   ├── window-start.js            # the first-message time that lands the reset mid-workday
 │   │   ├── gauge-icon.js              # draws the ring-gauge toolbar icon onto any 2D canvas
 │   │   ├── severity.js                # amber/red cut-offs + colours shared by every meter
 │   │   ├── bucket-prefs.js            # popup bucket order / pinned / hidden + the moves between them
@@ -313,7 +321,7 @@ Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `his
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
 `notifyThresholds`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
-`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `weeklyBudget`, `forecast`). The current model-switch hint, if any, is kept
+`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300), and the mini window's last position and size
 are kept under `miniWindowBounds`:
@@ -448,6 +456,11 @@ written when Developer mode is on, from Options.
   hourly profile (the tooltip says which method produced the figure), and "today is
   running at N× your usual" is capped between 0.5× and 2×. A straight-line forecast
   isn't offered in the first 2% of a window, where one message would swing it wildly.
+- The window-start suggestion plans a *typical* day of that weekday, in half-hour
+  steps, and only speaks up when the heaviest window would get at least 10 points
+  lighter. Before there is a week of history it has no idea how heavy your day is, so
+  it assumes even use across the working hours from Options and talks in hours of work
+  instead of percentages. It can't open the window for you: that takes a message.
 - "Used today" in the weekly budget is the limit's level now minus its level at local
   midnight. If ClaudeMeter has no reading from before midnight it uses the level just
   before today's first reading, and with no readings today it shows the budget alone.
@@ -470,6 +483,8 @@ written when Developer mode is on, from Options.
   two extra usage reads around each message.
 - **Weekly budget** — show/hide the "% a day until reset" line under each weekly limit.
 - **Forecast** — from your usual week (default), straight line, or off.
+- **Working hours** — start and end (9:00–17:00 by default), used for the window-start
+  suggestion until a week of your own usage is on record.
 - **Icon shows** — gauge ring (default), badge text, both, or nothing.
 - **Keyboard shortcuts** — shows the current bindings; "Change shortcuts…" opens
   `chrome://extensions/shortcuts`.
