@@ -5,6 +5,7 @@
     <title>ClaudeMeter</title>
     <link rel="stylesheet" href="../shared/theme.css" />
     <link rel="stylesheet" href="popup.css" />
+    <link rel="stylesheet" href="insights.css" />
   </head>
   <body>
     <header>
@@ -126,6 +127,21 @@
           <p class="usage-sub" id="historyEmpty" hidden>
             Not enough history yet — this fills in as ClaudeMeter refreshes.
           </p>
+        </div>
+
+        <!-- Dashboard-only analytics (src/popup/insights.js) -->
+        <div id="insights" hidden>
+          <div id="heatmapSection" hidden>
+            <hr />
+            <div class="weekly-header">
+              <h2>When you use Claude</h2>
+              <span class="header-note" id="heatmapNote"></span>
+            </div>
+            <div class="insight-body">
+              <div id="heatmap" class="heatmap" role="img"></div>
+            </div>
+            <p class="insight-summary" id="heatmapSummary"></p>
+          </div>
         </div>
       </section>
 

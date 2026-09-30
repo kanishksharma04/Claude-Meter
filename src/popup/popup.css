@@ -269,7 +269,7 @@ hr {
    width and colour that would give the number away. Screen readers still get
    the real values — this hides what is on screen, not what the user can know. */
 
-[data-privacy="on"] :is(.usage-pct, #lastMessage, .chat-list, #limitHits, #historyBody, #planBadge) {
+[data-privacy="on"] :is(.usage-pct, #lastMessage, .chat-list, #limitHits, #historyBody, #planBadge, .insight-body) {
   filter: blur(5px);
   user-select: none;
 }

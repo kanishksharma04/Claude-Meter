@@ -9,6 +9,7 @@ import { severityOf, isHexColor } from "../lib/severity.js";
 import { arrangeBuckets, moveBucket, togglePinned, toggleHidden } from "../lib/bucket-prefs.js";
 import { applyTheme, onSystemThemeChange } from "../lib/theme.js";
 import { shareRows, buildShareText, shareCardSize, drawShareCard } from "../lib/share.js";
+import { renderInsights } from "./insights.js";
 
 // This page serves more than one surface: the toolbar popup; as
 // popup.html?view=panel the side panel (or a full tab), which gets the room
@@ -62,6 +63,7 @@ const historyLegend = document.getElementById("historyLegend");
 const historyRange = document.getElementById("historyRange");
 const historyFrom = document.getElementById("historyFrom");
 const historyEmpty = document.getElementById("historyEmpty");
+const insights = document.getElementById("insights");
 
 let latestState = null;
 let arranging = false; // the popup's "reorder / pin / hide" mode
@@ -352,6 +354,8 @@ function render(state) {
   renderTopChats(settings.messageCost ? messageLog : []);
   renderLimitHits(limitHits);
   renderHistory(history);
+  insights.hidden = VIEW !== "panel";
+  if (!insights.hidden) renderInsights(state);
 
   lastUpdatedEl.textContent = `Last updated: ${timeAgo(latestSnapshot.fetchedAt)}`;
 

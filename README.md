@@ -133,6 +133,15 @@ alone — the one exception is the tab indicator, which has to edit the page's `
 and icon `<link>`s and restores them when switched off. Each piece can be turned off
 in Options.
 
+### Analytics
+
+The side panel dashboard also keeps a longer memory than the popup needs — one small
+record per hour, eight weeks deep — and builds its analytics from that:
+
+- **Weekday and hour heatmap** — a 7 × 24 grid of how much of a session you typically
+  use in each hour of the week, averaged over every such weekday on record, with the
+  busiest slots named underneath. Hover a cell for its figure.
+
 ## Accessibility
 
 - Every meter is a real `progressbar` with a name, a spoken value ("86% used") and
@@ -220,6 +229,7 @@ claudemeter/
 │   │   ├── relay.js                   # ISOLATED world: forwards both to the background worker
 │   │   └── page-ui.js                 # ISOLATED world: in-page UI (pill, banners, lockout timer) in a shadow root
 │   ├── popup/                         # toolbar popup, ?view=panel side panel dashboard, ?view=mini window
+│   │   └── insights.js                # the dashboard's analytics sections
 │   ├── options/                       # refresh interval, notifications, theme, developer mode
 │   ├── onboarding/                    # first-run welcome page: sign-in check, permissions, alerts
 │   ├── debug/                         # debug.html — raw capture viewer (developer mode only)
@@ -231,6 +241,8 @@ claudemeter/
 │   │   ├── burn-rate.js               # weekly %/hr from history + the model-switch hint
 │   │   ├── limit-hits.js              # "limit reached" log: dedupe per lockout + summary
 │   │   ├── history-chart.js           # snapshot history -> line-chart series + SVG paths
+│   │   ├── usage-log.js               # hourly rollup of every reading, kept for eight weeks
+│   │   ├── heatmap.js                 # usage log -> weekday × hour averages
 │   │   ├── gauge-icon.js              # draws the ring-gauge toolbar icon onto any 2D canvas
 │   │   ├── severity.js                # amber/red cut-offs + colours shared by every meter
 │   │   ├── bucket-prefs.js            # popup bucket order / pinned / hidden + the moves between them
@@ -323,10 +335,24 @@ LimitHit = {
 }
 ```
 
+Every reading is also folded into `usageLog`, the long-term record the analytics are
+built from (last 1,344 hours — eight weeks):
+
+```js
+HourRecord = {
+  t: number,                   // epoch ms of the start of the local clock hour
+  n: number,                   // readings folded into it
+  peak: number | null,         // highest session % seen during the hour
+  burn: number,                // session %-points used during the hour
+  weekly: { [label]: { pct: number, burn: number } },  // level at the last reading, points used
+}
+```
+
 Demo mode never overwrites any of this. `getAll()` in `src/lib/storage.js` swaps the
 made-up dataset in at read time, and the same dataset is written to a separate
 `demoState` key (removed again when demo mode goes off) so the page script on
-claude.ai can read it.
+claude.ai can read it. The demo's five weeks of hourly records are generated on each
+read and never stored.
 
 A snooze is a single top-level `snoozeUntil` timestamp (0 when alerts aren't paused);
 an alarm at that time clears it, so it ends even if the browser was closed meanwhile.
@@ -399,7 +425,12 @@ written when Developer mode is on, from Options.
   PDFs, project knowledge, and tool results aren't counted, so treat it as a floor.
 - The usage-over-time chart only reaches back as far as the stored history: 500
   readings, which is about a day at the default interval and less if per-message cost
-  is adding two readings per message. There is no long-term archive or export.
+  is adding two readings per message. There is no export.
+- The analytics only know what this browser saw. Hours when it wasn't running leave no
+  record, and usage that built up across a gap of more than 90 minutes between two
+  readings isn't assigned to any hour, because there is no telling when it happened.
+  The heatmap needs a few weeks before its averages mean much; the header says how
+  many days it rests on.
 
 ## Options
 
@@ -432,8 +463,8 @@ written when Developer mode is on, from Options.
 - **Demo mode** — show the demo dataset everywhere, with or without the "Demo" badge.
 - **Developer mode** — keeps raw request/response captures for the debug page
   (`src/debug/debug.html`), off by default.
-- **Clear stored data** — wipes snapshot, history, message costs, the limit-hit log,
-  org cache, and debug captures.
+- **Clear stored data** — wipes snapshot, history, the hourly usage log, message costs,
+  the limit-hit log, org cache, and debug captures.
 
 ## Author
 

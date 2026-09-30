@@ -4,7 +4,8 @@
 import { appendMessage, prunePending } from "./message-cost.js";
 import { addLimitHit } from "./limit-hits.js";
 import { DEFAULT_BUCKET_PREFS } from "./bucket-prefs.js";
-import { buildDemoState } from "./demo-data.js";
+import { buildDemoState, buildDemoAnalytics } from "./demo-data.js";
+import { foldSnapshot, buildUsageLog } from "./usage-log.js";
 
 export const MAX_DEBUG_CAPTURES = 20;
 // Enough for the dashboard chart to cover about a day at the default refresh interval.
@@ -48,6 +49,7 @@ export const DEFAULT_STATE = {
   pendingMessages: {}, // requestId -> { before snapshot, ... } for replies still streaming
   limitHits: [], // "limit reached" events, oldest first (see lib/limit-hits.js)
   snoozeUntil: 0, // epoch ms until which alerts are paused; 0 = not snoozed (see lib/snooze.js)
+  usageLog: [], // one compact record per hour, eight weeks deep (see lib/usage-log.js)
 };
 
 export async function getAll() {
@@ -55,7 +57,7 @@ export async function getAll() {
   const settings = withDefaults(stored.settings);
   // Demo mode swaps made-up readings in here, at read time. The real ones stay
   // in storage untouched, so switching it off shows exactly what was there before.
-  const data = settings.demoMode ? { ...stored, ...(stored.demoState ?? buildDemoState()) } : stored;
+  const data = settings.demoMode ? { ...stored, ...demoData(stored.demoState) } : stored;
   return {
     latestSnapshot: data.latestSnapshot ?? DEFAULT_STATE.latestSnapshot,
     history: data.history ?? DEFAULT_STATE.history,
@@ -68,7 +70,18 @@ export async function getAll() {
     pendingMessages: stored.pendingMessages ?? DEFAULT_STATE.pendingMessages,
     limitHits: data.limitHits ?? DEFAULT_STATE.limitHits,
     snoozeUntil: stored.snoozeUntil ?? DEFAULT_STATE.snoozeUntil,
+    usageLog: data.usageLog ?? DEFAULT_STATE.usageLog,
   };
+}
+
+/**
+ * The stored demo dataset plus its weeks of made-up analytics. Those are
+ * rebuilt on every read rather than stored: they are large, and only extension
+ * pages (which can import the generator) ever show them.
+ */
+function demoData(demoState) {
+  const demo = demoState ?? buildDemoState();
+  return { ...demo, ...buildDemoAnalytics(demo) };
 }
 
 /**
@@ -80,11 +93,21 @@ export async function setDemoState(demoState) {
   else await chrome.storage.local.remove("demoState");
 }
 
-/** Stores a new snapshot as the latest, and appends it to the capped rolling history. */
+/**
+ * Stores a new snapshot as the latest, appends it to the capped rolling
+ * history, and folds it into the hourly usage log.
+ */
 export async function setLatestSnapshot(snapshot) {
-  const { history = [] } = await chrome.storage.local.get("history");
+  const { history = [], usageLog } = await chrome.storage.local.get(["history", "usageLog"]);
   const nextHistory = [...history, snapshot].slice(-MAX_HISTORY);
-  await chrome.storage.local.set({ latestSnapshot: snapshot, history: nextHistory, lastError: null });
+  // First run with the log: seed it from whatever history is already there.
+  const nextLog = foldSnapshot(usageLog ?? buildUsageLog(history), history.at(-1) ?? null, snapshot);
+  await chrome.storage.local.set({
+    latestSnapshot: snapshot,
+    history: nextHistory,
+    usageLog: nextLog,
+    lastError: null,
+  });
   return snapshot;
 }
 
@@ -187,6 +210,7 @@ export async function clearAllData() {
     messageLog: [],
     pendingMessages: {},
     limitHits: [],
+    usageLog: [],
   });
 }
 

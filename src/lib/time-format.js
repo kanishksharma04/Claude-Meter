@@ -28,6 +28,11 @@ export function formatClock(epochMs, now = Date.now()) {
   });
 }
 
+/** An hour of the day (0–23) as a clock time in the user's locale — "2:00 PM" or "14:00". */
+export function formatHour(hour) {
+  return new Date(2026, 0, 1, hour).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
 /** Format the ms until a future epoch-ms timestamp as "X hr Y min" (or "X day Y hr" beyond a day). */
 export function formatDuration(fromMs, toMs) {
   if (toMs == null) return null;

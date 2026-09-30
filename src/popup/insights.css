@@ -1,0 +1,37 @@
+/* The dashboard's analytics sections (src/popup/insights.js). */
+
+.insight-summary {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* -------------------------------------------------------------- heatmap -- */
+
+.heatmap {
+  display: grid;
+  grid-template-columns: 30px repeat(24, minmax(0, 1fr));
+  gap: 2px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+/* A label sits over the first of the six hours it stands for. */
+.heat-tick {
+  grid-column: span 1;
+  overflow: visible;
+  white-space: nowrap;
+}
+
+.heat-cell {
+  aspect-ratio: 1;
+  min-height: 8px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) var(--heat, 0%), var(--track));
+}
+
+[data-theme="contrast"] .heat-cell {
+  outline: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+  outline-offset: -1px;
+}
