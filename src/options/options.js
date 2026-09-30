@@ -18,6 +18,7 @@ const longContextSelect = document.getElementById("longContextSelect");
 const attachmentWarnSelect = document.getElementById("attachmentWarnSelect");
 const lockoutOverlayToggle = document.getElementById("lockoutOverlayToggle");
 const messageCostToggle = document.getElementById("messageCostToggle");
+const weeklyBudgetToggle = document.getElementById("weeklyBudgetToggle");
 const iconStyleSelect = document.getElementById("iconStyleSelect");
 const gaugePreview = document.getElementById("gaugePreview");
 const actionOpensSelect = document.getElementById("actionOpensSelect");
@@ -152,6 +153,8 @@ async function init() {
   lockoutOverlayToggle.checked = settings.lockoutOverlay;
   messageCostToggle.checked = settings.messageCost;
 
+  weeklyBudgetToggle.checked = settings.weeklyBudget;
+
   iconStyleSelect.value = settings.iconStyle;
   renderGaugePreview();
 
@@ -221,6 +224,10 @@ lockoutOverlayToggle.addEventListener("change", async () => {
 
 messageCostToggle.addEventListener("change", async () => {
   await setSettings({ messageCost: messageCostToggle.checked });
+});
+
+weeklyBudgetToggle.addEventListener("change", async () => {
+  await setSettings({ weeklyBudget: weeklyBudgetToggle.checked });
 });
 
 iconStyleSelect.addEventListener("change", async () => {

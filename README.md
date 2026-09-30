@@ -141,6 +141,10 @@ record per hour, eight weeks deep — and builds its analytics from that:
 - **Weekday and hour heatmap** — a 7 × 24 grid of how much of a session you typically
   use in each hour of the week, averaged over every such weekday on record, with the
   busiest slots named underneath. Hover a cell for its figure.
+- **Weekly budget planner** — under each weekly limit, in the popup too: "Budget: 12% a
+  day until reset · 9% used today". The daily figure is what was left at the start of
+  today divided by the days until the reset, so it holds still while you work and only
+  re-plans at midnight; go past it and the line turns amber and says by how much.
 
 ## Accessibility
 
@@ -243,6 +247,7 @@ claudemeter/
 │   │   ├── history-chart.js           # snapshot history -> line-chart series + SVG paths
 │   │   ├── usage-log.js               # hourly rollup of every reading, kept for eight weeks
 │   │   ├── heatmap.js                 # usage log -> weekday × hour averages
+│   │   ├── budget.js                  # weekly limit -> % a day until reset, and today's share used
 │   │   ├── gauge-icon.js              # draws the ring-gauge toolbar icon onto any 2D canvas
 │   │   ├── severity.js                # amber/red cut-offs + colours shared by every meter
 │   │   ├── bucket-prefs.js            # popup bucket order / pinned / hidden + the moves between them
@@ -301,7 +306,7 @@ Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `his
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
 `notifyThresholds`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
-`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`). The current model-switch hint, if any, is kept
+`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `weeklyBudget`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300), and the mini window's last position and size
 are kept under `miniWindowBounds`:
@@ -431,6 +436,9 @@ written when Developer mode is on, from Options.
   readings isn't assigned to any hour, because there is no telling when it happened.
   The heatmap needs a few weeks before its averages mean much; the header says how
   many days it rests on.
+- "Used today" in the weekly budget is the limit's level now minus its level at local
+  midnight. If ClaudeMeter has no reading from before midnight it uses the level just
+  before today's first reading, and with no readings today it shows the budget alone.
 
 ## Options
 
@@ -448,6 +456,7 @@ written when Developer mode is on, from Options.
 - **Lockout countdown** — show/hide the "back at …" timer while a limit is exhausted.
 - **Measure what each message costs** — on by default; turning it off also stops the
   two extra usage reads around each message.
+- **Weekly budget** — show/hide the "% a day until reset" line under each weekly limit.
 - **Icon shows** — gauge ring (default), badge text, both, or nothing.
 - **Keyboard shortcuts** — shows the current bindings; "Change shortcuts…" opens
   `chrome://extensions/shortcuts`.

@@ -9,6 +9,7 @@ import { severityOf, isHexColor } from "../lib/severity.js";
 import { arrangeBuckets, moveBucket, togglePinned, toggleHidden } from "../lib/bucket-prefs.js";
 import { applyTheme, onSystemThemeChange } from "../lib/theme.js";
 import { shareRows, buildShareText, shareCardSize, drawShareCard } from "../lib/share.js";
+import { weeklyBudget, describeBudget } from "../lib/budget.js";
 import { renderInsights } from "./insights.js";
 
 // This page serves more than one surface: the toolbar popup; as
@@ -141,6 +142,16 @@ function buildBucketRow(entry, group, position, messageLog) {
     line.className = "usage-sub";
     line.id = "lastMessage";
     line.textContent = lastMessage;
+    row.querySelector(".bucket-tools").before(line);
+  }
+
+  const { settings, usageLog } = latestState;
+  const budget = kind === "weekly" && settings.weeklyBudget ? weeklyBudget(bucket, usageLog) : null;
+  if (budget) {
+    const line = document.createElement("p");
+    line.className = "usage-sub budget-line";
+    line.classList.toggle("over", budget.over >= 0.5);
+    line.textContent = describeBudget(budget);
     row.querySelector(".bucket-tools").before(line);
   }
 
