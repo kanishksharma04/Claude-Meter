@@ -6,7 +6,9 @@ import { buildHeatmap, describeHeatmap, describeSlot, WEEKDAYS } from "../lib/he
 import { nextStart, describeStart } from "../lib/window-start.js";
 import { lockoutStats } from "../lib/lockout-stats.js";
 import { planFit, describePlanFit } from "../lib/plan-fit.js";
-import { formatHour, formatDuration } from "../lib/time-format.js";
+import { timelineDays, summarizeWindows } from "../lib/session-windows.js";
+import { severityOf } from "../lib/severity.js";
+import { formatHour, formatDuration, formatClock } from "../lib/time-format.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -75,6 +77,52 @@ function renderWindowStart({ usageLog, settings }) {
   $("startBasis").textContent = basis;
 }
 
+// ------------------------------------------------------ session timeline --
+
+function renderTimeline({ sessionWindows, settings }) {
+  const summary = summarizeWindows(sessionWindows);
+  const section = $("timelineSection");
+  section.hidden = summary.count === 0;
+  if (section.hidden) return;
+
+  $("timelineNote").textContent = `${plural(summary.count, "window")} in 7 days`;
+  $("timelineSummary").textContent =
+    `About ${summary.perDay} a day, peaking at ${summary.averagePeak}% on average` +
+    (summary.full > 0 ? ` · ${summary.full} reached 100%` : "") +
+    ". Each bar is one 5-hour session, from its first message to its reset.";
+
+  const clock = (epochMs) => new Date(epochMs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  $("timelineTicks").replaceChildren(...HEATMAP_TICKS.map((hour) => el("span", {}, formatHour(hour))));
+  $("timeline").replaceChildren(
+    ...timelineDays(sessionWindows).map((row) => {
+      const day = new Date(row.dayStart).toLocaleDateString([], { weekday: "short", day: "numeric" });
+      const track = el("div", { className: "timeline-track", ariaHidden: "true" });
+      const spoken = [];
+
+      for (const bar of row.bars) {
+        const node = el("span", {
+          className: `timeline-bar ${severityOf(bar.peak, settings)}${bar.live ? " live" : ""}`,
+          title: `${formatClock(bar.start)} – ${formatClock(bar.resetsAt)} · peaked at ${bar.peak}%`,
+        });
+        node.style.left = `${bar.left}%`;
+        node.style.width = `${bar.width}%`;
+        // The figure only goes on bars wide enough to hold it — the stub of a window that crossed midnight isn't.
+        if (bar.width > 9) node.textContent = `${bar.peak}%`;
+        track.append(node);
+        spoken.push(`${clock(bar.start)} to ${clock(bar.resetsAt)}, ${bar.live ? "at" : "peaked at"} ${bar.peak}%`);
+      }
+
+      return el(
+        "li",
+        {},
+        el("span", { className: "timeline-day", ariaHidden: "true" }, day),
+        track,
+        el("span", { className: "sr-only" }, `${day}: ${spoken.length > 0 ? spoken.join("; ") : "no sessions"}.`)
+      );
+    })
+  );
+}
+
 // --------------------------------------------------------------- lockouts --
 
 function renderLockouts({ limitHits }) {
@@ -127,6 +175,7 @@ function renderPlanFit({ usageLog, limitHits, latestSnapshot, settings }) {
 export function renderInsights(state) {
   renderHeatmap(state);
   renderWindowStart(state);
+  renderTimeline(state);
   renderLockouts(state);
   renderPlanFit(state);
 }

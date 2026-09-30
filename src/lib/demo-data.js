@@ -8,6 +8,7 @@
 
 import { formatDuration } from "./time-format.js";
 import { foldSnapshot, hourStart } from "./usage-log.js";
+import { foldWindow } from "./session-windows.js";
 
 const MIN = 60 * 1000;
 const HOUR = 60 * MIN;
@@ -43,7 +44,10 @@ function bucket(label, percentUsed, resetsAt, now) {
   return { label, percentUsed, resetsAt, resetsInLabel: formatDuration(now, resetsAt) ?? "unknown" };
 }
 
-/** Session % at time `t`: three 5-hour windows, each filling steadily until it resets. */
+/**
+ * The session at time `t`: three 5-hour windows, each filling steadily until it resets.
+ * @returns {{ pct: number, resetsAt: number }} the level, and the reset time of the window `t` falls in
+ */
 function sessionAt(t, sessionResetsAt) {
   const peaks = [SESSION_NOW, 88, 74]; // current window, the one before it, the one before that
   const windowsBack = Math.max(0, Math.ceil((sessionResetsAt - SESSION_LENGTH - t) / SESSION_LENGTH));
@@ -51,7 +55,7 @@ function sessionAt(t, sessionResetsAt) {
   const elapsed = (t - (windowEnd - SESSION_LENGTH)) / SESSION_LENGTH; // 0..1 through this window
   // The current window is only part-way through, so scale it to land on SESSION_NOW "now".
   const full = windowsBack === 0 ? SESSION_NOW / ((SESSION_LENGTH - 134 * MIN) / SESSION_LENGTH) : peaks[windowsBack] ?? 60;
-  return Math.max(0, Math.min(100, Math.round(full * elapsed)));
+  return { pct: Math.max(0, Math.min(100, Math.round(full * elapsed))), resetsAt: windowEnd };
 }
 
 /**
@@ -63,10 +67,11 @@ export function buildDemoState(now = Date.now()) {
 
   const snapshotAt = (t) => {
     const progress = 1 - (now - t) / HISTORY_SPAN; // 0 at the start of the history, 1 now
+    const session = sessionAt(t, sessionResetsAt);
     return {
       fetchedAt: t,
       planTier: "Max 5x",
-      session: bucket("Current session", sessionAt(t, sessionResetsAt), sessionResetsAt, t),
+      session: bucket("Current session", session.pct, session.resetsAt, t),
       weekly: [
         bucket("All models", Math.round(WEEKLY_NOW["All models"] - 9 * (1 - progress)), weeklyResetsAt, t),
         bucket("Opus", Math.round(WEEKLY_NOW.Opus - 17 * (1 - progress)), weeklyResetsAt, t),
@@ -147,6 +152,7 @@ const WEEKLY_PER_SESSION_POINT = { "All models": 0.085, Opus: 0.13 };
 function simulateHours(from, to, weeklyResetsAt, weeklyAt) {
   const hours = [];
   const lockouts = [];
+  const windows = [];
   let session = 0;
   let windowEnd = 0;
   let weekEnd = weeklyResetsAt;
@@ -164,7 +170,10 @@ function simulateHours(from, to, weeklyResetsAt, weeklyAt) {
 
     if (t >= windowEnd) {
       session = 0;
-      if (want > 0) windowEnd = t + SESSION_LENGTH;
+      if (want > 0) {
+        windowEnd = t + SESSION_LENGTH;
+        windows.push({ start: t, resetsAt: windowEnd, firstSeen: t, lastSeen: t, peak: 0 });
+      }
     }
     if (t >= weekEnd) {
       used = 0;
@@ -173,6 +182,7 @@ function simulateHours(from, to, weeklyResetsAt, weeklyAt) {
     const burn = Math.min(want, 100 - session);
     session += burn;
     used += burn;
+    if (burn > 0) Object.assign(windows.at(-1), { peak: session, lastSeen: t + HOUR });
     // Wanting more than the window had left is a lockout, from part-way through this hour.
     if (burn < want && lockouts.at(-1)?.resetsAt !== windowEnd) {
       lockouts.push({ at: t + Math.round((burn / want) * 50) * MIN, resetsAt: windowEnd });
@@ -198,12 +208,12 @@ function simulateHours(from, to, weeklyResetsAt, weeklyAt) {
     }
     return { t, n: 12, peak, burn, weekly };
   });
-  return { records, lockouts };
+  return { records, lockouts, windows };
 }
 
 /**
  * @param {{ history: object[], limitHits: object[] }} demo - what buildDemoState() returned
- * @returns {{ usageLog: object[], limitHits: object[] }}
+ * @returns {{ usageLog: object[], sessionWindows: object[], limitHits: object[] }}
  */
 export function buildDemoAnalytics(demo) {
   const [first] = demo.history;
@@ -213,9 +223,12 @@ export function buildDemoAnalytics(demo) {
 
   const past = simulateHours(to - LOG_SPAN, to, first.weekly[0].resetsAt, weeklyAt);
   let usageLog = past.records;
+  // The made-up past stops where the first window of the stored history begins.
+  let sessionWindows = past.windows.filter((w) => w.resetsAt <= first.session.resetsAt - SESSION_LENGTH);
   let previous = null;
   for (const snapshot of demo.history) {
     usageLog = foldSnapshot(usageLog, previous, snapshot);
+    sessionWindows = foldWindow(sessionWindows, snapshot);
     previous = snapshot;
   }
 
@@ -233,5 +246,5 @@ export function buildDemoAnalytics(demo) {
       model: "claude-opus-4-5",
     }));
 
-  return { usageLog, limitHits: [...olderHits, ...demo.limitHits] };
+  return { usageLog, sessionWindows, limitHits: [...olderHits, ...demo.limitHits] };
 }

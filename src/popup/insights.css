@@ -66,6 +66,84 @@
   white-space: nowrap;
 }
 
+/* ----------------------------------------------------- session timeline -- */
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.timeline li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.timeline-day {
+  flex: 0 0 46px;
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* Four labels, each over the start of the six hours it stands for. */
+.timeline-ticks {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin: 0 0 3px 54px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.timeline-track {
+  position: relative;
+  flex: 1;
+  height: 16px;
+  border-radius: 4px;
+  /* Faint rules every six hours, matching the tick labels. */
+  background:
+    linear-gradient(90deg, var(--border) 1px, transparent 1px) 0 0 / 25% 100%,
+    var(--track);
+  overflow: hidden;
+}
+
+.timeline-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  box-sizing: border-box;
+  border-left: 1px solid var(--bg);
+  border-radius: 3px;
+  background: var(--ok-fill, var(--accent));
+  color: var(--on-accent);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.timeline-bar.warn {
+  background: var(--warn);
+}
+
+.timeline-bar.danger {
+  background: var(--danger);
+}
+
+/* The window still open: its remaining hours are a promise, not history. */
+.timeline-bar.live {
+  background-image: repeating-linear-gradient(-45deg, transparent 0 5px, rgb(255 255 255 / 0.22) 5px 10px);
+}
+
+[data-theme="contrast"] .timeline-bar {
+  color: #000;
+}
+
 /* ------------------------------------------------------------- lockouts -- */
 
 .lockout-table {

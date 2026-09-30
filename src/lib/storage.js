@@ -6,6 +6,7 @@ import { addLimitHit, observeFullBuckets } from "./limit-hits.js";
 import { DEFAULT_BUCKET_PREFS } from "./bucket-prefs.js";
 import { buildDemoState, buildDemoAnalytics } from "./demo-data.js";
 import { foldSnapshot, buildUsageLog } from "./usage-log.js";
+import { foldWindow, buildWindows } from "./session-windows.js";
 
 export const MAX_DEBUG_CAPTURES = 20;
 // Enough for the dashboard chart to cover about a day at the default refresh interval.
@@ -57,6 +58,7 @@ export const DEFAULT_STATE = {
   limitHits: [], // "limit reached" events, oldest first (see lib/limit-hits.js)
   snoozeUntil: 0, // epoch ms until which alerts are paused; 0 = not snoozed (see lib/snooze.js)
   usageLog: [], // one compact record per hour, eight weeks deep (see lib/usage-log.js)
+  sessionWindows: [], // past 5-hour session windows, oldest first (see lib/session-windows.js)
 };
 
 export async function getAll() {
@@ -78,6 +80,7 @@ export async function getAll() {
     limitHits: data.limitHits ?? DEFAULT_STATE.limitHits,
     snoozeUntil: stored.snoozeUntil ?? DEFAULT_STATE.snoozeUntil,
     usageLog: data.usageLog ?? DEFAULT_STATE.usageLog,
+    sessionWindows: data.sessionWindows ?? DEFAULT_STATE.sessionWindows,
   };
 }
 
@@ -102,17 +105,20 @@ export async function setDemoState(demoState) {
 
 /**
  * Stores a new snapshot as the latest, appends it to the capped rolling
- * history, and folds it into the hourly usage log.
+ * history, and folds it into the long-term records: the hourly usage log and
+ * the list of session windows.
  */
 export async function setLatestSnapshot(snapshot) {
-  const { history = [], usageLog } = await chrome.storage.local.get(["history", "usageLog"]);
-  const nextHistory = [...history, snapshot].slice(-MAX_HISTORY);
-  // First run with the log: seed it from whatever history is already there.
-  const nextLog = foldSnapshot(usageLog ?? buildUsageLog(history), history.at(-1) ?? null, snapshot);
+  const stored = await chrome.storage.local.get(["history", "usageLog", "sessionWindows"]);
+  const history = stored.history ?? [];
+  // First run with either record: seed it from whatever history is already there.
+  const usageLog = stored.usageLog ?? buildUsageLog(history);
+  const sessionWindows = stored.sessionWindows ?? buildWindows(history);
   await chrome.storage.local.set({
     latestSnapshot: snapshot,
-    history: nextHistory,
-    usageLog: nextLog,
+    history: [...history, snapshot].slice(-MAX_HISTORY),
+    usageLog: foldSnapshot(usageLog, history.at(-1) ?? null, snapshot),
+    sessionWindows: foldWindow(sessionWindows, snapshot),
     lastError: null,
   });
   return snapshot;
@@ -225,6 +231,7 @@ export async function clearAllData() {
     pendingMessages: {},
     limitHits: [],
     usageLog: [],
+    sessionWindows: [],
   });
 }
 

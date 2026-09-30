@@ -173,6 +173,11 @@ record per hour, eight weeks deep — and builds its analytics from that:
   switch and a "Compare with a week earlier" box. Ticked, the same stretch from one
   week before is drawn underneath as dashed lines in the matching colours, and the
   legend adds where each limit stood at this point last week ("38% (was 24%)").
+- **Session window timeline** — a Gantt-style view of your past 5-hour windows: one
+  row per day for the last week, one bar per session from its first message to its
+  reset, coloured by how full it got and labelled with its peak. The window still open
+  is hatched. It shows at a glance how many sessions a day you get through, where the
+  gaps are, and which ones ran hot.
 
 ## Accessibility
 
@@ -277,6 +282,7 @@ claudemeter/
 │   │   ├── plan-fit.js                # four weeks of peaks and lockouts -> smaller / larger / fits
 │   │   ├── history-chart.js           # history / usage log -> chart series, week-earlier overlay, SVG paths
 │   │   ├── usage-log.js               # hourly rollup of every reading, kept for eight weeks
+│   │   ├── session-windows.js         # log of past 5-hour windows + the timeline rows drawn from it
 │   │   ├── heatmap.js                 # usage log -> weekday × hour averages
 │   │   ├── budget.js                  # weekly limit -> % a day until reset, and today's share used
 │   │   ├── forecast.js                # level at reset from the typical hourly profile (or a straight line)
@@ -387,6 +393,19 @@ HourRecord = {
 }
 ```
 
+Each 5-hour window gets one entry in `sessionWindows` (last 300), recognised by its
+reset time:
+
+```js
+SessionWindow = {
+  start: number,               // epoch ms it opened: its reset time minus five hours
+  resetsAt: number,
+  firstSeen: number,           // first and last readings taken inside it
+  lastSeen: number,
+  peak: number,                // highest session % seen in it
+}
+```
+
 Demo mode never overwrites any of this. `getAll()` in `src/lib/storage.js` swaps the
 made-up dataset in at read time, and the same dataset is written to a separate
 `demoState` key (removed again when demo mode goes off) so the page script on
@@ -483,6 +502,10 @@ written when Developer mode is on, from Options.
   hourly profile (the tooltip says which method produced the figure), and "today is
   running at N× your usual" is capped between 0.5× and 2×. A straight-line forecast
   isn't offered in the first 2% of a window, where one message would swing it wildly.
+- A session window is only logged once a reading shows it with something used, and its
+  start is taken to be five hours before its reset. Windows that opened and closed
+  while the browser wasn't running never appear, and a window's peak is the highest
+  reading ClaudeMeter happened to take, which can be short of where it really ended.
 - Plan-fit advice compares plans by their advertised multiples of Pro (Max 5x = 5×,
   Max 20x = 20×). That holds for the session limit as Anthropic describes it and is
   only approximate for the weekly ones, and it is why "peaked at 40% on Max 5x" is
@@ -535,8 +558,8 @@ written when Developer mode is on, from Options.
 - **Demo mode** — show the demo dataset everywhere, with or without the "Demo" badge.
 - **Developer mode** — keeps raw request/response captures for the debug page
   (`src/debug/debug.html`), off by default.
-- **Clear stored data** — wipes snapshot, history, the hourly usage log, message costs,
-  the limit-hit log, org cache, and debug captures.
+- **Clear stored data** — wipes snapshot, history, the hourly usage log, the session
+  window log, message costs, the limit-hit log, org cache, and debug captures.
 
 ## Author
 
