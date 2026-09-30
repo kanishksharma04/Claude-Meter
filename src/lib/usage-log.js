@@ -10,6 +10,8 @@
 //     peak: number | null,   // highest session % seen during the hour
 //     burn: number,          // session %-points used during the hour
 //     weekly: { [label]: { pct: number, burn: number } },  // level at the last reading, points used
+//     away?: number,         // the part of `burn` that rose while this browser was idle (lib/attribution.js)
+//     unseen?: number,       // session points that built up across a gap in the readings — not in `burn`
 //   }
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -68,6 +70,11 @@ export function foldSnapshot(log, previous, snapshot, max = MAX_LOG_HOURS) {
   if (snapshot.session) {
     record.peak = Math.max(record.peak ?? 0, snapshot.session.percentUsed);
     record.burn += pointsUsed(baseline?.session, snapshot.session);
+  }
+  // The reading says how much of its rise happened elsewhere; with no baseline that rise isn't in `burn` at all.
+  if (snapshot.elsewhere > 0) {
+    const field = baseline ? "away" : "unseen";
+    record[field] = (record[field] ?? 0) + snapshot.elsewhere;
   }
 
   for (const bucket of snapshot.weekly ?? []) {

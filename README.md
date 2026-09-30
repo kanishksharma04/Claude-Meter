@@ -188,6 +188,12 @@ record per hour, eight weeks deep — and builds its analytics from that:
   chart, a line in the dashboard ("Current session +18% in 4 min (41% → 59%)") with
   the chat it happened during — or a note that nothing was sent from this browser —
   and a desktop notification if those are on. Weekly limits are watched as well.
+- **Other-device attribution** — the endpoint doesn't say where usage came from, so
+  ClaudeMeter works it out by elimination: it knows every message sent from this
+  browser, and a rise in usage with nothing being sent or answered here happened
+  somewhere else — another computer, the apps, Claude Code. Those stretches are shaded
+  on the chart ("used elsewhere"), and the dashboard splits the last seven days into
+  **This browser** and **Elsewhere**.
 
 ## Accessibility
 
@@ -293,6 +299,7 @@ claudemeter/
 │   │   ├── history-chart.js           # history / usage log -> chart series, week-earlier overlay, SVG paths
 │   │   ├── annotations.js             # the user's notes on the chart: add, remove, place on the axis
 │   │   ├── spikes.js                  # a sudden jump between nearby readings -> spike log
+│   │   ├── attribution.js             # which rises this browser can't account for -> "used elsewhere"
 │   │   ├── usage-log.js               # hourly rollup of every reading, kept for eight weeks
 │   │   ├── session-windows.js         # log of past 5-hour windows + the timeline rows drawn from it
 │   │   ├── heatmap.js                 # usage log -> weekday × hour averages
@@ -402,8 +409,15 @@ HourRecord = {
   peak: number | null,         // highest session % seen during the hour
   burn: number,                // session %-points used during the hour
   weekly: { [label]: { pct: number, burn: number } },  // level at the last reading, points used
+  away?: number,               // the part of `burn` that rose with nothing sent from this browser
+  unseen?: number,             // session points that built up across a gap in the readings (not in `burn`)
 }
 ```
+
+A snapshot whose rise this browser can't account for carries that rise as
+`elsewhere` (session %-points). What "this browser" was doing is a tiny
+`localActivity` record — the time of the last message sent or answered here, and
+the requests still streaming.
 
 Each 5-hour window gets one entry in `sessionWindows` (last 300), recognised by its
 reset time:
@@ -530,6 +544,13 @@ written when Developer mode is on, from Options.
   hourly profile (the tooltip says which method produced the figure), and "today is
   running at N× your usual" is capped between 0.5× and 2×. A straight-line forecast
   isn't offered in the first 2% of a window, where one message would swing it wildly.
+- "Used elsewhere" is an inference from timing, per stretch between two readings: if
+  anything was sent or answered in this browser during it (or in the two minutes
+  before), the whole rise is counted as this browser's, even if another device was
+  busy too — so the elsewhere share is a floor. A second browser profile, or a
+  claude.ai tab the page hook isn't running in, counts as elsewhere. Usage that built
+  up while the browser was closed is counted as elsewhere but, having no known hour,
+  is left out of the heatmap and the forecasts.
 - A spike can only be seen between two readings at most five minutes apart (plus a
   minute's slack for a late timer). At the default 5-minute refresh that means
   consecutive readings; with per-message cost on, the readings around each message

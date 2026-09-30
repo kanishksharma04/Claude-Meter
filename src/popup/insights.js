@@ -9,6 +9,7 @@ import { planFit, describePlanFit } from "../lib/plan-fit.js";
 import { timelineDays, summarizeWindows } from "../lib/session-windows.js";
 import { severityOf } from "../lib/severity.js";
 import { recentSpikes, describeSpike, spikeSource } from "../lib/spikes.js";
+import { attribution, describeAttribution } from "../lib/attribution.js";
 import { formatHour, formatDuration, formatClock, formatMoment } from "../lib/time-format.js";
 
 const $ = (id) => document.getElementById(id);
@@ -156,6 +157,26 @@ function renderSpikes({ spikes, messageLog, settings }) {
   );
 }
 
+// ------------------------------------------------------------ attribution --
+
+/** Below this many session points in the week there is too little to split meaningfully. */
+const MIN_ATTRIBUTION_POINTS = 10;
+
+function renderAttribution({ usageLog }) {
+  const split = attribution(usageLog);
+  const section = $("attributionSection");
+  section.hidden = split.total < MIN_ATTRIBUTION_POINTS;
+  if (section.hidden) return;
+
+  const elsewhere = Math.round(split.share * 100);
+  $("attributionHere").style.flexGrow = String(100 - elsewhere);
+  $("attributionElsewhere").style.flexGrow = String(elsewhere);
+  $("attributionBar").setAttribute("aria-label", `This browser ${100 - elsewhere}%, elsewhere ${elsewhere}%`);
+  $("attributionHereLabel").textContent = `This browser · ${100 - elsewhere}%`;
+  $("attributionElsewhereLabel").textContent = `Elsewhere · ${elsewhere}%`;
+  $("attributionLead").textContent = describeAttribution(split);
+}
+
 // --------------------------------------------------------------- lockouts --
 
 function renderLockouts({ limitHits }) {
@@ -210,6 +231,7 @@ export function renderInsights(state) {
   renderWindowStart(state);
   renderTimeline(state);
   renderSpikes(state);
+  renderAttribution(state);
   renderLockouts(state);
   renderPlanFit(state);
 }

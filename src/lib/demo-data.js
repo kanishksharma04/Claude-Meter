@@ -81,6 +81,12 @@ export function buildDemoState(now = Date.now()) {
 
   const history = [];
   for (let t = now - HISTORY_SPAN; t <= now; t += HISTORY_STEP) history.push(snapshotAt(t));
+  // The oldest of the three windows was Claude Code on another machine: nothing was sent from this browser.
+  const elsewhereUntil = sessionResetsAt - 2 * SESSION_LENGTH;
+  for (let index = 1; index < history.length && history[index].session.resetsAt <= elsewhereUntil; index++) {
+    const rise = history[index].session.percentUsed - history[index - 1].session.percentUsed;
+    if (rise > 0) history[index].elsewhere = rise;
+  }
 
   const messageLog = MESSAGES.map(([minutesAgo, chat, session, model], index) => ({
     id: `demo-${index}`,
@@ -188,13 +194,15 @@ function simulateHours(from, to, weeklyResetsAt, weeklyAt) {
       lockouts.push({ at: t + Math.round((burn / want) * 50) * MIN, resetsAt: windowEnd });
     }
 
-    if (hour >= FIRST_HOUR) hours.push({ t, burn, peak: session, used, weekEnd });
+    // Evenings and weekends are the phone: used, but not from this browser.
+    const away = weekend || hour >= 21 ? burn : 0;
+    if (hour >= FIRST_HOUR) hours.push({ t, burn, away, peak: session, used, weekEnd });
   }
 
   const reached = hours.at(-1)?.used ?? 0;
   const levels = {}; // label -> level at the previous record
   let lastWeekEnd = null;
-  const records = hours.map(({ t, burn, peak, used: soFar, weekEnd: end }) => {
+  const records = hours.map(({ t, burn, away, peak, used: soFar, weekEnd: end }) => {
     if (end !== lastWeekEnd) for (const label of Object.keys(weeklyAt)) levels[label] = 0;
     lastWeekEnd = end;
     const weekly = {};
@@ -206,7 +214,7 @@ function simulateHours(from, to, weeklyResetsAt, weeklyAt) {
       weekly[label] = { pct, burn: Math.max(0, pct - levels[label]) };
       levels[label] = pct;
     }
-    return { t, n: 12, peak, burn, weekly };
+    return { t, n: 12, peak, burn, weekly, ...(away > 0 ? { away } : {}) };
   });
   return { records, lockouts, windows };
 }

@@ -2,6 +2,7 @@ import { getAll, setSettings, setSnoozeUntil, addNote, removeNote, onStorageChan
 import { timeAgo, formatDuration, formatClock, formatMoment } from "../lib/time-format.js";
 import { placeAnnotations, parseWhen } from "../lib/annotations.js";
 import { describeSpike } from "../lib/spikes.js";
+import { elsewhereSpans } from "../lib/attribution.js";
 import { isSnoozed } from "../lib/snooze.js";
 import { formatCost } from "../lib/message-cost.js";
 import { rankConversations } from "../lib/conversation-costs.js";
@@ -365,7 +366,14 @@ function renderHistory({ history, usageLog, settings, annotations, spikes }) {
   // Spikes sit on the same axis as notes, so the same placing works for them.
   const jumps = drawable.length > 0 ? placeAnnotations(spikes, chart) : [];
 
+  // Stretches in which usage rose with nothing sent from this browser.
+  const away = drawable.length > 0 ? elsewhereSpans(chart, week ? { usageLog } : { history }) : [];
+  const xOf = (t) => ((t - chart.from) / Math.max(1, chart.to - chart.from)) * CHART_WIDTH;
+
   historyChart.replaceChildren(
+    ...away.map(([from, to]) =>
+      svgEl("rect", { class: "away-band", x: xOf(from), width: Math.max(0.5, xOf(to) - xOf(from)), y: 0, height: CHART_HEIGHT })
+    ),
     // Gridlines at 0 / 50 / 100%.
     ...[0, 0.5, 1].map((f) =>
       svgEl("line", { class: "grid", x1: 0, x2: CHART_WIDTH, y1: f * CHART_HEIGHT, y2: f * CHART_HEIGHT })
@@ -401,6 +409,14 @@ function renderHistory({ history, usageLog, settings, annotations, spikes }) {
       return item;
     })
   );
+  if (away.length > 0) {
+    const swatch = document.createElement("span");
+    swatch.className = "swatch away";
+    const item = document.createElement("li");
+    item.title = "Usage rose here while nothing was being sent from this browser.";
+    item.append(swatch, "used elsewhere");
+    historyLegend.append(item);
+  }
 
   renderNotes(annotations, marks, jumps);
 

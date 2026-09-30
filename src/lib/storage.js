@@ -9,6 +9,7 @@ import { foldSnapshot, buildUsageLog } from "./usage-log.js";
 import { foldWindow, buildWindows } from "./session-windows.js";
 import { addAnnotation, removeAnnotation } from "./annotations.js";
 import { detectSpike, addSpike } from "./spikes.js";
+import { noteActivity, elsewherePoints } from "./attribution.js";
 
 export const MAX_DEBUG_CAPTURES = 20;
 // Enough for the dashboard chart to cover about a day at the default refresh interval.
@@ -116,9 +117,12 @@ export async function setDemoState(demoState) {
  * history, and folds it into the long-term records: the hourly usage log and
  * the list of session windows.
  */
-export async function setLatestSnapshot(snapshot) {
-  const stored = await chrome.storage.local.get(["history", "usageLog", "sessionWindows"]);
+export async function setLatestSnapshot(reading) {
+  const stored = await chrome.storage.local.get(["history", "usageLog", "sessionWindows", "localActivity"]);
   const history = stored.history ?? [];
+  // Mark the reading with whatever part of its rise this browser had no hand in.
+  const elsewhere = elsewherePoints(history.at(-1), reading, stored.localActivity);
+  const snapshot = elsewhere > 0 ? { ...reading, elsewhere } : reading;
   // First run with either record: seed it from whatever history is already there.
   const usageLog = stored.usageLog ?? buildUsageLog(history);
   const sessionWindows = stored.sessionWindows ?? buildWindows(history);
@@ -211,6 +215,12 @@ export async function pushLimitHit(hit) {
   return next;
 }
 
+/** Remembers that a message was just sent, or its reply just ended, in this browser (lib/attribution.js). */
+export async function noteLocalActivity(event) {
+  const { localActivity } = await chrome.storage.local.get("localActivity");
+  await chrome.storage.local.set({ localActivity: noteActivity(localActivity, event) });
+}
+
 /** Logs a lockout for any limit this snapshot shows as full and the log doesn't know about yet. */
 export async function noteFullBuckets(snapshot) {
   const { limitHits = [] } = await chrome.storage.local.get("limitHits");
@@ -267,6 +277,7 @@ export async function clearAllData() {
     sessionWindows: [],
     annotations: [],
     spikes: [],
+    localActivity: null,
   });
 }
 

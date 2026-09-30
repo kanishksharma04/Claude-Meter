@@ -463,6 +463,19 @@ hr {
   stroke: var(--series);
 }
 
+/* Shading behind the lines where usage rose with nothing sent from this browser (lib/attribution.js). */
+.history-chart .away-band {
+  fill: var(--muted);
+  opacity: 0.16;
+}
+
+.history-legend .swatch.away {
+  height: 9px;
+  border-radius: 2px;
+  background: var(--muted);
+  opacity: 0.35;
+}
+
 /* ---------------------------------------------------------- chart notes -- */
 
 .chart-wrap {

@@ -13,6 +13,7 @@ import {
   pushLimitHit,
   noteFullBuckets,
   recordSpike,
+  noteLocalActivity,
   setSnoozeUntil,
   setDemoState,
 } from "../lib/storage.js";
@@ -111,6 +112,7 @@ async function handlePassiveCapture(capture, sender) {
 // has finished still finds its baseline. Lost if the worker is recycled — the
 // stored pendingMessages entry covers that case.
 const startsInFlight = new Map();
+let activityWrites = Promise.resolve();
 
 async function handleChatEvent(event) {
   try {
@@ -118,6 +120,14 @@ async function handleChatEvent(event) {
     // Demo mode shows made-up numbers; measuring real messages against them would be nonsense.
     if (settings.demoMode) return;
     if (event?.kind === "limit_hit") return await recordLimitHit(event);
+
+    // Whatever else is switched off, remember that this browser was in use: it is
+    // how a rise in usage gets told apart from one that happened on another device.
+    if (event?.kind === "completion_start" || event?.kind === "completion_end") {
+      // One at a time — a start and an end landing together must not overwrite each other.
+      activityWrites = activityWrites.then(() => noteLocalActivity(event)).catch(() => {});
+      await activityWrites;
+    }
 
     if (!settings.messageCost || !event?.requestId) return;
 

@@ -181,6 +181,39 @@
   overflow-wrap: anywhere;
 }
 
+/* ---------------------------------------------------------- attribution -- */
+
+.split-bar {
+  display: flex;
+  gap: 2px;
+  height: 9px;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.split-bar span {
+  flex: 0 0 0;
+  min-width: 0;
+}
+
+.split-here {
+  background: var(--ok-fill, var(--accent));
+}
+
+/* The same grey as the "used elsewhere" shading on the chart. */
+.split-elsewhere {
+  background: color-mix(in srgb, var(--muted) 55%, var(--track));
+}
+
+.split-labels {
+  display: flex;
+  justify-content: space-between;
+  margin: 5px 0 9px;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ------------------------------------------------------------- lockouts -- */
 
 .lockout-table {
