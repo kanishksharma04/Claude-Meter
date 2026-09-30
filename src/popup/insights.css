@@ -144,6 +144,43 @@
   color: #000;
 }
 
+/* --------------------------------------------------------------- spikes -- */
+
+.spike-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  font-size: 11px;
+}
+
+.spike-list:empty {
+  display: none;
+}
+
+.spike-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 3px 0 3px 9px;
+  border-left: 2px solid var(--danger);
+  margin-bottom: 5px;
+}
+
+.spike-list time,
+.spike-cause {
+  color: var(--muted);
+}
+
+.spike-what {
+  font-variant-numeric: tabular-nums;
+}
+
+.spike-cause {
+  flex-basis: 100%;
+  overflow-wrap: anywhere;
+}
+
 /* ------------------------------------------------------------- lockouts -- */
 
 .lockout-table {

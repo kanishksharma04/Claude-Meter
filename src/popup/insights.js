@@ -8,7 +8,8 @@ import { lockoutStats } from "../lib/lockout-stats.js";
 import { planFit, describePlanFit } from "../lib/plan-fit.js";
 import { timelineDays, summarizeWindows } from "../lib/session-windows.js";
 import { severityOf } from "../lib/severity.js";
-import { formatHour, formatDuration, formatClock } from "../lib/time-format.js";
+import { recentSpikes, describeSpike, spikeSource } from "../lib/spikes.js";
+import { formatHour, formatDuration, formatClock, formatMoment } from "../lib/time-format.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -123,6 +124,38 @@ function renderTimeline({ sessionWindows, settings }) {
   );
 }
 
+// ----------------------------------------------------------------- spikes --
+
+function renderSpikes({ spikes, messageLog, settings }) {
+  const section = $("spikeSection");
+  // With detection off there is nothing to report, and "none found" would be a lie.
+  section.hidden = !(settings.spikePercent > 0);
+  if (section.hidden) return;
+
+  const recent = recentSpikes(spikes);
+  $("spikeNote").textContent = `+${settings.spikePercent}% within 5 min`;
+  $("spikeLead").textContent =
+    recent.length === 0
+      ? "No sudden jumps in the last 7 days."
+      : `${plural(recent.length, "sudden jump")} in the last 7 days.`;
+
+  $("spikeList").replaceChildren(
+    ...recent.slice(0, 6).map((spike) => {
+      const source = spikeSource(spike, settings.messageCost ? messageLog : []);
+      const cause = source
+        ? `during “${source.title}”` + (source.messages > 1 ? ` and ${plural(source.messages - 1, "other message")}` : "")
+        : "nothing was sent from this browser";
+      return el(
+        "li",
+        {},
+        el("time", { dateTime: new Date(spike.at).toISOString() }, formatMoment(spike.at)),
+        el("span", { className: "spike-what" }, `${spike.label} ${describeSpike(spike)}`),
+        el("span", { className: "spike-cause" }, cause)
+      );
+    })
+  );
+}
+
 // --------------------------------------------------------------- lockouts --
 
 function renderLockouts({ limitHits }) {
@@ -176,6 +209,7 @@ export function renderInsights(state) {
   renderHeatmap(state);
   renderWindowStart(state);
   renderTimeline(state);
+  renderSpikes(state);
   renderLockouts(state);
   renderPlanFit(state);
 }

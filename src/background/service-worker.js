@@ -12,6 +12,7 @@ import {
   setModelHint,
   pushLimitHit,
   noteFullBuckets,
+  recordSpike,
   setSnoozeUntil,
   setDemoState,
 } from "../lib/storage.js";
@@ -26,6 +27,7 @@ import { buildSuggestions, resolveCommand } from "../lib/omnibox.js";
 import { buildDemoState } from "../lib/demo-data.js";
 import { formatDuration, formatClock } from "../lib/time-format.js";
 import { SNOOZE_OPTIONS, DEFAULT_SNOOZE, snoozeEnd, isSnoozed } from "../lib/snooze.js";
+import { describeSpike } from "../lib/spikes.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
 const ALARM_NAME = "claudemeter-refresh-check";
@@ -241,6 +243,7 @@ async function applyDemoMode(on) {
 async function applySnapshot(snapshot) {
   await setLatestSnapshot(snapshot);
   await noteFullBuckets(snapshot);
+  await watchForSpike(snapshot);
   await updateToolbar(snapshot);
   await updateModelHint();
 }
@@ -334,6 +337,25 @@ async function maybeNotify(previousSnapshot, snapshot) {
       priority: 1,
     });
   }
+}
+
+/** Logs a sudden jump in any limit and, if alerts are on, says so. */
+async function watchForSpike(snapshot) {
+  const { settings, snoozeUntil } = await getAll();
+  const spike = await recordSpike(snapshot, settings.spikePercent);
+  if (!spike) return;
+  console.log(LOG_PREFIX, "spike:", spike.label, describeSpike(spike));
+  if (!settings.notificationsEnabled || isSnoozed(snoozeUntil)) return;
+
+  chrome.notifications.create(`claudemeter-spike-${spike.at}`, {
+    type: "basic",
+    iconUrl: chrome.runtime.getURL("src/icons/icon128.png"),
+    title: "ClaudeMeter",
+    message: settings.privacyMode
+      ? "A sudden jump in usage was detected."
+      : `${spike.label} jumped: ${describeSpike(spike)}.`,
+    priority: 1,
+  });
 }
 
 // ------------------------------------------------------------ action surface --

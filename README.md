@@ -183,6 +183,11 @@ record per hour, eight weeks deep — and builds its analytics from that:
   flag with a dotted rule down the chart and a line in the list underneath, so a bend
   in the lines can be traced to its cause. Notes are yours, not readings: demo mode
   leaves them alone.
+- **Spike detection** — a limit that jumps by 15% or more within five minutes (the
+  threshold is yours to set) is logged as a spike: a red arrow at the foot of the
+  chart, a line in the dashboard ("Current session +18% in 4 min (41% → 59%)") with
+  the chat it happened during — or a note that nothing was sent from this browser —
+  and a desktop notification if those are on. Weekly limits are watched as well.
 
 ## Accessibility
 
@@ -287,6 +292,7 @@ claudemeter/
 │   │   ├── plan-fit.js                # four weeks of peaks and lockouts -> smaller / larger / fits
 │   │   ├── history-chart.js           # history / usage log -> chart series, week-earlier overlay, SVG paths
 │   │   ├── annotations.js             # the user's notes on the chart: add, remove, place on the axis
+│   │   ├── spikes.js                  # a sudden jump between nearby readings -> spike log
 │   │   ├── usage-log.js               # hourly rollup of every reading, kept for eight weeks
 │   │   ├── session-windows.js         # log of past 5-hour windows + the timeline rows drawn from it
 │   │   ├── heatmap.js                 # usage log -> weekday × hour averages
@@ -351,7 +357,7 @@ Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `his
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
 `notifyThresholds`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
-`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
+`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300), and the mini window's last position and size
 are kept under `miniWindowBounds`:
@@ -414,6 +420,19 @@ SessionWindow = {
 
 The notes pinned to the chart are kept in `annotations` (last 100), in time order, as
 `{ id, at, text }` with the text capped at 80 characters.
+
+Sudden jumps are logged to `spikes` (last 50):
+
+```js
+Spike = {
+  at: number,                  // epoch ms of the reading that revealed it
+  from: number,                // ...and of the low point it is measured from
+  label: string,               // "Current session", "All models", "Opus", …
+  before: number,              // % at `from`
+  after: number,               // % at `at`
+  rise: number,
+}
+```
 
 Demo mode never overwrites any of this. `getAll()` in `src/lib/storage.js` swaps the
 made-up dataset in at read time, and the same dataset is written to a separate
@@ -511,6 +530,12 @@ written when Developer mode is on, from Options.
   hourly profile (the tooltip says which method produced the figure), and "today is
   running at N× your usual" is capped between 0.5× and 2×. A straight-line forecast
   isn't offered in the first 2% of a window, where one message would swing it wildly.
+- A spike can only be seen between two readings at most five minutes apart (plus a
+  minute's slack for a late timer). At the default 5-minute refresh that means
+  consecutive readings; with per-message cost on, the readings around each message
+  make it much finer. On a longer refresh interval, jumps between scheduled
+  refreshes go unnoticed. A reset is never counted as a spike, and one jump is
+  flagged once, measured from the lowest reading in the window.
 - A chart note only gets a flag while its moment is inside the span the chart is
   showing; older ones stay in the list (dimmed) so they can still be removed. Notes
   can't be edited, only removed and re-added, and can't be pinned to the future.
@@ -554,6 +579,7 @@ written when Developer mode is on, from Options.
 - **Forecast** — from your usual week (default), straight line, or off.
 - **Working hours** — start and end (9:00–17:00 by default), used for the window-start
   suggestion until a week of your own usage is on record.
+- **Spike detection** — Off, or +10 / +15 (default) / +20 / +30% within five minutes.
 - **Your plan** — Auto-detect (default), Pro, Max 5x or Max 20x, for the plan-fit advice.
 - **Icon shows** — gauge ring (default), badge text, both, or nothing.
 - **Keyboard shortcuts** — shows the current bindings; "Change shortcuts…" opens
@@ -571,8 +597,8 @@ written when Developer mode is on, from Options.
 - **Developer mode** — keeps raw request/response captures for the debug page
   (`src/debug/debug.html`), off by default.
 - **Clear stored data** — wipes snapshot, history, the hourly usage log, the session
-  window log, your chart notes, message costs, the limit-hit log, org cache, and debug
-  captures.
+  window log, your chart notes, the spike log, message costs, the limit-hit log, org
+  cache, and debug captures.
 
 ## Author
 

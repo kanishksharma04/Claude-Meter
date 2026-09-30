@@ -213,7 +213,7 @@ function simulateHours(from, to, weeklyResetsAt, weeklyAt) {
 
 /**
  * @param {{ history: object[], limitHits: object[] }} demo - what buildDemoState() returned
- * @returns {{ usageLog: object[], sessionWindows: object[], limitHits: object[] }}
+ * @returns {{ usageLog: object[], sessionWindows: object[], spikes: object[], limitHits: object[] }}
  */
 export function buildDemoAnalytics(demo) {
   const [first] = demo.history;
@@ -246,5 +246,16 @@ export function buildDemoAnalytics(demo) {
       model: "claude-opus-4-5",
     }));
 
-  return { usageLog, sessionWindows, limitHits: [...olderHits, ...demo.limitHits] };
+  // Two sudden jumps: one in the current window, lined up with the costliest demo message, and an older one.
+  const spike = (minutesAgo, minutes, before, rise) => ({
+    at: now - minutesAgo * MIN,
+    from: now - (minutesAgo + minutes) * MIN,
+    label: "Current session",
+    before,
+    after: before + rise,
+    rise,
+  });
+  const spikes = [spike(2 * 24 * 60 + 190, 5, 48, 21), spike(128, 4, 9, 16)];
+
+  return { usageLog, sessionWindows, spikes, limitHits: [...olderHits, ...demo.limitHits] };
 }

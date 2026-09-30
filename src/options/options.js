@@ -23,6 +23,7 @@ const forecastSelect = document.getElementById("forecastSelect");
 const workdayStartSelect = document.getElementById("workdayStartSelect");
 const workdayEndSelect = document.getElementById("workdayEndSelect");
 const planSelect = document.getElementById("planSelect");
+const spikeSelect = document.getElementById("spikeSelect");
 const iconStyleSelect = document.getElementById("iconStyleSelect");
 const gaugePreview = document.getElementById("gaugePreview");
 const actionOpensSelect = document.getElementById("actionOpensSelect");
@@ -170,6 +171,7 @@ async function init() {
   forecastSelect.value = settings.forecast;
   renderWorkday(settings);
   planSelect.value = settings.plan;
+  spikeSelect.value = String(settings.spikePercent);
 
   iconStyleSelect.value = settings.iconStyle;
   renderGaugePreview();
@@ -263,6 +265,10 @@ for (const select of [workdayStartSelect, workdayEndSelect]) {
   });
 }
 
+spikeSelect.addEventListener("change", async () => {
+  await setSettings({ spikePercent: Number(spikeSelect.value) });
+});
+
 planSelect.addEventListener("change", async () => {
   await setSettings({ plan: planSelect.value });
 });
@@ -312,7 +318,7 @@ developerModeToggle.addEventListener("change", async () => {
 });
 
 clearDataBtn.addEventListener("click", async () => {
-  if (!confirm("Clear all stored ClaudeMeter data (captures + usage snapshot + history + hourly usage log + session windows + chart notes + message costs + limit-hit log)?")) return;
+  if (!confirm("Clear all stored ClaudeMeter data (captures + usage snapshot + history + hourly usage log + session windows + chart notes + spikes + message costs + limit-hit log)?")) return;
   await clearAllData();
   clearDataBtn.textContent = "Cleared!";
   document.getElementById("clearStatus").textContent = "Stored data cleared.";

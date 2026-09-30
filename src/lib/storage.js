@@ -8,6 +8,7 @@ import { buildDemoState, buildDemoAnalytics } from "./demo-data.js";
 import { foldSnapshot, buildUsageLog } from "./usage-log.js";
 import { foldWindow, buildWindows } from "./session-windows.js";
 import { addAnnotation, removeAnnotation } from "./annotations.js";
+import { detectSpike, addSpike } from "./spikes.js";
 
 export const MAX_DEBUG_CAPTURES = 20;
 // Enough for the dashboard chart to cover about a day at the default refresh interval.
@@ -42,6 +43,7 @@ export const DEFAULT_SETTINGS = {
   workdayStart: 9, // assumed working hours (0–24), for the window-start suggestion until the
   workdayEnd: 17, // usage log has a week to learn from (lib/window-start.js)
   plan: "auto", // for the plan-fit adviser: "auto" (detect) | "pro" | "max5" | "max20" (lib/plan-fit.js)
+  spikePercent: 15, // flag a limit that jumps this many points within five minutes; 0 = off (lib/spikes.js)
   chartRange: "day", // the dashboard chart's span: "day" (raw readings) | "week" (hourly log)
   chartCompare: false, // overlay the same stretch one week earlier on the chart
 };
@@ -61,6 +63,7 @@ export const DEFAULT_STATE = {
   usageLog: [], // one compact record per hour, eight weeks deep (see lib/usage-log.js)
   sessionWindows: [], // past 5-hour session windows, oldest first (see lib/session-windows.js)
   annotations: [], // the user's notes on the chart, oldest first (see lib/annotations.js)
+  spikes: [], // sudden jumps in usage, oldest first (see lib/spikes.js)
 };
 
 export async function getAll() {
@@ -83,6 +86,7 @@ export async function getAll() {
     snoozeUntil: stored.snoozeUntil ?? DEFAULT_STATE.snoozeUntil,
     usageLog: data.usageLog ?? DEFAULT_STATE.usageLog,
     sessionWindows: data.sessionWindows ?? DEFAULT_STATE.sessionWindows,
+    spikes: data.spikes ?? DEFAULT_STATE.spikes,
     // The user's own words, not a reading — so they are the real ones in demo mode too.
     annotations: stored.annotations ?? DEFAULT_STATE.annotations,
   };
@@ -214,6 +218,17 @@ export async function noteFullBuckets(snapshot) {
   if (next !== limitHits) await chrome.storage.local.set({ limitHits: next });
 }
 
+/**
+ * Checks the reading that just landed against the few before it and logs a
+ * spike if it reveals one. Resolves to the spike, or null.
+ */
+export async function recordSpike(snapshot, percent) {
+  const { history = [], spikes = [] } = await chrome.storage.local.get(["history", "spikes"]);
+  const spike = detectSpike(history, snapshot, { percent, since: spikes.at(-1)?.at ?? 0 });
+  if (spike) await chrome.storage.local.set({ spikes: addSpike(spikes, spike) });
+  return spike;
+}
+
 /** Pins a note to a moment on the chart. Resolves to whether it was added (empty text isn't). */
 export async function addNote(text, at = Date.now()) {
   const { annotations = [] } = await chrome.storage.local.get("annotations");
@@ -251,6 +266,7 @@ export async function clearAllData() {
     usageLog: [],
     sessionWindows: [],
     annotations: [],
+    spikes: [],
   });
 }
 

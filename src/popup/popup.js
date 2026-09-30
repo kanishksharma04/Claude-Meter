@@ -1,6 +1,7 @@
 import { getAll, setSettings, setSnoozeUntil, addNote, removeNote, onStorageChanged } from "../lib/storage.js";
 import { timeAgo, formatDuration, formatClock, formatMoment } from "../lib/time-format.js";
 import { placeAnnotations, parseWhen } from "../lib/annotations.js";
+import { describeSpike } from "../lib/spikes.js";
 import { isSnoozed } from "../lib/snooze.js";
 import { formatCost } from "../lib/message-cost.js";
 import { rankConversations } from "../lib/conversation-costs.js";
@@ -337,7 +338,7 @@ function svgEl(tag, attrs) {
   return node;
 }
 
-function renderHistory({ history, usageLog, settings, annotations }) {
+function renderHistory({ history, usageLog, settings, annotations, spikes }) {
   historySection.hidden = VIEW !== "panel";
   if (historySection.hidden) return;
 
@@ -361,15 +362,20 @@ function renderHistory({ history, usageLog, settings, annotations }) {
   historyChart.setAttribute("aria-label", describeChart({ series: drawable }, earlier));
 
   const marks = drawable.length > 0 ? placeAnnotations(annotations, chart) : [];
+  // Spikes sit on the same axis as notes, so the same placing works for them.
+  const jumps = drawable.length > 0 ? placeAnnotations(spikes, chart) : [];
 
   historyChart.replaceChildren(
     // Gridlines at 0 / 50 / 100%.
     ...[0, 0.5, 1].map((f) =>
       svgEl("line", { class: "grid", x1: 0, x2: CHART_WIDTH, y1: f * CHART_HEIGHT, y2: f * CHART_HEIGHT })
     ),
-    // A rule down the chart at each note.
+    // A rule down the chart at each note, and at each sudden jump.
     ...marks.map((mark) =>
       svgEl("line", { class: "note-rule", x1: mark.x * CHART_WIDTH, x2: mark.x * CHART_WIDTH, y1: 0, y2: CHART_HEIGHT })
+    ),
+    ...jumps.map((jump) =>
+      svgEl("line", { class: "note-rule spike", x1: jump.x * CHART_WIDTH, x2: jump.x * CHART_WIDTH, y1: 0, y2: CHART_HEIGHT })
     ),
     // Last week's lines go underneath this week's.
     ...drawable.flatMap((series, index) => {
@@ -396,7 +402,7 @@ function renderHistory({ history, usageLog, settings, annotations }) {
     })
   );
 
-  renderNotes(annotations, marks);
+  renderNotes(annotations, marks, jumps);
 
   const compared = drawable.some(earlierOf);
   historyCompareNote.hidden = !settings.chartCompare;
@@ -409,18 +415,23 @@ function renderHistory({ history, usageLog, settings, annotations }) {
  * The flags over the chart and the list under it. Every note is listed, newest
  * first, so any of them can be removed; only those on the chart get a number.
  */
-function renderNotes(annotations, marks) {
+function renderNotes(annotations, marks, jumps) {
   // The flags are HTML laid over the chart: text inside the stretched SVG would be stretched with it.
+  const flag = (x, text, title, className) => {
+    const node = document.createElement("span");
+    node.className = className;
+    node.textContent = text;
+    node.title = title;
+    // Kept wholly inside the chart: something that happened just now sits at the very right edge.
+    node.style.left = `clamp(8px, ${(x * 100).toFixed(2)}%, calc(100% - 8px))`;
+    return node;
+  };
   historyMarks.replaceChildren(
-    ...marks.map((mark) => {
-      const flag = document.createElement("span");
-      flag.className = "note-flag";
-      flag.textContent = mark.number;
-      flag.title = `${formatMoment(mark.at)} — ${mark.text}`;
-      // Kept wholly inside the chart: a note made just now sits at the very right edge.
-      flag.style.left = `clamp(8px, ${(mark.x * 100).toFixed(2)}%, calc(100% - 8px))`;
-      return flag;
-    })
+    ...marks.map((mark) => flag(mark.x, mark.number, `${formatMoment(mark.at)} — ${mark.text}`, "note-flag")),
+    // Spikes hang from the bottom edge, so a note at the same moment stays readable.
+    ...jumps.map((jump) =>
+      flag(jump.x, "\u2191", `${formatMoment(jump.at)} — ${jump.label} ${describeSpike(jump)}`, "note-flag spike")
+    )
   );
 
   const numberOf = new Map(marks.map((mark) => [mark.id, mark.number]));
@@ -756,6 +767,7 @@ onStorageChanged((changes) => {
     "snoozeUntil",
     "demoState",
     "annotations",
+    "spikes",
   ];
   if (watched.some((key) => key in changes)) {
     loadAndRender();

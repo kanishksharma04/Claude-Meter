@@ -185,6 +185,22 @@
       </div>
       <label class="row">
         <span>
+          Spike detection
+          <small>
+            Flags a limit that jumps this much within five minutes — on the chart, in the dashboard, and as a
+            notification if those are on.
+          </small>
+        </span>
+        <select id="spikeSelect">
+          <option value="0">Off</option>
+          <option value="10">+10%</option>
+          <option value="15">+15%</option>
+          <option value="20">+20%</option>
+          <option value="30">+30%</option>
+        </select>
+      </label>
+      <label class="row">
+        <span>
           Your plan
           <small>
             For the plan-fit advice in the dashboard. claude.ai rarely says which plan you're on, so pick it here

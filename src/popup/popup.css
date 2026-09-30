@@ -506,6 +506,18 @@ hr {
   cursor: default;
 }
 
+/* A sudden jump (lib/spikes.js): same furniture as a note, in the alarm colour, at the foot of the chart. */
+.history-chart .note-rule.spike {
+  stroke: var(--danger);
+}
+
+.note-flag.spike {
+  top: auto;
+  bottom: -7px;
+  background: var(--danger);
+  color: #fff;
+}
+
 .notes {
   margin-top: 12px;
 }
@@ -635,7 +647,7 @@ hr {
 .history-axis {
   display: flex;
   justify-content: space-between;
-  margin-top: 4px;
+  margin-top: 8px;
   color: var(--muted);
   font-size: 11px;
 }
