@@ -28,6 +28,12 @@ export function formatClock(epochMs, now = Date.now()) {
   });
 }
 
+/** A past moment, as briefly as stays unambiguous: "4:30 PM", "Tue 4:30 PM", or "24 Sep, 4:30 PM". */
+export function formatMoment(epochMs, now = Date.now()) {
+  if (Math.abs(now - epochMs) < 6 * 24 * 60 * 60 * 1000) return formatClock(epochMs, now);
+  return new Date(epochMs).toLocaleString([], { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+}
+
 /** Minutes since midnight as a clock time in the user's locale — "2:30 PM" or "14:30". */
 export function formatTimeOfDay(minutes) {
   return new Date(2026, 0, 1, 0, minutes).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });

@@ -7,6 +7,7 @@ import { DEFAULT_BUCKET_PREFS } from "./bucket-prefs.js";
 import { buildDemoState, buildDemoAnalytics } from "./demo-data.js";
 import { foldSnapshot, buildUsageLog } from "./usage-log.js";
 import { foldWindow, buildWindows } from "./session-windows.js";
+import { addAnnotation, removeAnnotation } from "./annotations.js";
 
 export const MAX_DEBUG_CAPTURES = 20;
 // Enough for the dashboard chart to cover about a day at the default refresh interval.
@@ -59,6 +60,7 @@ export const DEFAULT_STATE = {
   snoozeUntil: 0, // epoch ms until which alerts are paused; 0 = not snoozed (see lib/snooze.js)
   usageLog: [], // one compact record per hour, eight weeks deep (see lib/usage-log.js)
   sessionWindows: [], // past 5-hour session windows, oldest first (see lib/session-windows.js)
+  annotations: [], // the user's notes on the chart, oldest first (see lib/annotations.js)
 };
 
 export async function getAll() {
@@ -81,6 +83,8 @@ export async function getAll() {
     snoozeUntil: stored.snoozeUntil ?? DEFAULT_STATE.snoozeUntil,
     usageLog: data.usageLog ?? DEFAULT_STATE.usageLog,
     sessionWindows: data.sessionWindows ?? DEFAULT_STATE.sessionWindows,
+    // The user's own words, not a reading — so they are the real ones in demo mode too.
+    annotations: stored.annotations ?? DEFAULT_STATE.annotations,
   };
 }
 
@@ -205,9 +209,23 @@ export async function pushLimitHit(hit) {
 
 /** Logs a lockout for any limit this snapshot shows as full and the log doesn't know about yet. */
 export async function noteFullBuckets(snapshot) {
-  const { limitHits } = await chrome.storage.local.get("limitHits");
+  const { limitHits = [] } = await chrome.storage.local.get("limitHits");
   const next = observeFullBuckets(limitHits, snapshot);
-  if (next !== (limitHits ?? [])) await chrome.storage.local.set({ limitHits: next });
+  if (next !== limitHits) await chrome.storage.local.set({ limitHits: next });
+}
+
+/** Pins a note to a moment on the chart. Resolves to whether it was added (empty text isn't). */
+export async function addNote(text, at = Date.now()) {
+  const { annotations = [] } = await chrome.storage.local.get("annotations");
+  const next = addAnnotation(annotations, { at, text });
+  if (next === annotations) return false;
+  await chrome.storage.local.set({ annotations: next });
+  return true;
+}
+
+export async function removeNote(id) {
+  const { annotations } = await chrome.storage.local.get("annotations");
+  await chrome.storage.local.set({ annotations: removeAnnotation(annotations, id) });
 }
 
 /** Pause alerts until the given time; 0 resumes them. */
@@ -232,6 +250,7 @@ export async function clearAllData() {
     limitHits: [],
     usageLog: [],
     sessionWindows: [],
+    annotations: [],
   });
 }
 

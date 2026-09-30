@@ -127,7 +127,11 @@
             <label class="chart-check"><input type="checkbox" id="historyCompare" /> Compare with a week earlier</label>
           </div>
           <div id="historyBody">
-            <svg id="historyChart" class="history-chart" viewBox="0 0 320 120" preserveAspectRatio="none" role="img"></svg>
+            <div class="chart-wrap">
+              <svg id="historyChart" class="history-chart" viewBox="0 0 320 120" preserveAspectRatio="none" role="img"></svg>
+              <!-- Numbered flags for the notes; the list below is what assistive tech reads -->
+              <div id="historyMarks" class="chart-marks" aria-hidden="true"></div>
+            </div>
             <div class="history-axis"><span id="historyFrom"></span><span>now</span></div>
             <ul id="historyLegend" class="history-legend"></ul>
             <p class="insight-summary" id="historyCompareNote" hidden></p>
@@ -135,6 +139,21 @@
           <p class="usage-sub" id="historyEmpty" hidden>
             Not enough history yet — this fills in as ClaudeMeter refreshes.
           </p>
+          <div id="historyNotes" class="notes">
+            <form id="noteForm" class="note-form">
+              <input
+                type="text"
+                id="noteText"
+                maxlength="80"
+                placeholder="Add a note — e.g. started project X"
+                aria-label="Note to pin on the chart"
+                autocomplete="off"
+              />
+              <input type="datetime-local" id="noteWhen" aria-label="When (leave empty for now)" title="When — leave empty for now" />
+              <button type="submit" class="tool-btn">Add note</button>
+            </form>
+            <ol id="noteList" class="note-list" aria-label="Notes"></ol>
+          </div>
         </div>
 
         <!-- Dashboard-only analytics (src/popup/insights.js) -->

@@ -178,6 +178,11 @@ record per hour, eight weeks deep — and builds its analytics from that:
   reset, coloured by how full it got and labelled with its peak. The window still open
   is hatched. It shows at a glance how many sessions a day you get through, where the
   gaps are, and which ones ran hot.
+- **Chart annotations** — pin a short note to the chart ("started project X",
+  "switched to Sonnet") for now or for any earlier moment. Each note becomes a numbered
+  flag with a dotted rule down the chart and a line in the list underneath, so a bend
+  in the lines can be traced to its cause. Notes are yours, not readings: demo mode
+  leaves them alone.
 
 ## Accessibility
 
@@ -281,6 +286,7 @@ claudemeter/
 │   │   ├── weekly-stats.js            # usage log -> per-week peaks and totals
 │   │   ├── plan-fit.js                # four weeks of peaks and lockouts -> smaller / larger / fits
 │   │   ├── history-chart.js           # history / usage log -> chart series, week-earlier overlay, SVG paths
+│   │   ├── annotations.js             # the user's notes on the chart: add, remove, place on the axis
 │   │   ├── usage-log.js               # hourly rollup of every reading, kept for eight weeks
 │   │   ├── session-windows.js         # log of past 5-hour windows + the timeline rows drawn from it
 │   │   ├── heatmap.js                 # usage log -> weekday × hour averages
@@ -406,6 +412,9 @@ SessionWindow = {
 }
 ```
 
+The notes pinned to the chart are kept in `annotations` (last 100), in time order, as
+`{ id, at, text }` with the text capped at 80 characters.
+
 Demo mode never overwrites any of this. `getAll()` in `src/lib/storage.js` swaps the
 made-up dataset in at read time, and the same dataset is written to a separate
 `demoState` key (removed again when demo mode goes off) so the page script on
@@ -502,6 +511,9 @@ written when Developer mode is on, from Options.
   hourly profile (the tooltip says which method produced the figure), and "today is
   running at N× your usual" is capped between 0.5× and 2×. A straight-line forecast
   isn't offered in the first 2% of a window, where one message would swing it wildly.
+- A chart note only gets a flag while its moment is inside the span the chart is
+  showing; older ones stay in the list (dimmed) so they can still be removed. Notes
+  can't be edited, only removed and re-added, and can't be pinned to the future.
 - A session window is only logged once a reading shows it with something used, and its
   start is taken to be five hours before its reset. Windows that opened and closed
   while the browser wasn't running never appear, and a window's peak is the highest
@@ -559,7 +571,8 @@ written when Developer mode is on, from Options.
 - **Developer mode** — keeps raw request/response captures for the debug page
   (`src/debug/debug.html`), off by default.
 - **Clear stored data** — wipes snapshot, history, the hourly usage log, the session
-  window log, message costs, the limit-hit log, org cache, and debug captures.
+  window log, your chart notes, message costs, the limit-hit log, org cache, and debug
+  captures.
 
 ## Author
 

@@ -1,5 +1,6 @@
-import { getAll, setSettings, setSnoozeUntil, onStorageChanged } from "../lib/storage.js";
-import { timeAgo, formatDuration, formatClock } from "../lib/time-format.js";
+import { getAll, setSettings, setSnoozeUntil, addNote, removeNote, onStorageChanged } from "../lib/storage.js";
+import { timeAgo, formatDuration, formatClock, formatMoment } from "../lib/time-format.js";
+import { placeAnnotations, parseWhen } from "../lib/annotations.js";
 import { isSnoozed } from "../lib/snooze.js";
 import { formatCost } from "../lib/message-cost.js";
 import { rankConversations } from "../lib/conversation-costs.js";
@@ -76,6 +77,11 @@ const historyEmpty = document.getElementById("historyEmpty");
 const historyRangeButtons = [...document.querySelectorAll("#historyControls [data-range]")];
 const historyCompare = document.getElementById("historyCompare");
 const historyCompareNote = document.getElementById("historyCompareNote");
+const historyMarks = document.getElementById("historyMarks");
+const noteForm = document.getElementById("noteForm");
+const noteText = document.getElementById("noteText");
+const noteWhen = document.getElementById("noteWhen");
+const noteList = document.getElementById("noteList");
 const insights = document.getElementById("insights");
 
 let latestState = null;
@@ -331,7 +337,7 @@ function svgEl(tag, attrs) {
   return node;
 }
 
-function renderHistory({ history, usageLog, settings }) {
+function renderHistory({ history, usageLog, settings, annotations }) {
   historySection.hidden = VIEW !== "panel";
   if (historySection.hidden) return;
 
@@ -354,10 +360,16 @@ function renderHistory({ history, usageLog, settings }) {
   historyFrom.textContent = timeAgo(chart.from);
   historyChart.setAttribute("aria-label", describeChart({ series: drawable }, earlier));
 
+  const marks = drawable.length > 0 ? placeAnnotations(annotations, chart) : [];
+
   historyChart.replaceChildren(
     // Gridlines at 0 / 50 / 100%.
     ...[0, 0.5, 1].map((f) =>
       svgEl("line", { class: "grid", x1: 0, x2: CHART_WIDTH, y1: f * CHART_HEIGHT, y2: f * CHART_HEIGHT })
+    ),
+    // A rule down the chart at each note.
+    ...marks.map((mark) =>
+      svgEl("line", { class: "note-rule", x1: mark.x * CHART_WIDTH, x2: mark.x * CHART_WIDTH, y1: 0, y2: CHART_HEIGHT })
     ),
     // Last week's lines go underneath this week's.
     ...drawable.flatMap((series, index) => {
@@ -384,11 +396,62 @@ function renderHistory({ history, usageLog, settings }) {
     })
   );
 
+  renderNotes(annotations, marks);
+
   const compared = drawable.some(earlierOf);
   historyCompareNote.hidden = !settings.chartCompare;
   historyCompareNote.textContent = compared
     ? "Dashed: the same stretch a week earlier. \"Was\" is where each limit stood at this point last week."
     : "Nothing on record from a week earlier yet.";
+}
+
+/**
+ * The flags over the chart and the list under it. Every note is listed, newest
+ * first, so any of them can be removed; only those on the chart get a number.
+ */
+function renderNotes(annotations, marks) {
+  // The flags are HTML laid over the chart: text inside the stretched SVG would be stretched with it.
+  historyMarks.replaceChildren(
+    ...marks.map((mark) => {
+      const flag = document.createElement("span");
+      flag.className = "note-flag";
+      flag.textContent = mark.number;
+      flag.title = `${formatMoment(mark.at)} — ${mark.text}`;
+      // Kept wholly inside the chart: a note made just now sits at the very right edge.
+      flag.style.left = `clamp(8px, ${(mark.x * 100).toFixed(2)}%, calc(100% - 8px))`;
+      return flag;
+    })
+  );
+
+  const numberOf = new Map(marks.map((mark) => [mark.id, mark.number]));
+  noteList.replaceChildren(
+    ...[...annotations].reverse().map((note) => {
+      const number = document.createElement("span");
+      number.className = "note-number";
+      number.textContent = numberOf.get(note.id) ?? "";
+      number.setAttribute("aria-hidden", "true");
+
+      const when = document.createElement("time");
+      when.dateTime = new Date(note.at).toISOString();
+      when.textContent = formatMoment(note.at);
+
+      const text = document.createElement("span");
+      text.className = "note-text";
+      text.textContent = note.text;
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "link-btn";
+      remove.dataset.removeNote = note.id;
+      remove.textContent = "Remove";
+      remove.setAttribute("aria-label", `Remove note: ${note.text}`);
+
+      const item = document.createElement("li");
+      item.classList.toggle("off-chart", !numberOf.has(note.id));
+      item.append(number, when, text, remove);
+      return item;
+    })
+  );
 }
 
 function render(state) {
@@ -662,13 +725,38 @@ for (const button of historyRangeButtons) {
 }
 historyCompare.addEventListener("change", () => setSettings({ chartCompare: historyCompare.checked }));
 
+noteForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const added = await addNote(noteText.value, parseWhen(noteWhen.value));
+  if (!added) return noteText.focus();
+  announce(`Note added: ${noteText.value.trim()}`);
+  noteForm.reset();
+});
+
+noteList.addEventListener("click", async (event) => {
+  const id = event.target.closest("[data-remove-note]")?.dataset.removeNote;
+  if (!id) return;
+  await removeNote(id);
+  announce("Note removed.");
+  noteText.focus(); // the button that had focus is gone
+});
+
 // "…/popup.html?view=panel#history" (e.g. opened in a tab) lands on the chart.
 if (location.hash === "#history") {
   requestAnimationFrame(() => historySection.scrollIntoView());
 }
 
 onStorageChanged((changes) => {
-  const watched = ["latestSnapshot", "settings", "lastError", "messageLog", "limitHits", "snoozeUntil", "demoState"];
+  const watched = [
+    "latestSnapshot",
+    "settings",
+    "lastError",
+    "messageLog",
+    "limitHits",
+    "snoozeUntil",
+    "demoState",
+    "annotations",
+  ];
   if (watched.some((key) => key in changes)) {
     loadAndRender();
   }

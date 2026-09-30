@@ -279,7 +279,7 @@ hr {
    width and colour that would give the number away. Screen readers still get
    the real values — this hides what is on screen, not what the user can know. */
 
-[data-privacy="on"] :is(.usage-pct, #lastMessage, .forecast, .budget-line, .chat-list, #limitHits, #historyBody, #planBadge, .insight-body) {
+[data-privacy="on"] :is(.usage-pct, #lastMessage, .forecast, .budget-line, .note-list, .chat-list, #limitHits, #historyBody, #planBadge, .insight-body) {
   filter: blur(5px);
   user-select: none;
 }
@@ -461,6 +461,115 @@ hr {
 
 .history-chart .series {
   stroke: var(--series);
+}
+
+/* ---------------------------------------------------------- chart notes -- */
+
+.chart-wrap {
+  position: relative;
+}
+
+.history-chart .note-rule {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-marks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.note-flag,
+.note-number:not(:empty) {
+  display: inline-block;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.note-flag {
+  position: absolute;
+  top: -7px;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  cursor: default;
+}
+
+.notes {
+  margin-top: 12px;
+}
+
+.note-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.note-form input {
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.note-form input[type="text"] {
+  flex: 1 1 150px;
+}
+
+.note-list {
+  list-style: none;
+  max-height: 132px;
+  margin: 8px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  font-size: 11px;
+}
+
+.note-list:empty {
+  display: none;
+}
+
+.note-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.note-list .note-number {
+  flex: 0 0 15px;
+}
+
+.note-list time {
+  flex: none;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.note-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Older than the chart reaches back: still listed, so it can still be removed. */
+.note-list li.off-chart .note-text {
+  color: var(--muted);
 }
 
 /* The week-earlier overlay: same hue as its series, dashed and held back. */
