@@ -52,7 +52,7 @@ icon and you immediately see:
   and fire a test notification. Reopen it any time from Options
 - **`cm` in the address bar** — type `cm`, then a space: the dropdown shows every
   limit and its reset time without opening anything. Enter opens the dashboard;
-  `cm refresh`, `cm open` (claude.ai) and `cm options` do what they say
+  `cm refresh`, `cm report`, `cm open` (claude.ai) and `cm options` do what they say
 - **Right-click the icon** — Refresh now, **Snooze alerts** (1 hour, 4 hours, until
   tomorrow morning, or resume), Open history, Open side panel, Open mini window.
   A snooze pauses desktop notifications *and* the nudge banners on claude.ai, shows
@@ -175,6 +175,12 @@ record per hour, eight weeks deep — and builds its analytics from that:
   sent from this browser give both a rough token count and a number of session points,
   which yields a dollars-per-point rate; that rate is applied to every point used on
   the account. The working is shown underneath.
+- **Weekly report page** — one printable sheet per week: session peak, average session,
+  usage per day, lockouts and time blocked, the fastest-burning day, the busiest hour,
+  the share used elsewhere and the API-equivalent cost, each against the week before;
+  a bar per day; where each weekly limit peaked; and the week's notes and spikes. Step
+  back through earlier weeks from the menu. Open it from the dashboard, from Options,
+  or with `cm report` in the address bar.
 - **Week-over-week comparison** — the usage-over-time chart has a **24 hours / 7 days**
   switch and a "Compare with a week earlier" box. Ticked, the same stretch from one
   week before is drawn underneath as dashed lines in the matching colours, and the
@@ -289,6 +295,7 @@ claudemeter/
 │   │   └── page-ui.js                 # ISOLATED world: in-page UI (pill, banners, lockout timer) in a shadow root
 │   ├── popup/                         # toolbar popup, ?view=panel side panel dashboard, ?view=mini window
 │   │   └── insights.js                # the dashboard's analytics sections
+│   ├── report/                        # the weekly report page (printable)
 │   ├── options/                       # refresh interval, notifications, theme, developer mode
 │   ├── onboarding/                    # first-run welcome page: sign-in check, permissions, alerts
 │   ├── debug/                         # debug.html — raw capture viewer (developer mode only)
@@ -301,6 +308,7 @@ claudemeter/
 │   │   ├── limit-hits.js              # "limit reached" log: dedupe per lockout + summary
 │   │   ├── lockout-stats.js           # limit-hit log -> lockouts and time blocked per week
 │   │   ├── weekly-stats.js            # usage log -> per-week peaks and totals
+│   │   ├── weekly-report.js           # one calendar week's figures, with the week before for comparison
 │   │   ├── plan-fit.js                # four weeks of peaks and lockouts -> smaller / larger / fits
 │   │   ├── value.js                   # API price list, per-message API cost, usage vs subscription price
 │   │   ├── history-chart.js           # history / usage log -> chart series, week-earlier overlay, SVG paths
@@ -553,6 +561,10 @@ written when Developer mode is on, from Options.
   hourly profile (the tooltip says which method produced the figure), and "today is
   running at N× your usual" is capped between 0.5× and 2×. A straight-line forecast
   isn't offered in the first 2% of a window, where one message would swing it wildly.
+- A report week is seven calendar days ending today (or the seven before that, and so
+  on), so the current week's last day is still filling in. "Used per day" divides by
+  the days actually on record, not by seven. The report reaches back as far as the
+  hourly log does — eight weeks — and can only print what this browser saw.
 - The value-for-money figure is an estimate built on estimates. Tokens are characters
   divided by four and leave out everything the page never shows — the system prompt,
   tool results, reasoning, images, project knowledge — which makes the figure too low.

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ClaudeMeter — Weekly report</title>
+    <link rel="stylesheet" href="../shared/theme.css" />
+    <link rel="stylesheet" href="report.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">ClaudeMeter <span class="badge" id="demoBadge" hidden>Demo</span></p>
+          <h1>Weekly report</h1>
+          <p class="range" id="range"></p>
+        </div>
+        <div class="controls">
+          <label for="weekSelect" class="sr-only">Week</label>
+          <select id="weekSelect"></select>
+          <button type="button" id="printBtn">Print</button>
+        </div>
+      </header>
+
+      <p class="privacy-note" id="privacyNote" hidden>Privacy mode is on, so the figures are hidden.</p>
+
+      <div id="report">
+        <p class="summary" id="summary"></p>
+
+        <section aria-labelledby="statsTitle">
+          <h2 id="statsTitle" class="sr-only">Key figures</h2>
+          <dl class="stats" id="stats"></dl>
+        </section>
+
+        <section aria-labelledby="daysTitle">
+          <h2 id="daysTitle">Day by day</h2>
+          <p class="hint">Session allowance used each day, in % of one session. The fastest-burning day is marked.</p>
+          <ol class="days" id="days"></ol>
+        </section>
+
+        <section aria-labelledby="limitsTitle" id="limitsSection">
+          <h2 id="limitsTitle">Weekly limits</h2>
+          <ul class="limits" id="limits"></ul>
+        </section>
+
+        <section aria-labelledby="eventsTitle" id="eventsSection">
+          <h2 id="eventsTitle">What happened</h2>
+          <ul class="events" id="events"></ul>
+        </section>
+      </div>
+
+      <footer>
+        <p id="footnote"></p>
+        <p><a href="../popup/popup.html?view=panel">Open the dashboard &rarr;</a></p>
+      </footer>
+    </main>
+
+    <script type="module" src="report.js"></script>
+  </body>
+</html>

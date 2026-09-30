@@ -521,6 +521,7 @@ chrome.commands.onCommand.addListener(async (command) => {
 // "cm" + space in the address bar: the dropdown shows usage, Enter runs a command.
 
 const DASHBOARD_URL = chrome.runtime.getURL("src/popup/popup.html?view=panel");
+const REPORT_URL = chrome.runtime.getURL("src/report/report.html");
 
 function openUrl(url, disposition = "newForegroundTab") {
   if (disposition === "currentTab") return chrome.tabs.update({ url });
@@ -546,6 +547,7 @@ chrome.omnibox.onInputEntered.addListener(async (text, disposition) => {
   const command = resolveCommand(text, Boolean(latestSnapshot));
 
   if (command === "refresh") await refreshUsage();
+  else if (command === "report") await openUrl(REPORT_URL, disposition);
   else if (command === "privacy") await togglePrivacyMode();
   else if (command === "options") await chrome.runtime.openOptionsPage();
   else if (command === "claude") await openUrl("https://claude.ai/", disposition);

@@ -19,6 +19,12 @@ export const COMMANDS = [
     enter: "opens the dashboard",
   },
   { id: "refresh", keywords: ["refresh", "reload", "update"], description: "Refresh usage now", enter: "refreshes usage" },
+  {
+    id: "report",
+    keywords: ["report", "weekly", "week"],
+    description: "Open this week's usage report",
+    enter: "opens the weekly report",
+  },
   { id: "claude", keywords: ["open", "claude", "chat"], description: "Open claude.ai", enter: "opens claude.ai" },
   { id: "options", keywords: ["options", "settings"], description: "Open ClaudeMeter options", enter: "opens options" },
   {

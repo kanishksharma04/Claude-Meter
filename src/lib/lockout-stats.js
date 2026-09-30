@@ -21,42 +21,51 @@ function mergeSpans(spans) {
 }
 
 /**
+ * Lockouts that began in (from, to], and the time blocked inside that span.
  * @param {Array<object>} limitHits - LimitHit entries, oldest first
- * @returns {{ weeks: Array<{ from: number, to: number, count: number, blockedMs: number }>, total: number, blockedMs: number, most: { label: string, count: number } | null }}
- *   `weeks` are back-to-back 7-day spans ending now, newest first. A lockout is
- *   counted in the week it began; its blocked time goes to whichever weeks it covers.
+ * @returns {{ count: number, blockedMs: number, labels: Map<string, number> }}
+ *   `labels` counts the lockouts per limit ("Current session", "Opus", …)
  */
-export function lockoutStats(limitHits, { now = Date.now(), weeks = 4 } = {}) {
-  const periods = Array.from({ length: weeks }, (_, index) => ({
-    from: now - (index + 1) * WEEK_MS,
-    to: now - index * WEEK_MS,
-    count: 0,
-    blockedMs: 0,
-  }));
-  const earliest = periods.at(-1).from;
-  const recent = (limitHits ?? []).filter((hit) => hit.at > earliest && hit.at <= now);
-
-  const byLabel = new Map();
-  for (const hit of recent) {
-    periods.find((period) => hit.at > period.from && hit.at <= period.to).count += 1;
+export function lockoutsBetween(limitHits, from, to, now = Date.now()) {
+  const labels = new Map();
+  for (const hit of limitHits ?? []) {
+    if (hit.at <= from || hit.at > to) continue;
     const label = claimLabel(hit.claim) ?? "Unnamed limit";
-    byLabel.set(label, (byLabel.get(label) ?? 0) + 1);
+    labels.set(label, (labels.get(label) ?? 0) + 1);
   }
 
   // A lockout that is still running has only blocked you up to now.
   const spans = (limitHits ?? [])
     .filter((hit) => hit.resetsAt != null && hit.resetsAt > hit.at)
     .map((hit) => [hit.at, Math.min(hit.resetsAt, now)]);
-  for (const [start, end] of mergeSpans(spans)) {
-    for (const period of periods) {
-      period.blockedMs += Math.max(0, Math.min(end, period.to) - Math.max(start, period.from));
-    }
-  }
+  const blockedMs = mergeSpans(spans).reduce(
+    (sum, [start, end]) => sum + Math.max(0, Math.min(end, to) - Math.max(start, from)),
+    0
+  );
+
+  return { count: [...labels.values()].reduce((sum, count) => sum + count, 0), blockedMs, labels };
+}
+
+/**
+ * @param {Array<object>} limitHits - LimitHit entries, oldest first
+ * @returns {{ weeks: Array<{ from: number, to: number, count: number, blockedMs: number }>, total: number, blockedMs: number, most: { label: string, count: number } | null }}
+ *   `weeks` are back-to-back 7-day spans ending now, newest first. A lockout is
+ *   counted in the week it began; its blocked time goes to whichever weeks it covers.
+ */
+export function lockoutStats(limitHits, { now = Date.now(), weeks = 4 } = {}) {
+  const byLabel = new Map();
+  const periods = Array.from({ length: weeks }, (_, index) => {
+    const from = now - (index + 1) * WEEK_MS;
+    const to = now - index * WEEK_MS;
+    const { count, blockedMs, labels } = lockoutsBetween(limitHits, from, to, now);
+    for (const [label, n] of labels) byLabel.set(label, (byLabel.get(label) ?? 0) + n);
+    return { from, to, count, blockedMs };
+  });
 
   const [most] = [...byLabel].sort((a, b) => b[1] - a[1]);
   return {
     weeks: periods,
-    total: recent.length,
+    total: periods.reduce((sum, period) => sum + period.count, 0),
     blockedMs: periods.reduce((sum, period) => sum + period.blockedMs, 0),
     most: most ? { label: most[0], count: most[1] } : null,
   };
