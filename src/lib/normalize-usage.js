@@ -15,6 +15,12 @@
 //     // possibly other "seven_day_<model>" keys
 //   }
 // with "utilization_pct" / "reset_at" as seen fallback field names.
+//
+// Accounts with extra usage (pay-as-you-go past the plan's limits) also get
+//     "extra_usage": { "is_enabled": true, "monthly_limit": 5000, "used_credits": 1240, "utilization": 24.8 }
+// with the amounts in minor units (cents) and nulls when the feature is off.
+// claude.ai's own settings page reads much the same thing from
+// .../overage_spend_limit, as "monthly_credit_limit" / "used_credits" / "currency".
 
 import { formatDuration } from "./time-format.js";
 
@@ -56,6 +62,45 @@ function normalizeBucket(block, fetchedAt, label) {
   const resetsInLabel = resetsAt != null ? formatDuration(fetchedAt, resetsAt) ?? "unknown" : "unknown";
 
   return { label, percentUsed, resetsAt, resetsInLabel };
+}
+
+const EXTRA_USAGE_KEYS = ["extra_usage", "overage", "overage_spend_limit"];
+
+function firstDefined(block, fields) {
+  for (const field of fields) {
+    if (block[field] != null) return block[field];
+  }
+  return null;
+}
+
+/** Minor units (cents) -> major units (dollars). */
+function toMoney(rawValue) {
+  return typeof rawValue === "number" && Number.isFinite(rawValue) && rawValue >= 0 ? Math.round(rawValue) / 100 : null;
+}
+
+/**
+ * Normalizes an extra-usage block, from the usage endpoint or from the
+ * spend-limit one. Returns null when there is nothing recognisable in it, so
+ * the UI shows nothing rather than an invented zero.
+ * @returns {import("./extra-usage.js").ExtraUsage | null}
+ */
+export function normalizeExtraUsage(block) {
+  if (!block || typeof block !== "object") return null;
+
+  const flag = firstDefined(block, ["is_enabled", "enabled"]);
+  const used = toMoney(firstDefined(block, ["used_credits", "used", "spent"]));
+  const limit = toMoney(firstDefined(block, ["monthly_limit", "monthly_credit_limit", "spend_limit", "limit"]));
+  if (typeof flag !== "boolean" && used == null && limit == null) return null;
+
+  const percentUsed =
+    used != null && limit > 0 ? Math.max(0, Math.min(100, Math.round((used / limit) * 100))) : toPercent(block.utilization);
+  return {
+    enabled: typeof flag === "boolean" ? flag : true,
+    used,
+    limit,
+    percentUsed: limit != null ? percentUsed : null,
+    currency: typeof block.currency === "string" && block.currency ? block.currency.toUpperCase() : "USD",
+  };
 }
 
 // Only surface a badge when the raw value actually names a known plan —
@@ -112,5 +157,7 @@ export function normalizeUsageResponse(raw, context = {}) {
     // render a "not available" state rather than assuming 0% used.
     session,
     weekly,
+    // null for the many accounts whose response has no such block.
+    extraUsage: normalizeExtraUsage(firstDefined(raw, EXTRA_USAGE_KEYS)),
   };
 }

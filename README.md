@@ -79,6 +79,12 @@ icon and you immediately see:
   past limit hits. It's for trying ClaudeMeter before signing in — the welcome page
   offers it when you aren't — and for screenshots (the "Demo" badge can be switched
   off). Nothing is fetched while it's on and your real readings are left as they were
+- **Extra-usage spend** — if your account has extra usage (pay-as-you-go past the
+  plan's limits) switched on, the popup gets a row for it: what you've spent this
+  month against your cap, as a bar in your warning colours, with what today added —
+  "$12.40 of $50.00 · 25% of this month's cap · $2.10 today". It joins the toolbar
+  icon's hover text and the usage alerts (80% / 95% of the cap). Accounts without the
+  feature see nothing
 - **Side panel dashboard** — the same view as a persistent panel that stays open beside
   whatever you're browsing, with a **usage-over-time chart** (one line per limit) drawn
   from the stored history. Open it from the popup's footer, from Chrome's own side
@@ -234,7 +240,8 @@ same endpoint directly:
   `"chat"` capability is picked and its `uuid` cached.
 - `GET https://claude.ai/api/organizations/{org_id}/usage` — returns usage buckets,
   e.g. `five_hour` (current session) and `seven_day` / `seven_day_opus` (weekly, per
-  model group where applicable).
+  model group where applicable), and for some accounts an `extra_usage` block with the
+  month's pay-as-you-go spend and cap.
 
 These calls are made directly from the background service worker with
 `fetch(url, { credentials: "include" })`. **No credentials are ever read, stored, or
@@ -329,8 +336,9 @@ claudemeter/
 │   │   ├── snooze.js                  # snooze options -> end time, and the "is it snoozed" check
 │   │   ├── share.js                   # usage summary as text, and as a card drawn on a canvas
 │   │   ├── demo-data.js               # the deterministic made-up dataset behind demo mode
+│   │   ├── extra-usage.js             # extra-usage spend: day-by-day record, "today", wording
 │   │   ├── usage-api.js               # org discovery + usage fetch + typed errors
-│   │   └── normalize-usage.js         # raw usage response -> UsageSnapshot
+│   │   └── normalize-usage.js         # raw usage response -> UsageSnapshot (+ extra-usage block)
 │   ├── shared/theme.css               # theme tokens for every extension page
 │   └── icons/                         # toolbar/store icon set (16/32/48/128)
 └── README.md
@@ -371,8 +379,19 @@ UsageSnapshot = {
     resetsAt: number | null,
     resetsInLabel: string,
   }>,
+  extraUsage: {                 // pay-as-you-go spend past the plan; null when the response has no such block
+    enabled: boolean,
+    used: number | null,        // spent this month, in major units (dollars)
+    limit: number | null,       // the monthly cap; null when none is set
+    percentUsed: number | null, // of the cap
+    currency: string,           // "USD" unless the endpoint says otherwise
+  } | null,
 }
 ```
+
+The latest extra-usage reading is also kept on its own as `extraUsage` (it can come from
+a second endpoint, below), with the month's running total at the end of each day in
+`extraUsageLog` (last 62 days) so "today" can be worked out.
 
 Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `history`
 (last 500 snapshots) that feeds the dashboard chart and the burn-rate maths. Settings
@@ -487,7 +506,9 @@ written when Developer mode is on, from Options.
   so numbers are current without a manual click.
 - **Manual refresh**: the refresh icon in the popup header.
 - **Passive capture**: if claude.ai's own UI makes the exact usage request while a
-  claude.ai tab is open, that response is captured and applied immediately too.
+  claude.ai tab is open, that response is captured and applied immediately too. The
+  same goes for the `overage_spend_limit` request its settings page makes, which
+  carries the extra-usage spend and cap.
 - **Around each message** (when per-message cost is on): once as you send — skipped if
   the last reading is under 20 seconds old — and once ~1.5 s after the reply ends.
 - Failed refreshes never wipe the UI — the popup keeps showing the last known-good
@@ -561,6 +582,14 @@ written when Developer mode is on, from Options.
   hourly profile (the tooltip says which method produced the figure), and "today is
   running at N× your usual" is capped between 0.5× and 2×. A straight-line forecast
   isn't offered in the first 2% of a window, where one message would swing it wildly.
+- Extra-usage figures depend on a part of the response that is even less certain than
+  the rest: the field names (`extra_usage` with `is_enabled` / `monthly_limit` /
+  `used_credits`) and the unit (taken to be cents) are what other tools read, not
+  something documented, and none of it has been checked against a live account with
+  the feature on. If the amounts look a hundred times off, that assumption is why.
+  ClaudeMeter never fetches the spend-limit endpoint itself — it only reads that
+  response when the page happens to load it — and "today" needs a reading from a
+  previous day to measure from.
 - A report week is seven calendar days ending today (or the seven before that, and so
   on), so the current week's last day is still filling in. "Used per day" divides by
   the days actually on record, not by seven. The report reaches back as far as the
@@ -650,8 +679,8 @@ written when Developer mode is on, from Options.
 - **Developer mode** — keeps raw request/response captures for the debug page
   (`src/debug/debug.html`), off by default.
 - **Clear stored data** — wipes snapshot, history, the hourly usage log, the session
-  window log, your chart notes, the spike log, message costs, the limit-hit log, org
-  cache, and debug captures.
+  window log, your chart notes, the spike log, the extra-usage record, message costs,
+  the limit-hit log, org cache, and debug captures.
 
 ## Author
 

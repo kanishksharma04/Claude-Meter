@@ -10,6 +10,7 @@ import { foldWindow, buildWindows } from "./session-windows.js";
 import { addAnnotation, removeAnnotation } from "./annotations.js";
 import { detectSpike, addSpike } from "./spikes.js";
 import { noteActivity, elsewherePoints } from "./attribution.js";
+import { foldExtraUsage } from "./extra-usage.js";
 
 export const MAX_DEBUG_CAPTURES = 20;
 // Enough for the dashboard chart to cover about a day at the default refresh interval.
@@ -66,6 +67,8 @@ export const DEFAULT_STATE = {
   sessionWindows: [], // past 5-hour session windows, oldest first (see lib/session-windows.js)
   annotations: [], // the user's notes on the chart, oldest first (see lib/annotations.js)
   spikes: [], // sudden jumps in usage, oldest first (see lib/spikes.js)
+  extraUsage: null, // latest extra-usage spend and cap, when the account has it (see lib/extra-usage.js)
+  extraUsageLog: [], // that spend's running total, one entry per day
 };
 
 export async function getAll() {
@@ -89,6 +92,8 @@ export async function getAll() {
     usageLog: data.usageLog ?? DEFAULT_STATE.usageLog,
     sessionWindows: data.sessionWindows ?? DEFAULT_STATE.sessionWindows,
     spikes: data.spikes ?? DEFAULT_STATE.spikes,
+    extraUsage: data.extraUsage ?? DEFAULT_STATE.extraUsage,
+    extraUsageLog: data.extraUsageLog ?? DEFAULT_STATE.extraUsageLog,
     // The user's own words, not a reading — so they are the real ones in demo mode too.
     annotations: stored.annotations ?? DEFAULT_STATE.annotations,
   };
@@ -216,6 +221,15 @@ export async function pushLimitHit(hit) {
   return next;
 }
 
+/** Stores the latest extra-usage reading and folds it into the day-by-day record of the spend. */
+export async function setExtraUsage(reading, at = Date.now()) {
+  const { extraUsageLog = [] } = await chrome.storage.local.get("extraUsageLog");
+  await chrome.storage.local.set({
+    extraUsage: { ...reading, fetchedAt: at },
+    extraUsageLog: foldExtraUsage(extraUsageLog, reading, at),
+  });
+}
+
 /** Remembers that a message was just sent, or its reply just ended, in this browser (lib/attribution.js). */
 export async function noteLocalActivity(event) {
   const { localActivity } = await chrome.storage.local.get("localActivity");
@@ -279,6 +293,8 @@ export async function clearAllData() {
     annotations: [],
     spikes: [],
     localActivity: null,
+    extraUsage: null,
+    extraUsageLog: [],
   });
 }
 

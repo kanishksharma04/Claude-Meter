@@ -327,7 +327,7 @@ developerModeToggle.addEventListener("change", async () => {
 });
 
 clearDataBtn.addEventListener("click", async () => {
-  if (!confirm("Clear all stored ClaudeMeter data (captures + usage snapshot + history + hourly usage log + session windows + chart notes + spikes + message costs + limit-hit log)?")) return;
+  if (!confirm("Clear all stored ClaudeMeter data (captures + usage snapshot + history + hourly usage log + session windows + chart notes + spikes + extra-usage record + message costs + limit-hit log)?")) return;
   await clearAllData();
   clearDataBtn.textContent = "Cleared!";
   document.getElementById("clearStatus").textContent = "Stored data cleared.";

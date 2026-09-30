@@ -89,6 +89,29 @@
           <p class="usage-sub" id="noWeekly" hidden>No weekly limit data available.</p>
         </div>
 
+        <!-- Pay-as-you-go spend past the plan's limits; only for accounts the endpoint reports it for -->
+        <div id="extraUsage" hidden>
+          <hr />
+          <div class="usage-row">
+            <div class="usage-row-head">
+              <span class="usage-label" id="extraUsageLabel">Extra usage</span>
+              <span class="usage-pct" id="extraUsageAmount"></span>
+            </div>
+            <div
+              class="progress-track"
+              id="extraUsageTrack"
+              role="progressbar"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-labelledby="extraUsageLabel"
+              aria-describedby="extraUsageDetail"
+            >
+              <div class="progress-fill" id="extraUsageFill"></div>
+            </div>
+            <p class="usage-sub" id="extraUsageDetail"></p>
+          </div>
+        </div>
+
         <!-- Only while arranging: the buckets the user has hidden -->
         <div id="hiddenGroup" hidden>
           <hr />

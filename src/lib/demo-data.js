@@ -40,6 +40,11 @@ const MESSAGES = [
   [6, 0, 5, "claude-opus-5-5", 250_000, 4_000],
 ];
 
+/** Pay-as-you-go spend past the plan's limits: $12.40 of a $50 monthly cap. */
+const EXTRA_USAGE = { enabled: true, used: 12.4, limit: 50, percentUsed: 25, currency: "USD" };
+/** The month's running total at the end of each of the last few days, oldest first; today's is EXTRA_USAGE.used. */
+const EXTRA_USAGE_BY_DAY = [0, 3.2, 3.2, 6.1, 10.3];
+
 function bucket(label, percentUsed, resetsAt, now) {
   return { label, percentUsed, resetsAt, resetsInLabel: formatDuration(now, resetsAt) ?? "unknown" };
 }
@@ -71,6 +76,7 @@ export function buildDemoState(now = Date.now()) {
     return {
       fetchedAt: t,
       planTier: "Max 5x",
+      extraUsage: EXTRA_USAGE,
       session: bucket("Current session", session.pct, session.resetsAt, t),
       weekly: [
         bucket("All models", Math.round(WEEKLY_NOW["All models"] - 9 * (1 - progress)), weeklyResetsAt, t),
@@ -267,5 +273,18 @@ export function buildDemoAnalytics(demo) {
   });
   const spikes = [spike(2 * 24 * 60 + 190, 5, 48, 21), spike(128, 4, 9, 16)];
 
-  return { usageLog, sessionWindows, spikes, limitHits: [...olderHits, ...demo.limitHits] };
+  const today = new Date(now).setHours(0, 0, 0, 0);
+  const extraUsageLog = [...EXTRA_USAGE_BY_DAY, EXTRA_USAGE.used].map((used, index, all) => ({
+    day: today - (all.length - 1 - index) * DAY,
+    used,
+  }));
+
+  return {
+    usageLog,
+    sessionWindows,
+    spikes,
+    limitHits: [...olderHits, ...demo.limitHits],
+    extraUsage: { ...EXTRA_USAGE, fetchedAt: now },
+    extraUsageLog,
+  };
 }

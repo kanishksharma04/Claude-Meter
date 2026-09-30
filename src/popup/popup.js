@@ -3,6 +3,7 @@ import { timeAgo, formatDuration, formatClock, formatMoment } from "../lib/time-
 import { placeAnnotations, parseWhen } from "../lib/annotations.js";
 import { describeSpike } from "../lib/spikes.js";
 import { elsewhereSpans } from "../lib/attribution.js";
+import { spentToday, describeExtraUsage } from "../lib/extra-usage.js";
 import { isSnoozed } from "../lib/snooze.js";
 import { formatCost } from "../lib/message-cost.js";
 import { rankConversations } from "../lib/conversation-costs.js";
@@ -293,6 +294,28 @@ async function onBucketTool(event) {
   await setSettings({ bucketPrefs: next });
 }
 
+/** The extra-usage row: spend against the monthly cap, shown only where the account has the feature switched on. */
+function renderExtraUsage({ extraUsage, extraUsageLog }) {
+  const section = document.getElementById("extraUsage");
+  section.hidden = !extraUsage?.enabled;
+  if (section.hidden) return;
+
+  const { amount, detail } = describeExtraUsage(extraUsage, spentToday(extraUsageLog, extraUsage));
+  document.getElementById("extraUsageAmount").textContent = amount;
+  document.getElementById("extraUsageDetail").textContent = detail;
+
+  // With no cap there is nothing to be a share of, so the bar stays away.
+  const capped = extraUsage.percentUsed != null;
+  const track = document.getElementById("extraUsageTrack");
+  track.hidden = !capped;
+  if (!capped) return;
+  track.setAttribute("aria-valuenow", String(extraUsage.percentUsed));
+  track.setAttribute("aria-valuetext", `${amount} spent`);
+  const fill = document.getElementById("extraUsageFill");
+  fill.style.width = `${extraUsage.percentUsed}%`;
+  fill.className = `progress-fill ${severityClass(extraUsage.percentUsed)}`.trim();
+}
+
 function renderTopChats(messageLog) {
   const ranked = rankConversations(messageLog, { limit: 5 });
   topChats.hidden = ranked.length === 0;
@@ -514,6 +537,7 @@ function render(state) {
   snoozeText.textContent = `Alerts snoozed until ${formatClock(snoozeUntil)}`;
 
   renderBuckets(latestSnapshot, settings, settings.messageCost ? messageLog : []);
+  renderExtraUsage(state);
   renderTopChats(settings.messageCost ? messageLog : []);
   renderLimitHits(limitHits);
   renderHistory(state);
@@ -784,6 +808,7 @@ onStorageChanged((changes) => {
     "demoState",
     "annotations",
     "spikes",
+    "extraUsage",
   ];
   if (watched.some((key) => key in changes)) {
     loadAndRender();

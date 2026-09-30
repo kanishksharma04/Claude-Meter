@@ -14,11 +14,13 @@ import {
   noteFullBuckets,
   recordSpike,
   noteLocalActivity,
+  setExtraUsage,
   setSnoozeUntil,
   setDemoState,
 } from "../lib/storage.js";
 import { fetchUsageSnapshot, UsageApiError } from "../lib/usage-api.js";
-import { normalizeUsageResponse } from "../lib/normalize-usage.js";
+import { normalizeUsageResponse, normalizeExtraUsage } from "../lib/normalize-usage.js";
+import { formatMoney } from "../lib/extra-usage.js";
 import { computeMessageCost } from "../lib/message-cost.js";
 import { modelSwitchHint } from "../lib/burn-rate.js";
 import { resolveResetsAt } from "../lib/limit-hits.js";
@@ -37,6 +39,8 @@ const SNOOZE_ALARM_NAME = "claudemeter-snooze-end";
 // How long a keyboard shortcut's confirmation stays on the toolbar badge.
 const BADGE_FLASH_MS = 1500;
 const USAGE_ENDPOINT_PATTERN = /\/api\/organizations\/[^/]+\/usage(?:[/?]|$)/;
+// claude.ai's settings page reads the extra-usage spend and cap from here.
+const SPEND_LIMIT_ENDPOINT_PATTERN = /\/api\/organizations\/[^/]+\/overage_spend_limit(?:[/?]|$)/;
 // A "before" reading this fresh is reused rather than re-fetched when a message is sent.
 const BEFORE_MAX_AGE_MS = 20_000;
 // The usage endpoint lags the end of a reply slightly; wait before the "after" reading.
@@ -101,6 +105,12 @@ async function handlePassiveCapture(capture, sender) {
         await applySnapshot(snapshot);
         console.log(LOG_PREFIX, "updated snapshot from passive capture");
       }
+    }
+
+    // Same idea for extra usage: when the page loads its own spend-limit data, read it over its shoulder.
+    if (!settings.demoMode && capture.method === "GET" && SPEND_LIMIT_ENDPOINT_PATTERN.test(capture.url)) {
+      const extraUsage = normalizeExtraUsage(capture.responseBody);
+      if (extraUsage) await setExtraUsage(extraUsage, capture.timestamp ?? Date.now());
     }
   } catch (err) {
     console.error(LOG_PREFIX, "failed to handle passive capture", err);
@@ -283,6 +293,7 @@ async function applyDemoMode(on) {
 /** Everything that has to happen whenever a new reading lands, whichever way it arrived. */
 async function applySnapshot(snapshot) {
   await setLatestSnapshot(snapshot);
+  if (snapshot.extraUsage) await setExtraUsage(snapshot.extraUsage, snapshot.fetchedAt);
   await noteFullBuckets(snapshot);
   await watchForSpike(snapshot);
   await updateToolbar(snapshot);
@@ -309,6 +320,11 @@ function toolbarTitle(snapshot) {
     parts.push(`Session ${snapshot.session.percentUsed}%` + (resetsIn ? ` (resets in ${resetsIn})` : ""));
   }
   for (const bucket of snapshot?.weekly ?? []) parts.push(`${bucket.label} ${bucket.percentUsed}%`);
+  const extra = snapshot?.extraUsage;
+  if (extra?.enabled && extra.used != null) {
+    const cap = extra.limit != null ? ` of ${formatMoney(extra.limit, extra.currency)}` : "";
+    parts.push(`Extra usage ${formatMoney(extra.used, extra.currency)}${cap}`);
+  }
   return parts.length > 0 ? `ClaudeMeter — ${parts.join(" · ")}` : "ClaudeMeter";
 }
 
@@ -350,6 +366,11 @@ function bucketsOf(snapshot) {
   if (!snapshot) return [];
   const buckets = [...(snapshot.weekly ?? [])];
   if (snapshot.session) buckets.push({ ...snapshot.session, label: snapshot.session.label ?? "Current session" });
+  // The monthly extra-usage cap is alerted on like any other limit.
+  const extra = snapshot.extraUsage;
+  if (extra?.enabled && extra.percentUsed != null) {
+    buckets.push({ label: "Extra usage", percentUsed: extra.percentUsed, subject: "Extra usage", of: " of this month's cap" });
+  }
   return buckets;
 }
 
@@ -374,7 +395,7 @@ async function maybeNotify(previousSnapshot, snapshot) {
       // A notification pops up over whatever is being shared, so it gets no numbers in privacy mode.
       message: settings.privacyMode
         ? "A usage alert you set has been reached."
-        : `${bucket.label} usage just crossed ${crossed}% (now ${bucket.percentUsed}%).`,
+        : `${bucket.subject ?? `${bucket.label} usage`} just crossed ${crossed}%${bucket.of ?? ""} (now ${bucket.percentUsed}%).`,
       priority: 1,
     });
   }
