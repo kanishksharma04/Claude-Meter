@@ -169,6 +169,12 @@ record per hour, eight weeks deep — and builds its analytics from that:
   that would have been about 70% and 60% — Pro may be enough"). If you ran out four or
   more times across at least two weeks, or a weekly limit got to 95% in two of them,
   it points at the next plan up. Otherwise it tells you the plan looks right.
+- **Value-for-money readout** — what your usage would have cost through the API, set
+  against your subscription: "The last 28 days of usage would cost about $277 at API
+  prices — 3× the $91.99 of your subscription that covers the same days." Messages
+  sent from this browser give both a rough token count and a number of session points,
+  which yields a dollars-per-point rate; that rate is applied to every point used on
+  the account. The working is shown underneath.
 - **Week-over-week comparison** — the usage-over-time chart has a **24 hours / 7 days**
   switch and a "Compare with a week earlier" box. Ticked, the same stretch from one
   week before is drawn underneath as dashed lines in the matching colours, and the
@@ -296,6 +302,7 @@ claudemeter/
 │   │   ├── lockout-stats.js           # limit-hit log -> lockouts and time blocked per week
 │   │   ├── weekly-stats.js            # usage log -> per-week peaks and totals
 │   │   ├── plan-fit.js                # four weeks of peaks and lockouts -> smaller / larger / fits
+│   │   ├── value.js                   # API price list, per-message API cost, usage vs subscription price
 │   │   ├── history-chart.js           # history / usage log -> chart series, week-earlier overlay, SVG paths
 │   │   ├── annotations.js             # the user's notes on the chart: add, remove, place on the axis
 │   │   ├── spikes.js                  # a sudden jump between nearby readings -> spike log
@@ -364,7 +371,7 @@ Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `his
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
 `notifyThresholds`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
-`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
+`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300), and the mini window's last position and size
 are kept under `miniWindowBounds`:
@@ -379,6 +386,8 @@ MessageCost = {
   session: number | null,      // session % points this message used; null if the window reset mid-reply
   weekly: Array<{ label: string, delta: number }>,
   durationMs: number | null,
+  inputTokens: number | null,  // rough: the thread as it stood plus this message, in characters / 4
+  outputTokens: number,        // rough: the reply's characters / 4
   shared: boolean,             // another reply was streaming at the same time
 }
 ```
@@ -544,6 +553,15 @@ written when Developer mode is on, from Options.
   hourly profile (the tooltip says which method produced the figure), and "today is
   running at N× your usual" is capped between 0.5× and 2×. A straight-line forecast
   isn't offered in the first 2% of a window, where one message would swing it wildly.
+- The value-for-money figure is an estimate built on estimates. Tokens are characters
+  divided by four and leave out everything the page never shows — the system prompt,
+  tool results, reasoning, images, project knowledge — which makes the figure too low.
+  Prices are Anthropic's API list prices as of 25 September 2026 (`src/lib/value.js`),
+  with models older than that list priced at their family's rate and no prompt
+  caching, which an API client re-sending a long thread would use — that makes it too
+  high. The rate needs five cleanly measured messages (10 points between them) and
+  assumes usage elsewhere costs the same per point as usage here. Subscription list
+  prices are US ones before tax; set your own in Options.
 - "Used elsewhere" is an inference from timing, per stretch between two readings: if
   anything was sent or answered in this browser during it (or in the two minutes
   before), the whole rise is counted as this browser's, even if another device was
@@ -600,6 +618,8 @@ written when Developer mode is on, from Options.
 - **Forecast** — from your usual week (default), straight line, or off.
 - **Working hours** — start and end (9:00–17:00 by default), used for the window-start
   suggestion until a week of your own usage is on record.
+- **Subscription price** — what you pay a month in US dollars, for the value readout;
+  empty uses your plan's list price ($20 Pro, $100 Max 5x, $200 Max 20x).
 - **Spike detection** — Off, or +10 / +15 (default) / +20 / +30% within five minutes.
 - **Your plan** — Auto-detect (default), Pro, Max 5x or Max 20x, for the plan-fit advice.
 - **Icon shows** — gauge ring (default), badge text, both, or nothing.

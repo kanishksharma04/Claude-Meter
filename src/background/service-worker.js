@@ -29,6 +29,7 @@ import { buildDemoState } from "../lib/demo-data.js";
 import { formatDuration, formatClock } from "../lib/time-format.js";
 import { SNOOZE_OPTIONS, DEFAULT_SNOOZE, snoozeEnd, isSnoozed } from "../lib/snooze.js";
 import { describeSpike } from "../lib/spikes.js";
+import { tokensOf } from "../lib/value.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
 const ALARM_NAME = "claudemeter-refresh-check";
@@ -129,7 +130,9 @@ async function handleChatEvent(event) {
       await activityWrites;
     }
 
-    if (!settings.messageCost || !event?.requestId) return;
+    if (!settings.messageCost) return;
+    if (event?.kind === "conversation_loaded") return await setThreadChars(event.conversationId, event.chars ?? 0);
+    if (!event?.requestId) return;
 
     if (event.kind === "completion_start") {
       const started = recordMessageStart(event);
@@ -145,6 +148,24 @@ async function handleChatEvent(event) {
   }
 }
 
+// How long each open chat's thread is, in characters, so a message's input can
+// be sized: every message re-sends the whole thread. Kept in storage.session —
+// it is only good for as long as the tabs it describes.
+const MAX_TRACKED_THREADS = 50;
+
+async function threadChars(conversationId) {
+  const { threadChars: sizes = {} } = await chrome.storage.session.get("threadChars");
+  return sizes[conversationId] ?? 0;
+}
+
+async function setThreadChars(conversationId, chars) {
+  if (!conversationId) return;
+  const { threadChars: sizes = {} } = await chrome.storage.session.get("threadChars");
+  delete sizes[conversationId]; // re-insert, so the least recently touched chat is the one dropped
+  const entries = [...Object.entries(sizes), [conversationId, chars]].slice(-MAX_TRACKED_THREADS);
+  await chrome.storage.session.set({ threadChars: Object.fromEntries(entries) });
+}
+
 async function recordMessageStart(event) {
   let { latestSnapshot: before } = await getAll();
   if (!before || Date.now() - before.fetchedAt > BEFORE_MAX_AGE_MS) {
@@ -157,6 +178,9 @@ async function recordMessageStart(event) {
     startedAt: event.timestamp ?? Date.now(),
     conversationId: event.conversationId ?? null,
     model: event.model ?? null,
+    // What went in: the thread as it stood, plus this message.
+    promptChars: event.promptChars ?? 0,
+    inputChars: (await threadChars(event.conversationId)) + (event.promptChars ?? 0),
     before,
   });
 }
@@ -165,6 +189,10 @@ async function recordMessageEnd(event) {
   const { pending, othersInFlight } = await takePendingMessage(event.requestId);
   // A request that never produced a reply (HTTP error, network failure) cost nothing.
   if (!pending || !event.ok) return;
+
+  // The thread is now longer by this exchange, whatever the next reading says.
+  const exchanged = (pending.promptChars ?? 0) + (event.replyChars ?? 0);
+  await setThreadChars(pending.conversationId, (await threadChars(pending.conversationId)) + exchanged);
 
   await new Promise((resolve) => setTimeout(resolve, AFTER_SETTLE_MS));
   const result = await refreshUsage();
@@ -180,6 +208,9 @@ async function recordMessageEnd(event) {
     session: cost.session,
     weekly: cost.weekly,
     durationMs: event.durationMs ?? null,
+    // Rough token counts, for pricing the message at API rates (lib/value.js).
+    inputTokens: pending.inputChars != null ? tokensOf(pending.inputChars) : null,
+    outputTokens: tokensOf(event.replyChars),
     // Another reply was streaming at the same time, so the delta is split between them.
     shared: othersInFlight,
   });

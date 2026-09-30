@@ -44,6 +44,7 @@ export const DEFAULT_SETTINGS = {
   workdayStart: 9, // assumed working hours (0–24), for the window-start suggestion until the
   workdayEnd: 17, // usage log has a week to learn from (lib/window-start.js)
   plan: "auto", // for the plan-fit adviser: "auto" (detect) | "pro" | "max5" | "max20" (lib/plan-fit.js)
+  planPrice: 0, // what the subscription costs a month in US$, for the value readout; 0 = the plan's list price
   spikePercent: 15, // flag a limit that jumps this many points within five minutes; 0 = off (lib/spikes.js)
   chartRange: "day", // the dashboard chart's span: "day" (raw readings) | "week" (hourly log)
   chartCompare: false, // overlay the same stretch one week earlier on the chart

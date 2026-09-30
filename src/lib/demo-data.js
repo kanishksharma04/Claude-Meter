@@ -27,17 +27,17 @@ const CHATS = [
   { id: "d3m00003-0000-4000-8000-000000000003", title: "Quarterly report draft" },
 ];
 
-/** [minutes ago, chat index, session % points, model] — newest last. */
+/** [minutes ago, chat index, session % points, model, tokens in, tokens out] — newest last. */
 const MESSAGES = [
-  [640, 2, 6, "claude-sonnet-4-5"],
-  [610, 2, 4, "claude-sonnet-4-5"],
-  [420, 1, 2, "claude-haiku-4-5"],
-  [400, 1, 1, "claude-haiku-4-5"],
-  [160, 0, 9, "claude-opus-4-5"],
-  [128, 0, 12, "claude-opus-4-5"],
-  [96, 0, 8, "claude-opus-4-5"],
-  [41, 0, 11, "claude-opus-4-5"],
-  [6, 0, 5, "claude-opus-4-5"],
+  [640, 2, 6, "claude-sonnet-5-5", 60_000, 4_000],
+  [610, 2, 4, "claude-sonnet-5-5", 72_000, 3_000],
+  [420, 1, 2, "claude-haiku-4-5", 15_000, 1_200],
+  [400, 1, 1, "claude-haiku-4-5", 18_000, 1_000],
+  [160, 0, 9, "claude-opus-5-5", 140_000, 6_000],
+  [128, 0, 12, "claude-opus-5-5", 180_000, 9_000],
+  [96, 0, 8, "claude-opus-5-5", 205_000, 5_000],
+  [41, 0, 11, "claude-opus-5-5", 230_000, 8_000],
+  [6, 0, 5, "claude-opus-5-5", 250_000, 4_000],
 ];
 
 function bucket(label, percentUsed, resetsAt, now) {
@@ -88,7 +88,7 @@ export function buildDemoState(now = Date.now()) {
     if (rise > 0) history[index].elsewhere = rise;
   }
 
-  const messageLog = MESSAGES.map(([minutesAgo, chat, session, model], index) => ({
+  const messageLog = MESSAGES.map(([minutesAgo, chat, session, model, inputTokens, outputTokens], index) => ({
     id: `demo-${index}`,
     at: now - minutesAgo * MIN,
     conversationId: CHATS[chat].id,
@@ -97,6 +97,8 @@ export function buildDemoState(now = Date.now()) {
     session,
     weekly: model.includes("opus") ? [{ label: "Opus", delta: Math.max(1, Math.round(session / 6)) }] : [],
     durationMs: 9000 + index * 1700,
+    inputTokens,
+    outputTokens,
     shared: false,
   }));
 
@@ -108,7 +110,7 @@ export function buildDemoState(now = Date.now()) {
     claim: "five_hour",
     resetsAt: now - ago + 47 * MIN,
     conversationId: CHATS[0].id,
-    model: "claude-opus-4-5",
+    model: "claude-opus-5-5",
   });
 
   return {
@@ -251,7 +253,7 @@ export function buildDemoAnalytics(demo) {
       claim: "five_hour",
       resetsAt,
       conversationId: CHATS[0].id,
-      model: "claude-opus-4-5",
+      model: "claude-opus-5-5",
     }));
 
   // Two sudden jumps: one in the current window, lined up with the costliest demo message, and an older one.

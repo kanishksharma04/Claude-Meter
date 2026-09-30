@@ -24,6 +24,7 @@ const workdayStartSelect = document.getElementById("workdayStartSelect");
 const workdayEndSelect = document.getElementById("workdayEndSelect");
 const planSelect = document.getElementById("planSelect");
 const spikeSelect = document.getElementById("spikeSelect");
+const planPriceInput = document.getElementById("planPriceInput");
 const iconStyleSelect = document.getElementById("iconStyleSelect");
 const gaugePreview = document.getElementById("gaugePreview");
 const actionOpensSelect = document.getElementById("actionOpensSelect");
@@ -172,6 +173,7 @@ async function init() {
   renderWorkday(settings);
   planSelect.value = settings.plan;
   spikeSelect.value = String(settings.spikePercent);
+  planPriceInput.value = settings.planPrice > 0 ? settings.planPrice : "";
 
   iconStyleSelect.value = settings.iconStyle;
   renderGaugePreview();
@@ -264,6 +266,13 @@ for (const select of [workdayStartSelect, workdayEndSelect]) {
     renderWorkday(await setSettings({ workdayStart: start, workdayEnd: end }));
   });
 }
+
+planPriceInput.addEventListener("change", async () => {
+  // Empty, zero or nonsense all mean "use the plan's list price".
+  const price = Math.max(0, Math.min(10_000, Number(planPriceInput.value) || 0));
+  planPriceInput.value = price > 0 ? price : "";
+  await setSettings({ planPrice: price });
+});
 
 spikeSelect.addEventListener("change", async () => {
   await setSettings({ spikePercent: Number(spikeSelect.value) });

@@ -10,6 +10,7 @@ import { timelineDays, summarizeWindows } from "../lib/session-windows.js";
 import { severityOf } from "../lib/severity.js";
 import { recentSpikes, describeSpike, spikeSource } from "../lib/spikes.js";
 import { attribution, describeAttribution } from "../lib/attribution.js";
+import { valueForMoney, describeValue, monthlyPriceFor } from "../lib/value.js";
 import { formatHour, formatDuration, formatClock, formatMoment } from "../lib/time-format.js";
 
 const $ = (id) => document.getElementById(id);
@@ -177,6 +178,23 @@ function renderAttribution({ usageLog }) {
   $("attributionLead").textContent = describeAttribution(split);
 }
 
+// ------------------------------------------------------------------ value --
+
+function renderValue({ messageLog, usageLog, settings, latestSnapshot }) {
+  const section = $("valueSection");
+  // The rate comes from measured messages; with measuring off there is nothing to go on.
+  section.hidden = !settings.messageCost;
+  if (section.hidden) return;
+
+  const monthlyPrice = monthlyPriceFor(settings, latestSnapshot?.planTier);
+  const value = valueForMoney({ messageLog, usageLog, monthlyPrice });
+  const { lead, detail } = describeValue(value);
+  $("valueNote").textContent = monthlyPrice ? `vs $${monthlyPrice} a month` : "API-equivalent cost";
+  $("valueLead").textContent = lead;
+  $("valueDetail").textContent = detail;
+  section.dataset.verdict = value.ready ? "ready" : "learning";
+}
+
 // --------------------------------------------------------------- lockouts --
 
 function renderLockouts({ limitHits }) {
@@ -234,4 +252,5 @@ export function renderInsights(state) {
   renderAttribution(state);
   renderLockouts(state);
   renderPlanFit(state);
+  renderValue(state);
 }
