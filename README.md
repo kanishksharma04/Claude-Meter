@@ -169,6 +169,10 @@ record per hour, eight weeks deep — and builds its analytics from that:
   that would have been about 70% and 60% — Pro may be enough"). If you ran out four or
   more times across at least two weeks, or a weekly limit got to 95% in two of them,
   it points at the next plan up. Otherwise it tells you the plan looks right.
+- **Week-over-week comparison** — the usage-over-time chart has a **24 hours / 7 days**
+  switch and a "Compare with a week earlier" box. Ticked, the same stretch from one
+  week before is drawn underneath as dashed lines in the matching colours, and the
+  legend adds where each limit stood at this point last week ("38% (was 24%)").
 
 ## Accessibility
 
@@ -271,7 +275,7 @@ claudemeter/
 │   │   ├── lockout-stats.js           # limit-hit log -> lockouts and time blocked per week
 │   │   ├── weekly-stats.js            # usage log -> per-week peaks and totals
 │   │   ├── plan-fit.js                # four weeks of peaks and lockouts -> smaller / larger / fits
-│   │   ├── history-chart.js           # snapshot history -> line-chart series + SVG paths
+│   │   ├── history-chart.js           # history / usage log -> chart series, week-earlier overlay, SVG paths
 │   │   ├── usage-log.js               # hourly rollup of every reading, kept for eight weeks
 │   │   ├── heatmap.js                 # usage log -> weekday × hour averages
 │   │   ├── budget.js                  # weekly limit -> % a day until reset, and today's share used
@@ -335,7 +339,7 @@ Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `his
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
 `notifyThresholds`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
-`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`). The current model-switch hint, if any, is kept
+`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300), and the mini window's last position and size
 are kept under `miniWindowBounds`:
@@ -463,9 +467,12 @@ written when Developer mode is on, from Options.
 - Thread length is a character count divided by four, not a real token count. It
   covers message text and pasted/extracted attachments on the active branch; images,
   PDFs, project knowledge, and tool results aren't counted, so treat it as a floor.
-- The usage-over-time chart only reaches back as far as the stored history: 500
-  readings, which is about a day at the default interval and less if per-message cost
-  is adding two readings per message. There is no export.
+- The 24-hour chart only reaches back as far as the stored history: 500 readings,
+  which is about a day at the default interval and less if per-message cost is adding
+  two readings per message. The 7-day view and the week-earlier overlay are drawn from
+  the hourly log instead, so they are coarser — one point per hour, the session line
+  showing each hour's peak — and the line breaks wherever the browser wasn't running.
+  There is no export.
 - The analytics only know what this browser saw. Hours when it wasn't running leave no
   record, and usage that built up across a gap of more than 90 minutes between two
   readings isn't assigned to any hour, because there is no telling when it happened.

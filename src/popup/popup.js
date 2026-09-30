@@ -4,7 +4,15 @@ import { isSnoozed } from "../lib/snooze.js";
 import { formatCost } from "../lib/message-cost.js";
 import { rankConversations } from "../lib/conversation-costs.js";
 import { summarizeLimitHits, claimLabel } from "../lib/limit-hits.js";
-import { chartSeries, linePath, describeChart } from "../lib/history-chart.js";
+import {
+  chartSeries,
+  weekSeries,
+  logSeries,
+  linePath,
+  describeChart,
+  WEEK_WINDOW_MS,
+  LOG_GAP_MS,
+} from "../lib/history-chart.js";
 import { severityOf, isHexColor } from "../lib/severity.js";
 import { arrangeBuckets, moveBucket, togglePinned, toggleHidden } from "../lib/bucket-prefs.js";
 import { applyTheme, onSystemThemeChange } from "../lib/theme.js";
@@ -65,6 +73,9 @@ const historyLegend = document.getElementById("historyLegend");
 const historyRange = document.getElementById("historyRange");
 const historyFrom = document.getElementById("historyFrom");
 const historyEmpty = document.getElementById("historyEmpty");
+const historyRangeButtons = [...document.querySelectorAll("#historyControls [data-range]")];
+const historyCompare = document.getElementById("historyCompare");
+const historyCompareNote = document.getElementById("historyCompareNote");
 const insights = document.getElementById("insights");
 
 let latestState = null;
@@ -320,27 +331,45 @@ function svgEl(tag, attrs) {
   return node;
 }
 
-function renderHistory(history) {
+function renderHistory({ history, usageLog, settings }) {
   historySection.hidden = VIEW !== "panel";
   if (historySection.hidden) return;
 
-  const chart = chartSeries(history);
+  const week = settings.chartRange === "week";
+  const chart = week ? weekSeries(usageLog) : chartSeries(history);
   const drawable = chart.series.filter((s) => s.points.length >= 2);
   const box = { from: chart.from, to: chart.to, width: CHART_WIDTH, height: CHART_HEIGHT };
+  // The same stretch one week earlier, moved forward onto this axis.
+  const earlier = settings.chartCompare ? logSeries(usageLog, { ...box, shiftMs: WEEK_WINDOW_MS }) : null;
+  const earlierOf = (series) => earlier?.series.find((s) => s.id === series.id && s.points.length >= 2);
+
+  for (const button of historyRangeButtons) {
+    button.setAttribute("aria-pressed", String(button.dataset.range === (week ? "week" : "day")));
+  }
+  historyCompare.checked = settings.chartCompare;
 
   historyEmpty.hidden = drawable.length > 0;
   historyBody.hidden = drawable.length === 0;
   historyRange.textContent = drawable.length > 0 ? `last ${formatDuration(chart.from, chart.to)}` : "";
   historyFrom.textContent = timeAgo(chart.from);
-  historyChart.setAttribute("aria-label", describeChart({ series: drawable }));
+  historyChart.setAttribute("aria-label", describeChart({ series: drawable }, earlier));
 
   historyChart.replaceChildren(
     // Gridlines at 0 / 50 / 100%.
     ...[0, 0.5, 1].map((f) =>
       svgEl("line", { class: "grid", x1: 0, x2: CHART_WIDTH, y1: f * CHART_HEIGHT, y2: f * CHART_HEIGHT })
     ),
+    // Last week's lines go underneath this week's.
+    ...drawable.flatMap((series, index) => {
+      const before = earlierOf(series);
+      const d = before && linePath(before.points, { ...box, gapMs: LOG_GAP_MS });
+      return before ? [svgEl("path", { class: `series compare series-${index % 5}`, d })] : [];
+    }),
     ...drawable.map((series, index) =>
-      svgEl("path", { class: `series series-${index % 5}`, d: linePath(series.points, box) })
+      svgEl("path", {
+        class: `series series-${index % 5}`,
+        d: linePath(series.points, { ...box, gapMs: week ? LOG_GAP_MS : Infinity }),
+      })
     )
   );
 
@@ -348,11 +377,18 @@ function renderHistory(history) {
     ...drawable.map((series, index) => {
       const swatch = document.createElement("span");
       swatch.className = `swatch series-${index % 5}`;
+      const before = earlierOf(series)?.points.at(-1);
       const item = document.createElement("li");
-      item.append(swatch, `${series.label} · ${series.points.at(-1).pct}%`);
+      item.append(swatch, `${series.label} · ${series.points.at(-1).pct}%` + (before ? ` (was ${before.pct}%)` : ""));
       return item;
     })
   );
+
+  const compared = drawable.some(earlierOf);
+  historyCompareNote.hidden = !settings.chartCompare;
+  historyCompareNote.textContent = compared
+    ? "Dashed: the same stretch a week earlier. \"Was\" is where each limit stood at this point last week."
+    : "Nothing on record from a week earlier yet.";
 }
 
 function render(state) {
@@ -390,7 +426,7 @@ function render(state) {
   renderBuckets(latestSnapshot, settings, settings.messageCost ? messageLog : []);
   renderTopChats(settings.messageCost ? messageLog : []);
   renderLimitHits(limitHits);
-  renderHistory(history);
+  renderHistory(state);
   insights.hidden = VIEW !== "panel";
   if (!insights.hidden) renderInsights(state);
 
@@ -620,6 +656,11 @@ chrome.commands?.getAll().then((commands) => {
   const shortcut = commands.find((command) => command.name === "refresh-usage")?.shortcut;
   if (shortcut) refreshBtn.title = `Refresh now (${shortcut})`;
 });
+
+for (const button of historyRangeButtons) {
+  button.addEventListener("click", () => setSettings({ chartRange: button.dataset.range }));
+}
+historyCompare.addEventListener("change", () => setSettings({ chartCompare: historyCompare.checked }));
 
 // "…/popup.html?view=panel#history" (e.g. opened in a tab) lands on the chart.
 if (location.hash === "#history") {

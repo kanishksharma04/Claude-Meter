@@ -463,6 +463,66 @@ hr {
   stroke: var(--series);
 }
 
+/* The week-earlier overlay: same hue as its series, dashed and held back. */
+.history-chart .series.compare {
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  opacity: 0.55;
+}
+
+.chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+  font-size: 11px;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.segmented button {
+  padding: 3px 10px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.segmented button + button {
+  border-left: 1px solid var(--border);
+}
+
+.segmented button[aria-pressed="true"] {
+  background: var(--panel);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.segmented button:focus-visible {
+  outline-offset: -2px;
+}
+
+.chart-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.chart-check input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
 .history-axis {
   display: flex;
   justify-content: space-between;

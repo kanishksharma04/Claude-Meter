@@ -40,6 +40,8 @@ export const DEFAULT_SETTINGS = {
   workdayStart: 9, // assumed working hours (0–24), for the window-start suggestion until the
   workdayEnd: 17, // usage log has a week to learn from (lib/window-start.js)
   plan: "auto", // for the plan-fit adviser: "auto" (detect) | "pro" | "max5" | "max20" (lib/plan-fit.js)
+  chartRange: "day", // the dashboard chart's span: "day" (raw readings) | "week" (hourly log)
+  chartCompare: false, // overlay the same stretch one week earlier on the chart
 };
 
 export const DEFAULT_STATE = {

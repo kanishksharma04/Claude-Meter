@@ -119,10 +119,18 @@
             <h2>Usage over time</h2>
             <span class="header-note" id="historyRange"></span>
           </div>
+          <div id="historyControls" class="chart-controls">
+            <div class="segmented" role="group" aria-label="Chart range">
+              <button type="button" data-range="day" aria-pressed="true">24 hours</button>
+              <button type="button" data-range="week" aria-pressed="false">7 days</button>
+            </div>
+            <label class="chart-check"><input type="checkbox" id="historyCompare" /> Compare with a week earlier</label>
+          </div>
           <div id="historyBody">
             <svg id="historyChart" class="history-chart" viewBox="0 0 320 120" preserveAspectRatio="none" role="img"></svg>
             <div class="history-axis"><span id="historyFrom"></span><span>now</span></div>
             <ul id="historyLegend" class="history-legend"></ul>
+            <p class="insight-summary" id="historyCompareNote" hidden></p>
           </div>
           <p class="usage-sub" id="historyEmpty" hidden>
             Not enough history yet — this fills in as ClaudeMeter refreshes.
