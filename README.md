@@ -163,6 +163,12 @@ record per hour, eight weeks deep — and builds its analytics from that:
   time runs from when the lockout was first seen to its reset; two limits exhausted at
   once count once. A limit that a refresh finds at 100% is now logged as a lockout
   even if no message was refused in this browser.
+- **Plan-fit adviser** — after four weeks of watching, a verdict on the plan itself.
+  If nothing ran out and your busiest session and fullest weekly limit would still
+  have fitted under 80% of the next plan down, it says so with the numbers ("…on Pro
+  that would have been about 70% and 60% — Pro may be enough"). If you ran out four or
+  more times across at least two weeks, or a weekly limit got to 95% in two of them,
+  it points at the next plan up. Otherwise it tells you the plan looks right.
 
 ## Accessibility
 
@@ -263,6 +269,8 @@ claudemeter/
 │   │   ├── burn-rate.js               # weekly %/hr from history + the model-switch hint
 │   │   ├── limit-hits.js              # "limit reached" log: dedupe per lockout + summary
 │   │   ├── lockout-stats.js           # limit-hit log -> lockouts and time blocked per week
+│   │   ├── weekly-stats.js            # usage log -> per-week peaks and totals
+│   │   ├── plan-fit.js                # four weeks of peaks and lockouts -> smaller / larger / fits
 │   │   ├── history-chart.js           # snapshot history -> line-chart series + SVG paths
 │   │   ├── usage-log.js               # hourly rollup of every reading, kept for eight weeks
 │   │   ├── heatmap.js                 # usage log -> weekday × hour averages
@@ -327,7 +335,7 @@ Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `his
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
 `notifyThresholds`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
-`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`). The current model-switch hint, if any, is kept
+`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300), and the mini window's last position and size
 are kept under `miniWindowBounds`:
@@ -468,6 +476,13 @@ written when Developer mode is on, from Options.
   hourly profile (the tooltip says which method produced the figure), and "today is
   running at N× your usual" is capped between 0.5× and 2×. A straight-line forecast
   isn't offered in the first 2% of a window, where one message would swing it wildly.
+- Plan-fit advice compares plans by their advertised multiples of Pro (Max 5x = 5×,
+  Max 20x = 20×). That holds for the session limit as Anthropic describes it and is
+  only approximate for the weekly ones, and it is why "peaked at 40% on Max 5x" is
+  *not* read as "Pro would do": that is twice Pro's allowance. It knows nothing about
+  price, Free, Team or Enterprise, and it needs your plan — pick it in Options if the
+  header says "plan not detected". Each of the four weeks needs at least three days on
+  record before it says anything.
 - The window-start suggestion plans a *typical* day of that weekday, in half-hour
   steps, and only speaks up when the heaviest window would get at least 10 points
   lighter. Before there is a week of history it has no idea how heavy your day is, so
@@ -497,6 +512,7 @@ written when Developer mode is on, from Options.
 - **Forecast** — from your usual week (default), straight line, or off.
 - **Working hours** — start and end (9:00–17:00 by default), used for the window-start
   suggestion until a week of your own usage is on record.
+- **Your plan** — Auto-detect (default), Pro, Max 5x or Max 20x, for the plan-fit advice.
 - **Icon shows** — gauge ring (default), badge text, both, or nothing.
 - **Keyboard shortcuts** — shows the current bindings; "Change shortcuts…" opens
   `chrome://extensions/shortcuts`.

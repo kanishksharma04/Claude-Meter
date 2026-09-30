@@ -39,6 +39,7 @@ export const DEFAULT_SETTINGS = {
   forecast: "profile", // where each limit is heading: "profile" (your usual week) | "linear" | "off" (lib/forecast.js)
   workdayStart: 9, // assumed working hours (0–24), for the window-start suggestion until the
   workdayEnd: 17, // usage log has a week to learn from (lib/window-start.js)
+  plan: "auto", // for the plan-fit adviser: "auto" (detect) | "pro" | "max5" | "max20" (lib/plan-fit.js)
 };
 
 export const DEFAULT_STATE = {

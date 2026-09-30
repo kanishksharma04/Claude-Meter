@@ -183,6 +183,21 @@
           <select id="workdayEndSelect" aria-label="Working hours end"></select>
         </span>
       </div>
+      <label class="row">
+        <span>
+          Your plan
+          <small>
+            For the plan-fit advice in the dashboard. claude.ai rarely says which plan you're on, so pick it here
+            if "Auto-detect" doesn't find it.
+          </small>
+        </span>
+        <select id="planSelect">
+          <option value="auto">Auto-detect</option>
+          <option value="pro">Pro</option>
+          <option value="max5">Max 5x</option>
+          <option value="max20">Max 20x</option>
+        </select>
+      </label>
     </section>
 
     <section class="card">

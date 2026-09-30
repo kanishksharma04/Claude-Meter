@@ -5,6 +5,7 @@
 import { buildHeatmap, describeHeatmap, describeSlot, WEEKDAYS } from "../lib/heatmap.js";
 import { nextStart, describeStart } from "../lib/window-start.js";
 import { lockoutStats } from "../lib/lockout-stats.js";
+import { planFit, describePlanFit } from "../lib/plan-fit.js";
 import { formatHour, formatDuration } from "../lib/time-format.js";
 
 const $ = (id) => document.getElementById(id);
@@ -112,10 +113,20 @@ function renderLockouts({ limitHits }) {
         (stats.most ? ` · most often: ${stats.most.label} (${stats.most.count}×)` : "");
 }
 
+// --------------------------------------------------------------- plan fit --
+
+function renderPlanFit({ usageLog, limitHits, latestSnapshot, settings }) {
+  const fit = planFit({ usageLog, limitHits, planTier: latestSnapshot?.planTier, plan: settings.plan });
+  $("planFitNote").textContent = fit.plan ? `on ${fit.plan.label}` : "plan not detected";
+  $("planFitLead").textContent = describePlanFit(fit, fit.blockedMs > 0 ? span(fit.blockedMs) : "");
+  $("planFitSection").dataset.verdict = fit.verdict;
+}
+
 // ------------------------------------------------------------------------
 
 export function renderInsights(state) {
   renderHeatmap(state);
   renderWindowStart(state);
   renderLockouts(state);
+  renderPlanFit(state);
 }

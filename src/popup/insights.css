@@ -99,3 +99,11 @@
   border-radius: 999px;
   background: var(--danger);
 }
+
+/* ------------------------------------------------------------- plan fit -- */
+
+/* Still gathering its four weeks: said quietly, it isn't advice yet. */
+[data-verdict="learning"] .insight-lead {
+  color: var(--muted);
+  font-size: 11px;
+}

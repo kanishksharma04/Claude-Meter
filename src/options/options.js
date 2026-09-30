@@ -22,6 +22,7 @@ const weeklyBudgetToggle = document.getElementById("weeklyBudgetToggle");
 const forecastSelect = document.getElementById("forecastSelect");
 const workdayStartSelect = document.getElementById("workdayStartSelect");
 const workdayEndSelect = document.getElementById("workdayEndSelect");
+const planSelect = document.getElementById("planSelect");
 const iconStyleSelect = document.getElementById("iconStyleSelect");
 const gaugePreview = document.getElementById("gaugePreview");
 const actionOpensSelect = document.getElementById("actionOpensSelect");
@@ -168,6 +169,7 @@ async function init() {
   weeklyBudgetToggle.checked = settings.weeklyBudget;
   forecastSelect.value = settings.forecast;
   renderWorkday(settings);
+  planSelect.value = settings.plan;
 
   iconStyleSelect.value = settings.iconStyle;
   renderGaugePreview();
@@ -260,6 +262,10 @@ for (const select of [workdayStartSelect, workdayEndSelect]) {
     renderWorkday(await setSettings({ workdayStart: start, workdayEnd: end }));
   });
 }
+
+planSelect.addEventListener("change", async () => {
+  await setSettings({ plan: planSelect.value });
+});
 
 iconStyleSelect.addEventListener("change", async () => {
   renderGaugePreview();
