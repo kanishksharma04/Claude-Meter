@@ -4,7 +4,8 @@
 
 import { buildHeatmap, describeHeatmap, describeSlot, WEEKDAYS } from "../lib/heatmap.js";
 import { nextStart, describeStart } from "../lib/window-start.js";
-import { formatHour } from "../lib/time-format.js";
+import { lockoutStats } from "../lib/lockout-stats.js";
+import { formatHour, formatDuration } from "../lib/time-format.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -15,6 +16,15 @@ function el(tag, props = {}, ...children) {
 }
 
 const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
+/** A length of time in words — "2 hr 40 min". */
+const span = (ms) => (ms < 60_000 ? "under a minute" : formatDuration(0, ms));
+
+/** "24 Sep – 30 Sep" for a span of days; `to` is exclusive. */
+function dateRange(from, to) {
+  const format = (epochMs) => new Date(epochMs).toLocaleDateString([], { day: "numeric", month: "short" });
+  return `${format(from)} – ${format(to - 1)}`;
+}
 
 // ---------------------------------------------------------------- heatmap --
 
@@ -64,9 +74,48 @@ function renderWindowStart({ usageLog, settings }) {
   $("startBasis").textContent = basis;
 }
 
+// --------------------------------------------------------------- lockouts --
+
+function renderLockouts({ limitHits }) {
+  const stats = lockoutStats(limitHits);
+  const [thisWeek] = stats.weeks;
+
+  $("lockoutLead").textContent =
+    stats.total === 0
+      ? "No limit has run out in the last four weeks."
+      : thisWeek.count === 0
+        ? "No lockouts in the last 7 days."
+        : `${plural(thisWeek.count, "lockout")} in the last 7 days, blocked for ${span(thisWeek.blockedMs)} in all.`;
+
+  const table = $("lockoutTable");
+  table.hidden = stats.total === 0;
+  const longest = Math.max(1, ...stats.weeks.map((week) => week.blockedMs));
+  $("lockoutRows").replaceChildren(
+    ...stats.weeks.map((week) => {
+      const bar = el("span", { className: "lockout-bar" });
+      bar.style.width = `${Math.round((week.blockedMs / longest) * 100)}%`;
+      return el(
+        "tr",
+        {},
+        el("th", { scope: "row" }, dateRange(week.from, week.to)),
+        el("td", {}, week.count === 0 ? "–" : `${week.count}×`),
+        el("td", {}, week.blockedMs === 0 ? "–" : span(week.blockedMs)),
+        el("td", { className: "lockout-bar-cell", ariaHidden: "true" }, bar)
+      );
+    })
+  );
+
+  $("lockoutNote").textContent =
+    stats.total === 0
+      ? ""
+      : `${plural(stats.total, "lockout")} and ${span(stats.blockedMs)} blocked in four weeks` +
+        (stats.most ? ` · most often: ${stats.most.label} (${stats.most.count}×)` : "");
+}
+
 // ------------------------------------------------------------------------
 
 export function renderInsights(state) {
   renderHeatmap(state);
   renderWindowStart(state);
+  renderLockouts(state);
 }

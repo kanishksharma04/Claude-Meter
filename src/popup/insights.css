@@ -6,6 +6,10 @@
   font-size: 11px;
 }
 
+.insight-summary:empty {
+  display: none;
+}
+
 .insight-lead {
   margin: 0;
   line-height: 1.45;
@@ -60,4 +64,38 @@
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* ------------------------------------------------------------- lockouts -- */
+
+.lockout-table {
+  width: 100%;
+  margin-top: 10px;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lockout-table :is(th, td) {
+  padding: 3px 10px 3px 0;
+  text-align: left;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.lockout-table thead th {
+  color: var(--muted);
+}
+
+.lockout-bar-cell {
+  width: 40%;
+  padding-right: 0;
+}
+
+.lockout-bar {
+  display: block;
+  height: 6px;
+  min-width: 0;
+  border-radius: 999px;
+  background: var(--danger);
 }

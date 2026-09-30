@@ -2,7 +2,7 @@
 // Shared by the background worker, popup, options, and debug pages.
 
 import { appendMessage, prunePending } from "./message-cost.js";
-import { addLimitHit } from "./limit-hits.js";
+import { addLimitHit, observeFullBuckets } from "./limit-hits.js";
 import { DEFAULT_BUCKET_PREFS } from "./bucket-prefs.js";
 import { buildDemoState, buildDemoAnalytics } from "./demo-data.js";
 import { foldSnapshot, buildUsageLog } from "./usage-log.js";
@@ -192,6 +192,13 @@ export async function pushLimitHit(hit) {
   const next = addLimitHit(limitHits, hit);
   await chrome.storage.local.set({ limitHits: next });
   return next;
+}
+
+/** Logs a lockout for any limit this snapshot shows as full and the log doesn't know about yet. */
+export async function noteFullBuckets(snapshot) {
+  const { limitHits } = await chrome.storage.local.get("limitHits");
+  const next = observeFullBuckets(limitHits, snapshot);
+  if (next !== (limitHits ?? [])) await chrome.storage.local.set({ limitHits: next });
 }
 
 /** Pause alerts until the given time; 0 resumes them. */

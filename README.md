@@ -158,6 +158,11 @@ record per hour, eight weeks deep — and builds its analytics from that:
   one will do. Your session then resets at 12:00 PM…", with the resulting windows and
   how full each would get. It plans for today until that time has passed, then for
   tomorrow, and says so when your usual start is already fine.
+- **Lockout statistics** — how many times a limit ran out and how long that left you
+  blocked, for each of the last four weeks, plus which limit it usually is. Blocked
+  time runs from when the lockout was first seen to its reset; two limits exhausted at
+  once count once. A limit that a refresh finds at 100% is now logged as a lockout
+  even if no message was refused in this browser.
 
 ## Accessibility
 
@@ -257,6 +262,7 @@ claudemeter/
 │   │   ├── conversation-costs.js      # per-chat totals + ranking, derived from the message log
 │   │   ├── burn-rate.js               # weekly %/hr from history + the model-switch hint
 │   │   ├── limit-hits.js              # "limit reached" log: dedupe per lockout + summary
+│   │   ├── lockout-stats.js           # limit-hit log -> lockouts and time blocked per week
 │   │   ├── history-chart.js           # snapshot history -> line-chart series + SVG paths
 │   │   ├── usage-log.js               # hourly rollup of every reading, kept for eight weeks
 │   │   ├── heatmap.js                 # usage log -> weekday × hour averages
@@ -346,8 +352,9 @@ MessageCost = {
 LimitHit = {
   at: number,                  // epoch ms of the first refused/flagged message
   lastAt: number,              // ...and of the most recent one in the same lockout
-  attempts: number,            // messages sent into this lockout
-  source: "rejected" | "reply",// HTTP 429, or the reply stream's message_limit event
+  attempts: number,            // messages sent into this lockout (0 for "observed")
+  source: "rejected" | "reply" | "observed", // HTTP 429, the reply stream's message_limit
+                               // event, or a refresh that found the limit at 100%
   claim: string | null,        // claude.ai's name for the limit, e.g. "five_hour"
   resetsAt: number | null,     // from the response, else from the usage snapshot
   conversationId: string | null,
@@ -430,8 +437,13 @@ written when Developer mode is on, from Options.
   messages sent through `fetch` in a tab with the extension loaded are measured.
 - Limit hits are recognised by the `exceeded_limit` marker claude.ai currently puts in
   its 429 body and in the reply stream. A bare 429 with no readable body is still
-  logged, with the reset time borrowed from the usage snapshot. Hits that happen in
-  another browser, the desktop/mobile apps, or Claude Code aren't seen.
+  logged, with the reset time borrowed from the usage snapshot. Refusals that happen in
+  another browser, the desktop/mobile apps, or Claude Code aren't seen as such — but
+  the limit they exhausted shows up at 100% on the next refresh and is logged then.
+- Time blocked is measured from when ClaudeMeter first saw the lockout, so a limit
+  that ran out while the browser was closed is counted from the next refresh, and one
+  with no known reset time counts as a lockout but adds no blocked time. Being
+  "blocked" on a weekly model limit still leaves the other models usable.
 - The model-switch hint needs about ten minutes of history to measure a pace; before
   that it falls back to "fullest weekly limit". It only appears when ClaudeMeter can
   tell which model you're on (from the model picker or the last message sent).

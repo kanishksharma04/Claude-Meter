@@ -11,6 +11,7 @@ import {
   pushMessageCost,
   setModelHint,
   pushLimitHit,
+  noteFullBuckets,
   setSnoozeUntil,
   setDemoState,
 } from "../lib/storage.js";
@@ -239,6 +240,7 @@ async function applyDemoMode(on) {
 /** Everything that has to happen whenever a new reading lands, whichever way it arrived. */
 async function applySnapshot(snapshot) {
   await setLatestSnapshot(snapshot);
+  await noteFullBuckets(snapshot);
   await updateToolbar(snapshot);
   await updateModelHint();
 }

@@ -146,6 +146,7 @@ const WEEKLY_PER_SESSION_POINT = { "All models": 0.085, Opus: 0.13 };
  */
 function simulateHours(from, to, weeklyResetsAt, weeklyAt) {
   const hours = [];
+  const lockouts = [];
   let session = 0;
   let windowEnd = 0;
   let weekEnd = weeklyResetsAt;
@@ -172,6 +173,10 @@ function simulateHours(from, to, weeklyResetsAt, weeklyAt) {
     const burn = Math.min(want, 100 - session);
     session += burn;
     used += burn;
+    // Wanting more than the window had left is a lockout, from part-way through this hour.
+    if (burn < want && lockouts.at(-1)?.resetsAt !== windowEnd) {
+      lockouts.push({ at: t + Math.round((burn / want) * 50) * MIN, resetsAt: windowEnd });
+    }
 
     if (hour >= FIRST_HOUR) hours.push({ t, burn, peak: session, used, weekEnd });
   }
@@ -179,7 +184,7 @@ function simulateHours(from, to, weeklyResetsAt, weeklyAt) {
   const reached = hours.at(-1)?.used ?? 0;
   const levels = {}; // label -> level at the previous record
   let lastWeekEnd = null;
-  return hours.map(({ t, burn, peak, used: soFar, weekEnd: end }) => {
+  const records = hours.map(({ t, burn, peak, used: soFar, weekEnd: end }) => {
     if (end !== lastWeekEnd) for (const label of Object.keys(weeklyAt)) levels[label] = 0;
     lastWeekEnd = end;
     const weekly = {};
@@ -193,22 +198,40 @@ function simulateHours(from, to, weeklyResetsAt, weeklyAt) {
     }
     return { t, n: 12, peak, burn, weekly };
   });
+  return { records, lockouts };
 }
 
 /**
- * @param {{ history: object[] }} demo - what buildDemoState() returned
- * @returns {{ usageLog: object[] }}
+ * @param {{ history: object[], limitHits: object[] }} demo - what buildDemoState() returned
+ * @returns {{ usageLog: object[], limitHits: object[] }}
  */
 export function buildDemoAnalytics(demo) {
   const [first] = demo.history;
+  const now = demo.history.at(-1).fetchedAt;
   const to = hourStart(first.fetchedAt);
   const weeklyAt = Object.fromEntries(first.weekly.map((b) => [b.label, b.percentUsed]));
 
-  let usageLog = simulateHours(to - LOG_SPAN, to, first.weekly[0].resetsAt, weeklyAt);
+  const past = simulateHours(to - LOG_SPAN, to, first.weekly[0].resetsAt, weeklyAt);
+  let usageLog = past.records;
   let previous = null;
   for (const snapshot of demo.history) {
     usageLog = foldSnapshot(usageLog, previous, snapshot);
     previous = snapshot;
   }
-  return { usageLog };
+
+  // The last week's lockouts are the stored demo ones, which the page script on claude.ai shows too.
+  const olderHits = past.lockouts
+    .filter((lockout) => lockout.at < now - 7 * DAY)
+    .map(({ at, resetsAt }, index) => ({
+      at,
+      lastAt: at + (index % 3) * 4 * MIN,
+      attempts: 1 + (index % 3),
+      source: "rejected",
+      claim: "five_hour",
+      resetsAt,
+      conversationId: CHATS[0].id,
+      model: "claude-opus-4-5",
+    }));
+
+  return { usageLog, limitHits: [...olderHits, ...demo.limitHits] };
 }

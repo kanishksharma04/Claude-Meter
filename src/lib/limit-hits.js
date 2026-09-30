@@ -1,6 +1,9 @@
-// A log of the times claude.ai actually said "limit reached" — either by
-// rejecting a message (HTTP 429) or by flagging the reply that used up the
-// last of the allowance. Detected in the page by src/content/inject-hook.js.
+// A log of the times a limit ran out. Most are claude.ai actually saying "limit
+// reached" — by rejecting a message (HTTP 429) or by flagging the reply that
+// used up the last of the allowance — detected in the page by
+// src/content/inject-hook.js. The rest are "observed": a refresh found a limit
+// at 100% with nothing refused in this browser (it ran out somewhere else, or
+// you stopped in time).
 
 export const MAX_LIMIT_HITS = 100;
 
@@ -8,6 +11,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** Hits with no reset time are folded into the previous one if they're this close together. */
 const SAME_LOCKOUT_MS = 10 * 60 * 1000;
 const RESET_TOLERANCE_MS = 60 * 1000;
+/** The usage endpoint's reset times wobble more than the page's do. */
+const OBSERVED_TOLERANCE_MS = 5 * 60 * 1000;
 
 /** claude.ai names the exhausted limit after the usage endpoint's bucket keys ("five_hour", "seven_day_opus"). */
 export function claimLabel(claim) {
@@ -51,6 +56,9 @@ export function addLimitHit(list, hit, max = MAX_LIMIT_HITS) {
   if (sameLockout(previous, hit)) {
     hits[hits.length - 1] = {
       ...previous,
+      // A refused message says more about the lockout than having merely seen the limit full.
+      source: previous.source === "observed" ? hit.source : previous.source,
+      claim: previous.claim ?? hit.claim,
       resetsAt: previous.resetsAt ?? hit.resetsAt,
       attempts: previous.attempts + 1,
       lastAt: hit.at,
@@ -60,6 +68,47 @@ export function addLimitHit(list, hit, max = MAX_LIMIT_HITS) {
 
   hits.push({ ...hit, attempts: 1, lastAt: hit.at });
   return hits.slice(-max);
+}
+
+/** The usage-endpoint key a bucket came from — the same names claude.ai uses for its claims. */
+function claimFor(label, isSession) {
+  if (isSession) return "five_hour";
+  return label === "All models" ? "seven_day" : `seven_day_${label.toLowerCase().replace(/\s+/g, "_")}`;
+}
+
+/**
+ * Logs a lockout for every limit the snapshot shows at 100% that isn't in the
+ * list yet (matched by reset time). Returns the same array when nothing is new.
+ */
+export function observeFullBuckets(list, snapshot, max = MAX_LIMIT_HITS) {
+  let hits = list ?? [];
+  const buckets = [
+    ...(snapshot?.session ? [{ ...snapshot.session, claim: claimFor(null, true) }] : []),
+    ...(snapshot?.weekly ?? []).map((bucket) => ({ ...bucket, claim: claimFor(bucket.label, false) })),
+  ];
+
+  for (const bucket of buckets) {
+    if (bucket.percentUsed < 100 || bucket.resetsAt == null || bucket.resetsAt <= snapshot.fetchedAt) continue;
+    const known = hits.some(
+      (hit) => hit.resetsAt != null && Math.abs(hit.resetsAt - bucket.resetsAt) <= OBSERVED_TOLERANCE_MS
+    );
+    if (known) continue;
+
+    hits = [
+      ...hits,
+      {
+        at: snapshot.fetchedAt,
+        lastAt: snapshot.fetchedAt,
+        attempts: 0, // nothing was refused — the limit was simply found full
+        source: "observed",
+        claim: bucket.claim,
+        resetsAt: bucket.resetsAt,
+        conversationId: null,
+        model: null,
+      },
+    ].slice(-max);
+  }
+  return hits;
 }
 
 /**

@@ -307,7 +307,11 @@ function renderLimitHits(limitHits) {
   limitHitsEl.textContent =
     `Limit reached ${last7Days}× in the last 7 days · last ${timeAgo(last.lastAt)}` + (which ? ` (${which})` : "");
   limitHitsEl.title =
-    last.attempts > 1 ? `${last.attempts} messages were sent into that lockout.` : "Detected from claude.ai's response.";
+    last.attempts > 1
+      ? `${last.attempts} messages were sent into that lockout.`
+      : last.attempts === 0
+        ? "Seen at 100% when usage was refreshed; no message was refused in this browser."
+        : "Detected from claude.ai's response.";
 }
 
 function svgEl(tag, attrs) {
