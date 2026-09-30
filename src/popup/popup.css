@@ -214,6 +214,11 @@ hr {
   font-size: 11px;
 }
 
+/* The forecast says this limit runs out before it resets. */
+.forecast.full {
+  color: var(--danger);
+}
+
 /* Today's share of a weekly limit has been spent. */
 .budget-line.over {
   color: var(--warn);
@@ -274,7 +279,7 @@ hr {
    width and colour that would give the number away. Screen readers still get
    the real values — this hides what is on screen, not what the user can know. */
 
-[data-privacy="on"] :is(.usage-pct, #lastMessage, .budget-line, .chat-list, #limitHits, #historyBody, #planBadge, .insight-body) {
+[data-privacy="on"] :is(.usage-pct, #lastMessage, .forecast, .budget-line, .chat-list, #limitHits, #historyBody, #planBadge, .insight-body) {
   filter: blur(5px);
   user-select: none;
 }

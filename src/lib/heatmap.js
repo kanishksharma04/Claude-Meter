@@ -13,12 +13,13 @@ export function weekdayIndex(date) {
 }
 
 /**
+ * Averages some per-hour quantity over every slot of the week.
  * @param {Array<object>} log - HourRecords (lib/usage-log.js)
- * @returns {{ cells: number[][], max: number, days: number, busiest: Array<{ day: number, hour: number, value: number }> }}
- *   cells[day][hour] is the average session %-points used in that slot; `days`
- *   is how many calendar days the averages rest on.
+ * @param {(record: object) => number} pick - the quantity to average, e.g. session points used
+ * @returns {{ cells: number[][], days: number }} cells[day][hour]; `days` is how many
+ *   calendar days the averages rest on
  */
-export function buildHeatmap(log) {
+export function averageBySlot(log, pick) {
   const sums = WEEKDAYS.map(() => new Array(24).fill(0));
   const dates = WEEKDAYS.map(() => new Set());
 
@@ -26,19 +27,38 @@ export function buildHeatmap(log) {
     const date = new Date(record.t);
     const day = weekdayIndex(date);
     dates[day].add(date.toDateString());
-    sums[day][date.getHours()] += record.burn ?? 0;
+    sums[day][date.getHours()] += pick(record) ?? 0;
   }
 
-  // An hour with no record on a day we did see counts as zero use, not as missing.
-  const cells = sums.map((row, day) =>
-    row.map((sum) => (dates[day].size > 0 ? Math.round((sum / dates[day].size) * 10) / 10 : 0))
-  );
+  const newest = log?.length ? new Date(log.at(-1).t) : null;
+  return {
+    cells: sums.map((row, day) =>
+      row.map((sum, hour) => {
+        // An hour with no record on a day we did see counts as zero use, not as
+        // missing — except the newest day's later hours, which haven't happened yet.
+        const unreached = newest && weekdayIndex(newest) === day && hour > newest.getHours() ? 1 : 0;
+        const seen = dates[day].size - unreached;
+        return seen > 0 ? sum / seen : 0;
+      })
+    ),
+    days: dates.reduce((total, set) => total + set.size, 0),
+  };
+}
+
+/**
+ * @param {Array<object>} log - HourRecords (lib/usage-log.js)
+ * @returns {{ cells: number[][], max: number, days: number, busiest: Array<{ day: number, hour: number, value: number }> }}
+ *   cells[day][hour] is the average session %-points used in that slot
+ */
+export function buildHeatmap(log) {
+  const average = averageBySlot(log, (record) => record.burn);
+  const cells = average.cells.map((row) => row.map((value) => Math.round(value * 10) / 10));
 
   const slots = cells.flatMap((row, day) => row.map((value, hour) => ({ day, hour, value })));
   return {
     cells,
     max: Math.max(0, ...slots.map((slot) => slot.value)),
-    days: dates.reduce((total, set) => total + set.size, 0),
+    days: average.days,
     busiest: slots
       .filter((slot) => slot.value > 0)
       .sort((a, b) => b.value - a.value)

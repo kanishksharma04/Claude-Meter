@@ -10,6 +10,7 @@ import { arrangeBuckets, moveBucket, togglePinned, toggleHidden } from "../lib/b
 import { applyTheme, onSystemThemeChange } from "../lib/theme.js";
 import { shareRows, buildShareText, shareCardSize, drawShareCard } from "../lib/share.js";
 import { weeklyBudget, describeBudget } from "../lib/budget.js";
+import { forecastSession, forecastWeekly, describeForecast, explainForecast } from "../lib/forecast.js";
 import { renderInsights } from "./insights.js";
 
 // This page serves more than one surface: the toolbar popup; as
@@ -101,6 +102,16 @@ function lastMessageText(messageLog) {
   return `Last message: ${approx}${formatCost(last.session)} of session · ${timeAgo(last.at)}`;
 }
 
+/** Where this bucket is heading by its reset, per the forecast setting; null when off or unknowable. */
+function bucketForecast(kind, bucket) {
+  const { settings, usageLog, latestSnapshot } = latestState;
+  if (settings.forecast === "off") return null;
+  const options = { mode: settings.forecast };
+  return kind === "session"
+    ? forecastSession(latestSnapshot, usageLog, options)
+    : forecastWeekly(bucket, usageLog, options);
+}
+
 /**
  * One bucket row. `group` is where it is being shown ("pinned" | "rest" | "hidden"),
  * `position` its index and group size — both only matter for the arrange tools.
@@ -124,6 +135,17 @@ function buildBucketRow(entry, group, position, messageLog) {
   const liveLabel = bucket.resetsAt != null ? formatDuration(Date.now(), bucket.resetsAt) : null;
   const sub = row.querySelector(".usage-sub");
   sub.textContent = `Resets in ${liveLabel ?? bucket.resetsInLabel}`;
+
+  // "Resets in 3 days 6 hr · on course for 84%"
+  const forecast = bucketForecast(kind, bucket);
+  if (forecast) {
+    const phrase = document.createElement("span");
+    phrase.className = "forecast";
+    phrase.classList.toggle("full", forecast.fullAt != null);
+    phrase.textContent = describeForecast(forecast);
+    phrase.title = explainForecast(forecast);
+    sub.append(" · ", phrase);
+  }
 
   // The bar is the meter: name it after its label, give it a spoken value, and
   // hang the reset time off it as its description.

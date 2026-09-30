@@ -154,6 +154,21 @@
         </span>
         <input type="checkbox" id="weeklyBudgetToggle" />
       </label>
+      <label class="row">
+        <span>
+          Forecast
+          <small>
+            Where each limit is heading by its reset. "Your usual week" adds up what you typically use in each
+            coming hour, so nights and weekends count for what they are; it needs a week of history and uses the
+            straight line until then.
+          </small>
+        </span>
+        <select id="forecastSelect">
+          <option value="profile">From your usual week</option>
+          <option value="linear">Straight line</option>
+          <option value="off">Off</option>
+        </select>
+      </label>
     </section>
 
     <section class="card">

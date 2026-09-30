@@ -36,6 +36,7 @@ export const DEFAULT_SETTINGS = {
   lockoutOverlay: true, // live "back at 4:30 PM" countdown on claude.ai while a limit is exhausted
   messageCost: true, // measure session % before/after each reply (two extra usage fetches per message)
   weeklyBudget: true, // "12% a day until reset · 9% used today" under each weekly limit (lib/budget.js)
+  forecast: "profile", // where each limit is heading: "profile" (your usual week) | "linear" | "off" (lib/forecast.js)
 };
 
 export const DEFAULT_STATE = {

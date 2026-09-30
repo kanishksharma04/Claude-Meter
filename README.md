@@ -145,6 +145,12 @@ record per hour, eight weeks deep — and builds its analytics from that:
   day until reset · 9% used today". The daily figure is what was left at the start of
   today divided by the days until the reset, so it holds still while you work and only
   re-plans at midnight; go past it and the line turns amber and says by how much.
+- **Time-of-day-aware forecast** — next to every reset time: "on course for 84%", or
+  "full around Thu 3:10 PM" in red when the limit would run out first. Instead of
+  extending the current pace in a straight line — which at 3 PM on a working day
+  assumes you'll keep going all night and all weekend — it adds up what you
+  *typically* use in each coming hour of the week, and scales the rest of today by
+  how today compares with a usual one. Hover it for the reasoning.
 
 ## Accessibility
 
@@ -248,6 +254,7 @@ claudemeter/
 │   │   ├── usage-log.js               # hourly rollup of every reading, kept for eight weeks
 │   │   ├── heatmap.js                 # usage log -> weekday × hour averages
 │   │   ├── budget.js                  # weekly limit -> % a day until reset, and today's share used
+│   │   ├── forecast.js                # level at reset from the typical hourly profile (or a straight line)
 │   │   ├── gauge-icon.js              # draws the ring-gauge toolbar icon onto any 2D canvas
 │   │   ├── severity.js                # amber/red cut-offs + colours shared by every meter
 │   │   ├── bucket-prefs.js            # popup bucket order / pinned / hidden + the moves between them
@@ -306,7 +313,7 @@ Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `his
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
 `notifyThresholds`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
-`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `weeklyBudget`). The current model-switch hint, if any, is kept
+`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `weeklyBudget`, `forecast`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300), and the mini window's last position and size
 are kept under `miniWindowBounds`:
@@ -436,6 +443,11 @@ written when Developer mode is on, from Options.
   readings isn't assigned to any hour, because there is no telling when it happened.
   The heatmap needs a few weeks before its averages mean much; the header says how
   many days it rests on.
+- The forecast is an expectation, not a promise: it assumes the coming hours look like
+  the same hours in past weeks. It needs seven days on record before it uses the
+  hourly profile (the tooltip says which method produced the figure), and "today is
+  running at N× your usual" is capped between 0.5× and 2×. A straight-line forecast
+  isn't offered in the first 2% of a window, where one message would swing it wildly.
 - "Used today" in the weekly budget is the limit's level now minus its level at local
   midnight. If ClaudeMeter has no reading from before midnight it uses the level just
   before today's first reading, and with no readings today it shows the budget alone.
@@ -457,6 +469,7 @@ written when Developer mode is on, from Options.
 - **Measure what each message costs** — on by default; turning it off also stops the
   two extra usage reads around each message.
 - **Weekly budget** — show/hide the "% a day until reset" line under each weekly limit.
+- **Forecast** — from your usual week (default), straight line, or off.
 - **Icon shows** — gauge ring (default), badge text, both, or nothing.
 - **Keyboard shortcuts** — shows the current bindings; "Change shortcuts…" opens
   `chrome://extensions/shortcuts`.
