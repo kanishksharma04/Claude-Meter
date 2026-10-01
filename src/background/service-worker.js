@@ -34,10 +34,12 @@ import { describeSpike } from "../lib/spikes.js";
 import { tokensOf } from "../lib/value.js";
 import { crossedThreshold } from "../lib/thresholds.js";
 import { paceAlert, describePace } from "../lib/pace.js";
+import { resetsToAnnounce, nextResetCheck, describeReset } from "../lib/reset-alert.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
 const ALARM_NAME = "claudemeter-refresh-check";
 const SNOOZE_ALARM_NAME = "claudemeter-snooze-end";
+const RESET_ALARM_NAME = "claudemeter-reset-check";
 // How long a keyboard shortcut's confirmation stays on the toolbar badge.
 const BADGE_FLASH_MS = 1500;
 const USAGE_ENDPOINT_PATTERN = /\/api\/organizations\/[^/]+\/usage(?:[/?]|$)/;
@@ -256,11 +258,8 @@ async function refreshUsage() {
   try {
     if ((await getSettings()).demoMode) return await refreshDemo();
 
-    const { latestSnapshot: previous } = await getAll();
     const snapshot = await fetchUsageSnapshot();
     await applySnapshot(snapshot);
-    await maybeNotify(previous, snapshot);
-    await watchPace();
     console.log(LOG_PREFIX, "refreshed usage snapshot");
     return { ok: true, snapshot };
   } catch (err) {
@@ -295,12 +294,19 @@ async function applyDemoMode(on) {
 
 /** Everything that has to happen whenever a new reading lands, whichever way it arrived. */
 async function applySnapshot(snapshot) {
+  const { latestSnapshot: previous = null } = await chrome.storage.local.get("latestSnapshot");
   await setLatestSnapshot(snapshot);
   if (snapshot.extraUsage) await setExtraUsage(snapshot.extraUsage, snapshot.fetchedAt);
   await noteFullBuckets(snapshot);
-  await watchForSpike(snapshot);
   await updateToolbar(snapshot);
   await updateModelHint();
+
+  // Alerts, each comparing this reading with what came before it.
+  await maybeNotify(previous, snapshot);
+  await announceResets(previous, snapshot);
+  await watchForSpike(snapshot);
+  await watchPace();
+  await scheduleResetCheck(snapshot);
 }
 
 // ------------------------------------------------------------- model hint --
@@ -429,6 +435,35 @@ async function watchForSpike(snapshot) {
     message: `${spike.label} jumped: ${describeSpike(spike)}.`,
     discreet: "A sudden jump in usage was detected.",
   });
+}
+
+/** "Your session has reset" — for limits that were near their ceiling, and only when it just happened (lib/reset-alert.js). */
+async function announceResets(previousSnapshot, snapshot) {
+  if (!previousSnapshot) return;
+  const { resetAlertPercent } = await getSettings();
+  const resets = resetsToAnnounce(bucketsOf(previousSnapshot), bucketsOf(snapshot), {
+    percent: resetAlertPercent,
+    gapMs: snapshot.fetchedAt - previousSnapshot.fetchedAt,
+    at: snapshot.fetchedAt,
+  });
+  for (const reset of resets) {
+    await sendAlert({
+      id: `reset-${reset.label}-${snapshot.fetchedAt}`,
+      message: describeReset(reset),
+      discreet: "A usage limit has reset.",
+    });
+  }
+}
+
+/**
+ * A limit that is high enough to be announced gets a refresh timed for just
+ * after it resets — otherwise the news waits for the next scheduled one.
+ */
+async function scheduleResetCheck(snapshot) {
+  const { resetAlertPercent } = await getSettings();
+  const when = nextResetCheck(bucketsOf(snapshot), { percent: resetAlertPercent });
+  if (when) chrome.alarms.create(RESET_ALARM_NAME, { when });
+  else chrome.alarms.clear(RESET_ALARM_NAME);
 }
 
 /** Says so, once a day, when today is running well above a usual one (lib/pace.js). */
@@ -674,7 +709,7 @@ chrome.runtime.onStartup.addListener(() => {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === SNOOZE_ALARM_NAME) setSnoozeUntil(0);
-  if (alarm.name === ALARM_NAME) refreshUsage();
+  if (alarm.name === ALARM_NAME || alarm.name === RESET_ALARM_NAME) refreshUsage();
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -687,6 +722,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
     if (changes.settings.oldValue?.modelHintPercent !== changes.settings.newValue?.modelHintPercent) {
       updateModelHint();
+    }
+    if (changes.settings.oldValue?.resetAlertPercent !== changes.settings.newValue?.resetAlertPercent) {
+      getAll().then(({ latestSnapshot }) => latestSnapshot && scheduleResetCheck(latestSnapshot));
     }
     if (changes.settings.oldValue?.actionOpens !== changes.settings.newValue?.actionOpens) {
       applyActionSurface();

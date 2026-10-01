@@ -21,6 +21,7 @@ export const DEFAULT_SETTINGS = {
   notificationsEnabled: false,
   notifyThresholds: [80, 95], // any whole percentages, up to eight (lib/thresholds.js)
   paceAlertFactor: 2, // alert when today runs at this many times the usual pace; 0 = off (lib/pace.js)
+  resetAlertPercent: 90, // announce a reset only for a limit that had reached this level; 0 = off (lib/reset-alert.js)
   theme: "auto", // "auto" | "light" | "dark" | "contrast"
   accent: "clay", // preset name from lib/theme.js
   warnAt: 80, // meters turn amber at this %…

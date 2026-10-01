@@ -226,6 +226,12 @@ privacy mode (no figures in the text).
   against a usual 37% by now." Usual means what the same hours typically see on this
   weekday, so a heavy Monday morning is compared with Monday mornings. Set it to
   1.5×, 2× (default) or 3×, or off.
+- **Smart reset alert** — "Your session has reset — it was used up, and you're back."
+  Only for a limit you were actually waiting on: one that had reached 90% (or 80%, or
+  only a full lockout — your choice) when its window rolled over. A limit that reset
+  from 40% says nothing, and neither does one that reset hours ago while the browser
+  was closed. When a limit is that high, ClaudeMeter schedules a refresh for just
+  after its reset time, so the alert arrives as it happens.
 
 ## Accessibility
 
@@ -350,6 +356,7 @@ claudemeter/
 │   │   ├── snooze.js                  # snooze options -> end time, and the "is it snoozed" check
 │   │   ├── thresholds.js              # the alert levels: any 1–100, tidied, and which one a jump crossed
 │   │   ├── pace.js                    # today against the usual for these hours -> the once-a-day pace alert
+│   │   ├── reset-alert.js             # which resets are worth announcing, and when to look for the next
 │   │   ├── share.js                   # usage summary as text, and as a card drawn on a canvas
 │   │   ├── demo-data.js               # the deterministic made-up dataset behind demo mode
 │   │   ├── extra-usage.js             # extra-usage spend: day-by-day record, "today", wording
@@ -412,7 +419,7 @@ a second endpoint, below), with the month's running total at the end of each day
 Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `history`
 (last 500 snapshots) that feeds the dashboard chart and the burn-rate maths. Settings
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
-`notifyThresholds`, `paceAlertFactor`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
+`notifyThresholds`, `paceAlertFactor`, `resetAlertPercent`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
 `longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
@@ -518,6 +525,8 @@ written when Developer mode is on, from Options.
 
 - **Background alarm**: fetches on the interval set in Options (default 5 min),
   regardless of whether a claude.ai tab is open.
+- **At a reset**: when a limit is high enough for the reset alert, one extra fetch is
+  timed for ten seconds after its reset time.
 - **Popup open**: triggers a silent background refresh every time you open the popup,
   so numbers are current without a manual click.
 - **Manual refresh**: the refresh icon in the popup header.
@@ -626,6 +635,10 @@ written when Developer mode is on, from Options.
   claude.ai tab the page hook isn't running in, counts as elsewhere. Usage that built
   up while the browser was closed is counted as elsewhere but, having no known hour,
   is left out of the heatmap and the forecasts.
+- The reset alert goes by the last reading before the reset: a limit that climbed from
+  70% to 95% and reset inside one refresh interval was last seen below the bar and
+  stays silent. A reset is announced only within 15 minutes of happening, so one that
+  occurs while the browser is closed or the computer asleep is never announced.
 - The pace alert needs seven days on record before it knows what usual is, and stays
   quiet until the day has something to compare: at least 10 points of usual usage for
   the hours so far and 20 actually used. Today's own hours are part of the average it
@@ -668,6 +681,7 @@ written when Developer mode is on, from Options.
   fires on the transition, not on every fetch above a threshold. While alerts are
   snoozed this card says until when and offers Resume.
 - **Pace alert** — Off, or at 1.5× / 2× (default) / 3× your usual pace for the day so far.
+- **Reset alert** — Off, or when the limit had reached 80% / 90% (default) / 100%.
 - **Usage pill next to the composer** — show/hide the in-page pill on claude.ai.
 - **Usage in the tab** — Off, title prefix (default), favicon, or both.
 - **Warn before sending** — Off, or 50 / 70 / 80 / 90 / 95%; the usage level at which

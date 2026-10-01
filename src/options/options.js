@@ -15,6 +15,7 @@ const thresholdForm = document.getElementById("thresholdForm");
 const thresholdInput = document.getElementById("thresholdInput");
 const thresholdNote = document.getElementById("thresholdNote");
 const paceAlertSelect = document.getElementById("paceAlertSelect");
+const resetAlertSelect = document.getElementById("resetAlertSelect");
 const inlinePillToggle = document.getElementById("inlinePillToggle");
 const tabIndicatorSelect = document.getElementById("tabIndicatorSelect");
 const preSendWarnSelect = document.getElementById("preSendWarnSelect");
@@ -191,6 +192,7 @@ async function init() {
   renderSnooze();
 
   paceAlertSelect.value = String(settings.paceAlertFactor);
+  resetAlertSelect.value = String(settings.resetAlertPercent);
   renderThresholds(settings.notifyThresholds);
 
   inlinePillToggle.checked = settings.inlinePill;
@@ -243,6 +245,10 @@ notificationsToggle.addEventListener("change", async () => {
 
 paceAlertSelect.addEventListener("change", async () => {
   await setSettings({ paceAlertFactor: Number(paceAlertSelect.value) });
+});
+
+resetAlertSelect.addEventListener("change", async () => {
+  await setSettings({ resetAlertPercent: Number(resetAlertSelect.value) });
 });
 
 thresholdForm.addEventListener("submit", async (event) => {

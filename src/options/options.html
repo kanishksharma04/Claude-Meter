@@ -66,6 +66,21 @@
           <option value="3">At 3× usual</option>
         </select>
       </label>
+      <label class="row alert-option">
+        <span>
+          Reset alert
+          <small>
+            Tells you a limit has reset — but only one you were close to or locked out of, and only as it happens,
+            not hours later.
+          </small>
+        </span>
+        <select id="resetAlertSelect">
+          <option value="0">Off</option>
+          <option value="80">If it had reached 80%</option>
+          <option value="90">If it had reached 90%</option>
+          <option value="100">Only if I was locked out</option>
+        </select>
+      </label>
       <div class="row" id="snoozeRow" hidden>
         <span>
           <span id="snoozeInfo"></span>
