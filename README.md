@@ -232,6 +232,11 @@ privacy mode (no figures in the text).
   from 40% says nothing, and neither does one that reset hours ago while the browser
   was closed. When a limit is that high, ClaudeMeter schedules a refresh for just
   after its reset time, so the alert arrives as it happens.
+- **Webhooks** — opt-in delivery of every alert to **Slack**, **Discord** or **ntfy**
+  as well as the desktop. Paste the address in Options, switch it on, and the browser
+  asks permission for that one site; "Send test" tries it straight away, and the card
+  shows how the last delivery went. Only the alert's text is sent — in privacy mode,
+  the same figure-free wording the notification uses.
 
 ## Accessibility
 
@@ -268,7 +273,8 @@ These calls are made directly from the background service worker with
 forged by the extension** — `credentials: "include"` just tells the browser to attach
 whatever cookies it already holds for `claude.ai`, exactly as it would for a normal
 page request from an open tab. This requires the `https://claude.ai/*` host
-permission, which is the only host permission this extension requests.
+permission, which is the only host permission this extension has unless you switch
+on a webhook (below).
 
 If you're not logged into claude.ai in this browser, fetches fail with
 `NOT_LOGGED_IN` and the popup shows an error state — the extension cannot "log in" or
@@ -279,8 +285,10 @@ matching usage request claude.ai's own UI happens to make (e.g. if you open the
 account usage panel yourself) and reuses that response immediately, without waiting
 for the next scheduled fetch. See `src/content/inject-hook.js`.
 
-Nothing is ever sent to any third-party server — everything stays in
-`chrome.storage.local` on your machine.
+Nothing is sent to any third-party server unless you set up a webhook — everything
+stays in `chrome.storage.local` on your machine. A webhook is the one exception, and
+only what you opt into: the text of each alert, posted to the Slack, Discord or ntfy
+address you gave, after the browser has asked you to allow that one site.
 
 ## Tech stack
 
@@ -293,6 +301,9 @@ Nothing is ever sent to any third-party server — everything stays in
 - **`chrome.storage.local`** — the only persistence layer; schema in `src/lib/storage.js`
 - **`chrome.alarms`** — periodic background refresh, independent of any open tab
 - **`chrome.notifications`** — optional desktop alerts on usage-threshold crossings
+- **`chrome.permissions`** — the four webhook hosts are `optional_host_permissions`,
+  requested one at a time from Options when a webhook is switched on, and given back
+  when it is switched off
 - **`chrome.action`** — toolbar popup, hover title, badge text, and the gauge icon,
   which the service worker draws on an `OffscreenCanvas` and hands to `setIcon()`
 - **`chrome.sidePanel`** — the dashboard; it is the popup page loaded as
@@ -357,6 +368,7 @@ claudemeter/
 │   │   ├── thresholds.js              # the alert levels: any 1–100, tidied, and which one a jump crossed
 │   │   ├── pace.js                    # today against the usual for these hours -> the once-a-day pace alert
 │   │   ├── reset-alert.js             # which resets are worth announcing, and when to look for the next
+│   │   ├── webhooks.js                # Slack / Discord / ntfy: address checks, request shapes, delivery
 │   │   ├── share.js                   # usage summary as text, and as a card drawn on a canvas
 │   │   ├── demo-data.js               # the deterministic made-up dataset behind demo mode
 │   │   ├── extra-usage.js             # extra-usage spend: day-by-day record, "today", wording
@@ -419,7 +431,7 @@ a second endpoint, below), with the month's running total at the end of each day
 Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `history`
 (last 500 snapshots) that feeds the dashboard chart and the burn-rate maths. Settings
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
-`notifyThresholds`, `paceAlertFactor`, `resetAlertPercent`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
+`notifyThresholds`, `paceAlertFactor`, `resetAlertPercent`, `webhooks`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
 `longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
@@ -635,6 +647,13 @@ written when Developer mode is on, from Options.
   claude.ai tab the page hook isn't running in, counts as elsewhere. Usage that built
   up while the browser was closed is counted as elsewhere but, having no known hour,
   is left out of the heatmap and the forecasts.
+- Webhooks carry your usage figures to a third party's servers; that is the point of
+  them, and why they are off until you set one up. The address is stored in
+  `chrome.storage.local` like every other setting, unencrypted. Only `ntfy.sh` itself
+  is supported, not a self-hosted ntfy server, because the extension only ever asks
+  for a fixed list of hosts. A delivery gets ten seconds and is not retried, and
+  webhooks follow the same switch, snooze and privacy mode as desktop alerts — they
+  are a second place for an alert to go, not a separate set of alerts.
 - The reset alert goes by the last reading before the reset: a limit that climbed from
   70% to 95% and reset inside one refresh interval was last seen below the bar and
   stays silent. A reset is announced only within 15 minutes of happening, so one that
@@ -682,6 +701,8 @@ written when Developer mode is on, from Options.
   snoozed this card says until when and offers Resume.
 - **Pace alert** — Off, or at 1.5× / 2× (default) / 3× your usual pace for the day so far.
 - **Reset alert** — Off, or when the limit had reached 80% / 90% (default) / 100%.
+- **Webhooks** — Slack, Discord and ntfy, each with its own switch, address and test
+  button. All off by default.
 - **Usage pill next to the composer** — show/hide the in-page pill on claude.ai.
 - **Usage in the tab** — Off, title prefix (default), favicon, or both.
 - **Warn before sending** — Off, or 50 / 70 / 80 / 90 / 95%; the usage level at which

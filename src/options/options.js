@@ -1,5 +1,6 @@
 import { getAll, getSettings, setSettings, setSnoozeUntil, clearAllData, onStorageChanged } from "../lib/storage.js";
-import { formatClock, formatHour } from "../lib/time-format.js";
+import { formatClock, formatHour, timeAgo } from "../lib/time-format.js";
+import { SERVICES, checkWebhookUrl } from "../lib/webhooks.js";
 import { isSnoozed } from "../lib/snooze.js";
 import { drawGauge } from "../lib/gauge-icon.js";
 import { normalizeCutoffs, severityColor, severityColors } from "../lib/severity.js";
@@ -104,6 +105,112 @@ function renderWorkday(settings) {
   workdayEndSelect.value = String(settings.workdayEnd);
 }
 
+// ---------------------------------------------------------------- webhooks --
+
+const webhookList = document.getElementById("webhookList");
+
+function setWebhookStatus(service, text, problem = false) {
+  const status = webhookList.querySelector(`[data-service="${service}"] .webhook-status`);
+  status.textContent = text;
+  status.classList.toggle("problem", problem);
+}
+
+/** One block per service: a switch, the address, a test button, and how the last delivery went. */
+async function renderWebhooks() {
+  const { webhooks } = await getSettings();
+  const { webhookStatus = {} } = await chrome.storage.local.get("webhookStatus");
+
+  if (webhookList.childElementCount === 0) {
+    webhookList.replaceChildren(
+      ...Object.entries(SERVICES).map(([service, spec]) => {
+        const block = document.createElement("div");
+        block.className = "webhook";
+        block.dataset.service = service;
+        block.innerHTML = `
+          <label class="row">
+            <span><span class="webhook-name"></span><small></small></span>
+            <input type="checkbox" class="webhook-toggle" />
+          </label>
+          <div class="webhook-url">
+            <input type="url" class="webhook-address" spellcheck="false" autocomplete="off" />
+            <button type="button" class="secondary inline webhook-test">Send test</button>
+          </div>
+          <small class="webhook-status" role="status"></small>`;
+        block.querySelector(".webhook-name").textContent = spec.label;
+        block.querySelector("small").textContent = spec.help;
+        const address = block.querySelector(".webhook-address");
+        address.placeholder = spec.placeholder;
+        address.setAttribute("aria-label", `${spec.label} webhook address`);
+        return block;
+      })
+    );
+  }
+
+  for (const [service, { enabled, url }] of Object.entries(webhooks)) {
+    const block = webhookList.querySelector(`[data-service="${service}"]`);
+    block.querySelector(".webhook-toggle").checked = enabled;
+    const address = block.querySelector(".webhook-address");
+    if (document.activeElement !== address) address.value = url;
+    const last = webhookStatus[service];
+    if (last && !block.querySelector(".webhook-status").textContent) {
+      setWebhookStatus(service, `Last delivery ${timeAgo(last.at)}: ${last.detail}`, !last.ok);
+    }
+  }
+}
+
+async function saveWebhook(service, change) {
+  const { webhooks } = await getSettings();
+  await setSettings({ webhooks: { ...webhooks, [service]: { ...webhooks[service], ...change } } });
+}
+
+webhookList.addEventListener("change", async (event) => {
+  const block = event.target.closest(".webhook");
+  const service = block.dataset.service;
+  const toggle = block.querySelector(".webhook-toggle");
+  const checked = checkWebhookUrl(service, block.querySelector(".webhook-address").value);
+
+  if (event.target.matches(".webhook-address")) {
+    // A changed address may be on a different host, which the earlier permission doesn't cover: start again.
+    toggle.checked = false;
+    await saveWebhook(service, { url: checked.ok ? checked.url : event.target.value.trim(), enabled: false });
+    return setWebhookStatus(service, checked.ok ? "Address saved. Switch it on to start sending." : checked.problem, !checked.ok);
+  }
+
+  if (!toggle.checked) {
+    await saveWebhook(service, { enabled: false });
+    if (checked.ok) chrome.permissions.remove({ origins: [checked.origin] }).catch(() => {});
+    return setWebhookStatus(service, "Off. Nothing is sent to it.");
+  }
+
+  if (!checked.ok) {
+    toggle.checked = false;
+    return setWebhookStatus(service, checked.problem, true);
+  }
+  // Asked straight from the click: the browser only shows its prompt in answer to a user's own action.
+  const granted = await chrome.permissions.request({ origins: [checked.origin] }).catch(() => false);
+  if (!granted) {
+    toggle.checked = false;
+    return setWebhookStatus(service, `The browser wasn't given permission to contact ${new URL(checked.url).hostname}.`, true);
+  }
+  await saveWebhook(service, { url: checked.url, enabled: true });
+  setWebhookStatus(service, "On. Alerts will be sent here too.");
+});
+
+webhookList.addEventListener("click", async (event) => {
+  if (!event.target.matches(".webhook-test")) return;
+  const service = event.target.closest(".webhook").dataset.service;
+  const checked = checkWebhookUrl(service, event.target.closest(".webhook").querySelector(".webhook-address").value);
+  if (!checked.ok) return setWebhookStatus(service, checked.problem, true);
+
+  const granted = await chrome.permissions.request({ origins: [checked.origin] }).catch(() => false);
+  if (!granted) return setWebhookStatus(service, "The browser wasn't given permission to contact that site.", true);
+
+  await saveWebhook(service, { url: checked.url });
+  setWebhookStatus(service, "Sending…");
+  const result = await chrome.runtime.sendMessage({ type: "CLAUDEMETER_TEST_WEBHOOK", service }).catch(() => null);
+  setWebhookStatus(service, result?.ok ? "Test sent. Check the channel." : `Test failed: ${result?.detail ?? "no answer from the extension."}`, !result?.ok);
+});
+
 function renderDemo(settings) {
   demoModeToggle.checked = settings.demoMode;
   demoLabelToggle.checked = settings.demoLabel;
@@ -194,6 +301,7 @@ async function init() {
   paceAlertSelect.value = String(settings.paceAlertFactor);
   resetAlertSelect.value = String(settings.resetAlertPercent);
   renderThresholds(settings.notifyThresholds);
+  renderWebhooks();
 
   inlinePillToggle.checked = settings.inlinePill;
   tabIndicatorSelect.value = settings.tabIndicator;

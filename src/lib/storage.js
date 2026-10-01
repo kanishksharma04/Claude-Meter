@@ -11,6 +11,7 @@ import { addAnnotation, removeAnnotation } from "./annotations.js";
 import { detectSpike, addSpike } from "./spikes.js";
 import { noteActivity, elsewherePoints } from "./attribution.js";
 import { foldExtraUsage } from "./extra-usage.js";
+import { DEFAULT_WEBHOOKS } from "./webhooks.js";
 
 export const MAX_DEBUG_CAPTURES = 20;
 // Enough for the dashboard chart to cover about a day at the default refresh interval.
@@ -22,6 +23,7 @@ export const DEFAULT_SETTINGS = {
   notifyThresholds: [80, 95], // any whole percentages, up to eight (lib/thresholds.js)
   paceAlertFactor: 2, // alert when today runs at this many times the usual pace; 0 = off (lib/pace.js)
   resetAlertPercent: 90, // announce a reset only for a limit that had reached this level; 0 = off (lib/reset-alert.js)
+  webhooks: DEFAULT_WEBHOOKS, // { slack | discord | ntfy: { enabled, url } } — alerts also sent there (lib/webhooks.js)
   theme: "auto", // "auto" | "light" | "dark" | "contrast"
   accent: "clay", // preset name from lib/theme.js
   warnAt: 80, // meters turn amber at this %…
@@ -164,6 +166,9 @@ function withDefaults(stored) {
     ...(stored ?? {}),
     severityColors: { ...DEFAULT_SETTINGS.severityColors, ...(stored?.severityColors ?? {}) },
     bucketPrefs: { ...DEFAULT_SETTINGS.bucketPrefs, ...(stored?.bucketPrefs ?? {}) },
+    webhooks: Object.fromEntries(
+      Object.entries(DEFAULT_WEBHOOKS).map(([service, defaults]) => [service, { ...defaults, ...(stored?.webhooks?.[service] ?? {}) }])
+    ),
   };
 }
 
@@ -230,6 +235,14 @@ export async function setExtraUsage(reading, at = Date.now()) {
     extraUsage: { ...reading, fetchedAt: at },
     extraUsageLog: foldExtraUsage(extraUsageLog, reading, at),
   });
+}
+
+/** Keeps the outcome of the latest delivery to each webhook, for Options to show. */
+export async function recordWebhookResults(results, at = Date.now()) {
+  if (results.length === 0) return;
+  const { webhookStatus = {} } = await chrome.storage.local.get("webhookStatus");
+  for (const { service, ok, detail } of results) webhookStatus[service] = { at, ok, detail };
+  await chrome.storage.local.set({ webhookStatus });
 }
 
 /** Remembers that a message was just sent, or its reply just ended, in this browser (lib/attribution.js). */

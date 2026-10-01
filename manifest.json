@@ -69,5 +69,11 @@
     }
   ],
   "permissions": ["storage", "alarms", "notifications", "sidePanel", "contextMenus"],
-  "host_permissions": ["https://claude.ai/*"]
+  "host_permissions": ["https://claude.ai/*"],
+  "optional_host_permissions": [
+    "https://hooks.slack.com/*",
+    "https://discord.com/*",
+    "https://discordapp.com/*",
+    "https://ntfy.sh/*"
+  ]
 }

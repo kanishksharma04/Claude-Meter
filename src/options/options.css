@@ -391,3 +391,43 @@ button.danger {
   gap: 6px;
   white-space: nowrap;
 }
+
+/* ------------------------------------------------------------- webhooks -- */
+
+.webhook + .webhook {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.webhook-url {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.webhook-url input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.webhook-status {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.webhook-status:empty {
+  display: none;
+}
+
+.webhook-status.problem {
+  color: var(--danger);
+}

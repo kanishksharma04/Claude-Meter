@@ -15,6 +15,7 @@ import {
   recordSpike,
   noteLocalActivity,
   setExtraUsage,
+  recordWebhookResults,
   setSnoozeUntil,
   setDemoState,
 } from "../lib/storage.js";
@@ -35,6 +36,7 @@ import { tokensOf } from "../lib/value.js";
 import { crossedThreshold } from "../lib/thresholds.js";
 import { paceAlert, describePace } from "../lib/pace.js";
 import { resetsToAnnounce, nextResetCheck, describeReset } from "../lib/reset-alert.js";
+import { deliverWebhooks } from "../lib/webhooks.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
 const ALARM_NAME = "claudemeter-refresh-check";
@@ -72,6 +74,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "CLAUDEMETER_OPEN_MINI") {
     openMiniWindow();
     return false;
+  }
+
+  if (message?.type === "CLAUDEMETER_TEST_WEBHOOK") {
+    sendToWebhooks("This is a test alert from ClaudeMeter. Real ones tell you when a limit is close.", [message.service])
+      .then(([result]) => sendResponse(result ?? { ok: false, detail: "Unknown service." }));
+    return true;
   }
 
   if (message?.type === "CLAUDEMETER_REFRESH") {
@@ -394,14 +402,29 @@ async function sendAlert({ id, message, discreet }) {
   const { settings, snoozeUntil } = await getAll();
   if (!settings.notificationsEnabled || isSnoozed(snoozeUntil)) return false;
 
+  const text = settings.privacyMode ? discreet : message;
   chrome.notifications.create(`claudemeter-${id}`, {
     type: "basic",
     iconUrl: chrome.runtime.getURL("src/icons/icon128.png"),
     title: "ClaudeMeter",
-    message: settings.privacyMode ? discreet : message,
+    message: text,
     priority: 1,
   });
+  // Awaited, so the worker isn't put to sleep with a delivery half sent.
+  await sendToWebhooks(text);
   return true;
+}
+
+/**
+ * Sends a line of text to the webhooks the user has switched on (or, for the
+ * test button, to the ones named) and remembers how each delivery went.
+ */
+async function sendToWebhooks(text, only = null) {
+  const { webhooks } = await getSettings();
+  const results = await deliverWebhooks(webhooks, { title: "ClaudeMeter", message: text }, fetch, only);
+  await recordWebhookResults(results);
+  for (const result of results.filter((r) => !r.ok)) console.warn(LOG_PREFIX, "webhook", result.service, result.detail);
+  return results;
 }
 
 async function maybeNotify(previousSnapshot, snapshot) {
