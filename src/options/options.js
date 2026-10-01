@@ -2,6 +2,18 @@ import { getAll, getSettings, setSettings, setSnoozeUntil, clearAllData, onStora
 import { formatClock, formatHour, timeAgo } from "../lib/time-format.js";
 import { SERVICES, checkWebhookUrl } from "../lib/webhooks.js";
 import { SOUNDS } from "../lib/sounds.js";
+import {
+  isQuiet,
+  quietUntil,
+  addWindow,
+  removeWindow,
+  updateWindow,
+  copyToAllDays,
+  toTimeValue,
+  fromTimeValue,
+  windowNote,
+  MAX_WINDOWS_PER_DAY,
+} from "../lib/quiet-hours.js";
 import { isSnoozed } from "../lib/snooze.js";
 import { drawGauge } from "../lib/gauge-icon.js";
 import { normalizeCutoffs, severityColor, severityColors } from "../lib/severity.js";
@@ -109,6 +121,143 @@ function renderWorkday(settings) {
   workdayStartSelect.value = String(settings.workdayStart);
   workdayEndSelect.value = String(settings.workdayEnd);
 }
+
+// ------------------------------------------------------------- quiet hours --
+
+const quietToggle = document.getElementById("quietToggle");
+const quietDays = document.getElementById("quietDays");
+const quietStatus = document.getElementById("quietStatus");
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+function renderQuietStatus(quietHours) {
+  const until = quietUntil(quietHours);
+  quietStatus.textContent = !quietHours.enabled
+    ? ""
+    : isQuiet(quietHours)
+      ? until
+        ? `Quiet now, until ${formatClock(until)}.`
+        : "Quiet now, and all week — no alert will get through."
+      : "Not in a quiet window right now.";
+}
+
+/** One row per weekday: its windows as pairs of time fields, with add, remove and copy-to-all. */
+function renderQuietHours(quietHours, refocus = null) {
+  quietToggle.checked = quietHours.enabled;
+  quietDays.classList.toggle("disabled", !quietHours.enabled);
+  renderQuietStatus(quietHours);
+
+  const button = (text, action, label, disabled = false) => {
+    const node = document.createElement("button");
+    node.type = "button";
+    node.textContent = text;
+    node.dataset.action = action;
+    node.setAttribute("aria-label", label);
+    node.disabled = disabled || !quietHours.enabled;
+    return node;
+  };
+  const time = (minutes, end, label) => {
+    const input = document.createElement("input");
+    input.type = "time";
+    input.value = toTimeValue(minutes);
+    input.dataset.end = end;
+    input.setAttribute("aria-label", label);
+    input.disabled = !quietHours.enabled;
+    return input;
+  };
+
+  quietDays.replaceChildren(
+    ...quietHours.days.map((windows, day) => {
+      const name = DAY_NAMES[day];
+      const list = document.createElement("ul");
+      list.className = "quiet-windows";
+      list.setAttribute("aria-label", `${name}'s quiet windows`);
+      list.append(
+        ...windows.map((window, index) => {
+          const item = document.createElement("li");
+          item.dataset.index = String(index);
+          const ordinal = windows.length > 1 ? ` ${index + 1}` : "";
+          item.append(
+            time(window.from, "from", `${name} window${ordinal} starts`),
+            "to",
+            time(window.to, "to", `${name} window${ordinal} ends`),
+            button("\u00d7", "remove", `Remove ${name} window${ordinal}`)
+          );
+          const note = document.createElement("span");
+          note.className = "quiet-note";
+          note.textContent = windowNote(window);
+          item.lastChild.before(note);
+          return item;
+        })
+      );
+
+      // Under the windows: what can be done with the day, led by a word when it has none.
+      const actions = document.createElement("div");
+      actions.className = "quiet-day-actions";
+      if (windows.length === 0) {
+        const none = document.createElement("span");
+        none.className = "none";
+        none.textContent = "No quiet time";
+        actions.append(none);
+      }
+      actions.append(
+        button("Add", "add", `Add a quiet window on ${name}`, windows.length >= MAX_WINDOWS_PER_DAY),
+        button("Copy to all", "copy", `Give every day ${name}'s windows`)
+      );
+
+      const body = document.createElement("div");
+      body.className = "quiet-day-body";
+      body.append(list, actions);
+
+      const row = document.createElement("div");
+      row.className = "quiet-day";
+      row.dataset.day = String(day);
+      const heading = document.createElement("span");
+      heading.className = "quiet-day-name";
+      heading.textContent = name.slice(0, 3);
+      heading.title = name;
+      row.append(heading, body);
+      return row;
+    })
+  );
+
+  // The row was rebuilt under the button that was pressed; put focus back somewhere sensible in it.
+  if (refocus) quietDays.querySelector(`[data-day="${refocus.day}"] [data-action="${refocus.action}"]:not(:disabled)`)?.focus();
+}
+
+async function saveQuietHours(quietHours, refocus) {
+  renderQuietHours((await setSettings({ quietHours })).quietHours, refocus);
+}
+
+quietToggle.addEventListener("change", async () => {
+  const { quietHours } = await getSettings();
+  await saveQuietHours({ ...quietHours, enabled: quietToggle.checked });
+});
+
+quietDays.addEventListener("click", async (event) => {
+  const action = event.target.closest("button")?.dataset.action;
+  if (!action) return;
+  const day = Number(event.target.closest(".quiet-day").dataset.day);
+  const { quietHours } = await getSettings();
+
+  if (action === "add") return saveQuietHours(addWindow(quietHours, day), { day, action: "add" });
+  if (action === "copy") return saveQuietHours(copyToAllDays(quietHours, day), { day, action: "copy" });
+  const index = Number(event.target.closest("li").dataset.index);
+  await saveQuietHours(removeWindow(quietHours, day, index), { day, action: "add" });
+});
+
+quietDays.addEventListener("change", async (event) => {
+  if (!event.target.matches('input[type="time"]')) return;
+  const minutes = fromTimeValue(event.target.value);
+  const { quietHours } = await getSettings();
+  // A cleared field isn't a time: put back what was there.
+  if (minutes == null) return renderQuietHours(quietHours);
+  const day = Number(event.target.closest(".quiet-day").dataset.day);
+  const index = Number(event.target.closest("li").dataset.index);
+  await saveQuietHours(updateWindow(quietHours, day, index, { [event.target.dataset.end]: minutes }));
+});
+
+// "Quiet now, until…" goes stale by itself as the clock moves.
+setInterval(async () => renderQuietStatus((await getSettings()).quietHours), 30_000);
 
 // ---------------------------------------------------------------- webhooks --
 
@@ -311,6 +460,7 @@ async function init() {
   soundVolume.value = settings.soundVolume;
   soundVolume.setAttribute("aria-valuetext", `${settings.soundVolume}%`);
   renderThresholds(settings.notifyThresholds);
+  renderQuietHours(settings.quietHours);
   renderWebhooks();
 
   inlinePillToggle.checked = settings.inlinePill;

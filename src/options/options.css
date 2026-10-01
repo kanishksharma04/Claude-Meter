@@ -451,3 +451,113 @@ button.danger {
 .sound-test small:empty {
   display: none;
 }
+
+/* ---------------------------------------------------------- quiet hours -- */
+
+.quiet-status {
+  margin: 10px 0 0;
+}
+
+.quiet-days {
+  margin-top: 12px;
+}
+
+.quiet-days.disabled {
+  opacity: 0.4;
+}
+
+.quiet-day {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.quiet-day-name {
+  flex: 0 0 44px;
+  padding-top: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.quiet-day-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.quiet-windows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quiet-windows:empty {
+  display: none;
+}
+
+.quiet-windows li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* "into the next day": takes what room is left, and pushes the remove button to the edge. */
+.quiet-note {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quiet-days input[type="time"] {
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.quiet-day-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.quiet-day-actions .none {
+  flex: 1;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.quiet-days button {
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.quiet-days button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.quiet-days button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

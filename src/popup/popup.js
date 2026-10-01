@@ -5,6 +5,7 @@ import { describeSpike } from "../lib/spikes.js";
 import { elsewhereSpans } from "../lib/attribution.js";
 import { spentToday, describeExtraUsage } from "../lib/extra-usage.js";
 import { isSnoozed } from "../lib/snooze.js";
+import { isQuiet, quietUntil } from "../lib/quiet-hours.js";
 import { formatCost } from "../lib/message-cost.js";
 import { rankConversations } from "../lib/conversation-costs.js";
 import { summarizeLimitHits, claimLabel } from "../lib/limit-hits.js";
@@ -48,6 +49,7 @@ const shareMenu = document.getElementById("shareMenu");
 const shareStatus = document.getElementById("shareStatus");
 const snoozeBanner = document.getElementById("snoozeBanner");
 const snoozeText = document.getElementById("snoozeText");
+const quietBanner = document.getElementById("quietBanner");
 const mainEl = document.getElementById("main");
 const planBadge = document.getElementById("planBadge");
 const demoBadge = document.getElementById("demoBadge");
@@ -535,6 +537,12 @@ function render(state) {
 
   snoozeBanner.hidden = !isSnoozed(snoozeUntil);
   snoozeText.textContent = `Alerts snoozed until ${formatClock(snoozeUntil)}`;
+
+  // Quiet hours only matter to someone who has alerts on, and a snooze already says "silent".
+  const quiet = settings.notificationsEnabled && snoozeBanner.hidden && isQuiet(settings.quietHours);
+  const quietEnd = quiet ? quietUntil(settings.quietHours) : null;
+  quietBanner.hidden = !quiet;
+  quietBanner.textContent = quietEnd ? `Quiet hours: alerts are silent until ${formatClock(quietEnd)}` : "Quiet hours: alerts are silent";
 
   renderBuckets(latestSnapshot, settings, settings.messageCost ? messageLog : []);
   renderExtraUsage(state);

@@ -108,6 +108,22 @@
     </section>
 
     <section class="card">
+      <h2>Quiet hours</h2>
+      <label class="row">
+        <span>
+          Keep alerts silent at set times
+          <small>
+            No notification, sound or webhook inside these windows. Each day has its own, and can have several. An
+            end time earlier than the start runs on into the next morning.
+          </small>
+        </span>
+        <input type="checkbox" id="quietToggle" />
+      </label>
+      <p class="hint quiet-status" id="quietStatus" role="status"></p>
+      <div id="quietDays" class="quiet-days"></div>
+    </section>
+
+    <section class="card">
       <h2>Webhooks</h2>
       <p class="hint intro">
         Also send each alert to a chat channel or your phone. Off unless you set one up here. What is sent is the

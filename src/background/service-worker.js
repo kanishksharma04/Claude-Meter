@@ -37,6 +37,7 @@ import { crossedThreshold } from "../lib/thresholds.js";
 import { paceAlert, describePace } from "../lib/pace.js";
 import { resetsToAnnounce, nextResetCheck, describeReset } from "../lib/reset-alert.js";
 import { deliverWebhooks } from "../lib/webhooks.js";
+import { isQuiet } from "../lib/quiet-hours.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
 const ALARM_NAME = "claudemeter-refresh-check";
@@ -405,7 +406,7 @@ function bucketsOf(snapshot) {
  */
 async function sendAlert({ id, message, discreet }) {
   const { settings, snoozeUntil } = await getAll();
-  if (!settings.notificationsEnabled || isSnoozed(snoozeUntil)) return false;
+  if (!settings.notificationsEnabled || isSnoozed(snoozeUntil) || isQuiet(settings.quietHours)) return false;
 
   const text = settings.privacyMode ? discreet : message;
   chrome.notifications.create(`claudemeter-${id}`, {

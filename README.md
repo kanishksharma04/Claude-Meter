@@ -241,6 +241,11 @@ privacy mode (no figures in the text).
   to miss: Chime, Ping, Knock or Pulse, at a volume you set, with a Play button to
   hear it. The sounds are synthesised, not audio files, and are played through an
   offscreen document that exists only for the second the sound lasts.
+- **Quiet hours** — times of the week when alerts stay silent: no notification, no
+  sound, no webhook. Every weekday has its own windows, up to four each, so nights,
+  one standing meeting on Wednesdays and all of Sunday can coexist. A window whose
+  end is earlier than its start runs into the next morning; "Copy to all" gives every
+  day the same set. The popup and Options say when a quiet stretch ends.
 
 ## Accessibility
 
@@ -377,6 +382,7 @@ claudemeter/
 │   │   ├── pace.js                    # today against the usual for these hours -> the once-a-day pace alert
 │   │   ├── reset-alert.js             # which resets are worth announcing, and when to look for the next
 │   │   ├── webhooks.js                # Slack / Discord / ntfy: address checks, request shapes, delivery
+│   │   ├── quiet-hours.js             # per-weekday silent windows: "is it quiet now", "until when", editing
 │   │   ├── sounds.js                  # the alert sounds as notes, and scheduling them on an AudioContext
 │   │   ├── share.js                   # usage summary as text, and as a card drawn on a canvas
 │   │   ├── demo-data.js               # the deterministic made-up dataset behind demo mode
@@ -440,7 +446,7 @@ a second endpoint, below), with the month's running total at the end of each day
 Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `history`
 (last 500 snapshots) that feeds the dashboard chart and the burn-rate maths. Settings
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
-`notifyThresholds`, `paceAlertFactor`, `resetAlertPercent`, `soundAlerts`, `soundName`, `soundVolume`, `webhooks`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
+`notifyThresholds`, `paceAlertFactor`, `resetAlertPercent`, `quietHours`, `soundAlerts`, `soundName`, `soundVolume`, `webhooks`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
 `longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
@@ -656,6 +662,11 @@ written when Developer mode is on, from Options.
   claude.ai tab the page hook isn't running in, counts as elsewhere. Usage that built
   up while the browser was closed is counted as elsewhere but, having no known hour,
   is left out of the heatmap and the forecasts.
+- An alert that comes due in quiet hours is dropped, not held: a threshold crossed at
+  3 AM is not announced at 7. (The pace alert is the exception only because it is
+  re-checked on every refresh, so it can still go out later the same day.) Quiet
+  hours silence alerts, not the nudge banners on claude.ai — a snooze does both.
+  Times are your computer's local time and move with it when you travel.
 - A sound plays at the browser's own output volume and on whatever device it uses;
   the extension can't tell whether you're in a call or have the tab muted, so quiet
   hours or a snooze are the way to keep it silent. Sounds are played one after another
@@ -714,6 +725,7 @@ written when Developer mode is on, from Options.
   snoozed this card says until when and offers Resume.
 - **Pace alert** — Off, or at 1.5× / 2× (default) / 3× your usual pace for the day so far.
 - **Reset alert** — Off, or when the limit had reached 80% / 90% (default) / 100%.
+- **Quiet hours** — off by default; per weekday, up to four windows each.
 - **Play a sound** — off by default; pick the sound and volume, and Play to hear it.
 - **Webhooks** — Slack, Discord and ntfy, each with its own switch, address and test
   button. All off by default.

@@ -12,6 +12,7 @@ import { detectSpike, addSpike } from "./spikes.js";
 import { noteActivity, elsewherePoints } from "./attribution.js";
 import { foldExtraUsage } from "./extra-usage.js";
 import { DEFAULT_WEBHOOKS } from "./webhooks.js";
+import { DEFAULT_QUIET_HOURS, normalizeQuietHours } from "./quiet-hours.js";
 
 export const MAX_DEBUG_CAPTURES = 20;
 // Enough for the dashboard chart to cover about a day at the default refresh interval.
@@ -23,6 +24,7 @@ export const DEFAULT_SETTINGS = {
   notifyThresholds: [80, 95], // any whole percentages, up to eight (lib/thresholds.js)
   paceAlertFactor: 2, // alert when today runs at this many times the usual pace; 0 = off (lib/pace.js)
   resetAlertPercent: 90, // announce a reset only for a limit that had reached this level; 0 = off (lib/reset-alert.js)
+  quietHours: DEFAULT_QUIET_HOURS, // per-weekday windows in which alerts stay silent (lib/quiet-hours.js)
   soundAlerts: false, // play a sound with each alert, through the offscreen document (lib/sounds.js)
   soundName: "chime", // which one: a key of SOUNDS
   soundVolume: 60, // 0–100
@@ -169,6 +171,7 @@ function withDefaults(stored) {
     ...(stored ?? {}),
     severityColors: { ...DEFAULT_SETTINGS.severityColors, ...(stored?.severityColors ?? {}) },
     bucketPrefs: { ...DEFAULT_SETTINGS.bucketPrefs, ...(stored?.bucketPrefs ?? {}) },
+    quietHours: normalizeQuietHours(stored?.quietHours),
     webhooks: Object.fromEntries(
       Object.entries(DEFAULT_WEBHOOKS).map(([service, defaults]) => [service, { ...defaults, ...(stored?.webhooks?.[service] ?? {}) }])
     ),
