@@ -1,6 +1,7 @@
 import { getAll, getSettings, setSettings, setSnoozeUntil, clearAllData, onStorageChanged } from "../lib/storage.js";
 import { formatClock, formatHour, timeAgo } from "../lib/time-format.js";
 import { SERVICES, checkWebhookUrl } from "../lib/webhooks.js";
+import { SOUNDS } from "../lib/sounds.js";
 import { isSnoozed } from "../lib/snooze.js";
 import { drawGauge } from "../lib/gauge-icon.js";
 import { normalizeCutoffs, severityColor, severityColors } from "../lib/severity.js";
@@ -17,6 +18,10 @@ const thresholdInput = document.getElementById("thresholdInput");
 const thresholdNote = document.getElementById("thresholdNote");
 const paceAlertSelect = document.getElementById("paceAlertSelect");
 const resetAlertSelect = document.getElementById("resetAlertSelect");
+const soundToggle = document.getElementById("soundToggle");
+const soundSelect = document.getElementById("soundSelect");
+const soundVolume = document.getElementById("soundVolume");
+const soundNote = document.getElementById("soundNote");
 const inlinePillToggle = document.getElementById("inlinePillToggle");
 const tabIndicatorSelect = document.getElementById("tabIndicatorSelect");
 const preSendWarnSelect = document.getElementById("preSendWarnSelect");
@@ -300,6 +305,11 @@ async function init() {
 
   paceAlertSelect.value = String(settings.paceAlertFactor);
   resetAlertSelect.value = String(settings.resetAlertPercent);
+  soundSelect.replaceChildren(...Object.entries(SOUNDS).map(([id, { label }]) => new Option(label, id)));
+  soundToggle.checked = settings.soundAlerts;
+  soundSelect.value = settings.soundName;
+  soundVolume.value = settings.soundVolume;
+  soundVolume.setAttribute("aria-valuetext", `${settings.soundVolume}%`);
   renderThresholds(settings.notifyThresholds);
   renderWebhooks();
 
@@ -358,6 +368,32 @@ paceAlertSelect.addEventListener("change", async () => {
 resetAlertSelect.addEventListener("change", async () => {
   await setSettings({ resetAlertPercent: Number(resetAlertSelect.value) });
 });
+
+soundToggle.addEventListener("change", async () => {
+  await setSettings({ soundAlerts: soundToggle.checked });
+});
+
+/** Plays the chosen sound the way an alert would: worker, offscreen document and all. */
+async function previewSound() {
+  soundNote.textContent = "";
+  const result = await chrome.runtime
+    .sendMessage({ type: "CLAUDEMETER_TEST_SOUND", sound: soundSelect.value, volume: Number(soundVolume.value) })
+    .catch(() => null);
+  soundNote.textContent = result?.ok ? "" : `Couldn't play it: ${result?.detail ?? "no answer from the extension."}`;
+}
+
+soundSelect.addEventListener("change", async () => {
+  await setSettings({ soundName: soundSelect.value });
+  previewSound(); // choosing a sound without hearing it is guesswork
+});
+
+soundVolume.addEventListener("change", async () => {
+  soundVolume.setAttribute("aria-valuetext", `${soundVolume.value}%`);
+  await setSettings({ soundVolume: Number(soundVolume.value) });
+  previewSound();
+});
+
+document.getElementById("soundTestBtn").addEventListener("click", previewSound);
 
 thresholdForm.addEventListener("submit", async (event) => {
   event.preventDefault();

@@ -76,6 +76,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
+  if (message?.type === "CLAUDEMETER_TEST_SOUND") {
+    playAlertSound(message.sound, message.volume).then(sendResponse);
+    return true;
+  }
+
   if (message?.type === "CLAUDEMETER_TEST_WEBHOOK") {
     sendToWebhooks("This is a test alert from ClaudeMeter. Real ones tell you when a limit is close.", [message.service])
       .then(([result]) => sendResponse(result ?? { ok: false, detail: "Unknown service." }));
@@ -410,9 +415,44 @@ async function sendAlert({ id, message, discreet }) {
     message: text,
     priority: 1,
   });
-  // Awaited, so the worker isn't put to sleep with a delivery half sent.
-  await sendToWebhooks(text);
+  // Awaited, so the worker isn't put to sleep with a delivery half sent or a sound half played.
+  await Promise.all([
+    sendToWebhooks(text),
+    settings.soundAlerts ? playAlertSound(settings.soundName, settings.soundVolume) : null,
+  ]);
   return true;
+}
+
+// ------------------------------------------------------------------- sound --
+// A service worker has no audio output. The sound is played by an offscreen
+// document — a page with no window — opened for as long as the sound lasts.
+
+const OFFSCREEN_URL = "src/offscreen/offscreen.html";
+let soundQueue = Promise.resolve();
+
+/** @returns {Promise<{ ok: boolean, detail?: string }>} */
+function playAlertSound(sound, volume) {
+  // One at a time: two alerts landing together would otherwise fight over the one offscreen document.
+  soundQueue = soundQueue.then(async () => {
+    if (!chrome.offscreen) return { ok: false, detail: "This browser has no offscreen documents." };
+    try {
+      if (!(await chrome.offscreen.hasDocument())) {
+        await chrome.offscreen.createDocument({
+          url: OFFSCREEN_URL,
+          reasons: ["AUDIO_PLAYBACK"],
+          justification: "Play a short sound when a usage alert fires.",
+        });
+      }
+      const played = await chrome.runtime.sendMessage({ target: "offscreen", type: "CLAUDEMETER_PLAY_SOUND", sound, volume });
+      return played ?? { ok: false, detail: "The sound page didn't answer." };
+    } catch (err) {
+      console.warn(LOG_PREFIX, "could not play the alert sound", err);
+      return { ok: false, detail: String(err?.message ?? err) };
+    } finally {
+      await chrome.offscreen.closeDocument().catch(() => {});
+    }
+  });
+  return soundQueue;
 }
 
 /**

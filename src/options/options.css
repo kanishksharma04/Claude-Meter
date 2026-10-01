@@ -289,6 +289,8 @@ button.secondary:hover {
   flex-direction: column;
   align-items: flex-end;
   gap: 8px;
+  /* Wide enough for three chips to a row, so two don't stack. */
+  flex: 0 0 230px;
   min-width: 0;
 }
 
@@ -430,4 +432,22 @@ button.danger {
 
 .webhook-status.problem {
   color: var(--danger);
+}
+
+/* ---------------------------------------------------------------- sound -- */
+
+.sound-controls,
+.sound-test {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sound-controls input[type="range"] {
+  width: 120px;
+  margin-top: 0;
+}
+
+.sound-test small:empty {
+  display: none;
 }

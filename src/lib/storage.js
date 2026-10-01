@@ -23,6 +23,9 @@ export const DEFAULT_SETTINGS = {
   notifyThresholds: [80, 95], // any whole percentages, up to eight (lib/thresholds.js)
   paceAlertFactor: 2, // alert when today runs at this many times the usual pace; 0 = off (lib/pace.js)
   resetAlertPercent: 90, // announce a reset only for a limit that had reached this level; 0 = off (lib/reset-alert.js)
+  soundAlerts: false, // play a sound with each alert, through the offscreen document (lib/sounds.js)
+  soundName: "chime", // which one: a key of SOUNDS
+  soundVolume: 60, // 0–100
   webhooks: DEFAULT_WEBHOOKS, // { slack | discord | ntfy: { enabled, url } } — alerts also sent there (lib/webhooks.js)
   theme: "auto", // "auto" | "light" | "dark" | "contrast"
   accent: "clay", // preset name from lib/theme.js

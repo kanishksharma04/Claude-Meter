@@ -39,6 +39,10 @@ const PERMISSION_REASONS = {
     name: "Side panel",
     why: "Offer the dashboard in Chrome's side panel.",
   },
+  offscreen: {
+    name: "Offscreen document",
+    why: "Play a short sound with an alert, if you turn that on in Options. It needs a hidden page to do it, which is opened for the second the sound lasts and nothing else.",
+  },
   contextMenus: {
     name: "Context menu",
     why: "Add Refresh, Snooze and a few shortcuts to the menu you get by right-clicking the ClaudeMeter icon. Nothing is added to web pages' own menus.",
