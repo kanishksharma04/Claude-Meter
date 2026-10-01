@@ -111,6 +111,20 @@
           <button id="soundTestBtn" class="secondary inline" type="button">Play</button>
         </span>
       </div>
+      <div class="row" role="group" aria-labelledby="calendarLabel">
+        <span id="calendarLabel">
+          Reset calendar
+          <small>
+            Download your weekly reset as a repeating calendar event (.ics) for Google Calendar, Apple Calendar or
+            Outlook. This one needs no alerts switched on.
+          </small>
+        </span>
+        <span class="calendar-controls">
+          <select id="calendarReminderSelect" aria-label="Calendar reminder"></select>
+          <button id="calendarBtn" class="secondary inline" type="button">Download .ics</button>
+        </span>
+      </div>
+      <p class="hint calendar-note" id="calendarNote" role="status"></p>
       <div class="row" id="snoozeRow" hidden>
         <span>
           <span id="snoozeInfo"></span>

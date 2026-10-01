@@ -6,6 +6,7 @@ import { elsewhereSpans } from "../lib/attribution.js";
 import { spentToday, describeExtraUsage } from "../lib/extra-usage.js";
 import { isSnoozed } from "../lib/snooze.js";
 import { isQuiet, quietUntil } from "../lib/quiet-hours.js";
+import { buildResetCalendar, CALENDAR_FILENAME } from "../lib/ics.js";
 import { formatCost } from "../lib/message-cost.js";
 import { rankConversations } from "../lib/conversation-costs.js";
 import { summarizeLimitHits, claimLabel } from "../lib/limit-hits.js";
@@ -686,8 +687,23 @@ function renderShareImage() {
   return canvas.convertToBlob({ type: "image/png" });
 }
 
+/** Hands the browser a file to save. */
+function download(blob, filename) {
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+}
+
 async function share(kind) {
   const { latestSnapshot, settings } = latestState;
+  if (kind === "calendar") {
+    const calendar = buildResetCalendar(latestSnapshot, { reminderMinutes: settings.calendarReminder });
+    if (!calendar) return "No weekly reset time is known yet.";
+    download(new Blob([calendar], { type: "text/calendar;charset=utf-8" }), CALENDAR_FILENAME);
+    return "Calendar file saved. Open it to add the weekly reset.";
+  }
   if (kind === "text") {
     await navigator.clipboard.writeText(buildShareText(latestSnapshot, { bucketPrefs: settings.bucketPrefs }));
     return "Summary copied as text.";
@@ -699,11 +715,7 @@ async function share(kind) {
     return "Summary copied as an image.";
   }
 
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(image);
-  link.download = `claudemeter-usage-${new Date().toISOString().slice(0, 10)}.png`;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+  download(image, `claudemeter-usage-${new Date().toISOString().slice(0, 10)}.png`);
   return "Image saved to your downloads.";
 }
 

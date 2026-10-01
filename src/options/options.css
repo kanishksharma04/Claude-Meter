@@ -581,3 +581,21 @@ button.danger {
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
+
+/* ------------------------------------------------------- reset calendar -- */
+
+.calendar-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.calendar-note {
+  margin: 6px 0 0;
+  text-align: right;
+}
+
+.calendar-note:empty {
+  display: none;
+}

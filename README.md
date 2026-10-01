@@ -71,7 +71,8 @@ icon and you immediately see:
   `cm privacy`, or Options
 - **Share card** — the share button in the footer copies a usage summary as plain
   text (one line per limit, dated) or as a PNG card drawn in your current theme,
-  accent and warning colours, or saves that PNG. It contains only the limits you
+  accent and warning colours, or saves that PNG. The same menu exports the reset
+  calendar. It contains only the limits you
   haven't hidden, in your order — never anything about individual chats
 - **Demo mode** — made-up but coherent usage on every surface (popup, side panel,
   mini window, toolbar icon, the pill on claude.ai, the `cm` dropdown, the share
@@ -251,6 +252,12 @@ privacy mode (no figures in the text).
   sessions, peaking at 88%. That is 46% more than a usual day so far. Weekly: All
   models 38%, Opus 71% (resets in 3 days 6 hr). A limit ran out once." Usage is
   refreshed first so the figures are current, and clicking it opens the dashboard.
+- **Reset calendar export** — download the weekly reset as an `.ics` file: a repeating
+  weekly event at the reset time claude.ai reports, with an optional reminder 15
+  minutes, an hour or a day before. Limits that reset together share one event.
+  Google Calendar, Apple Calendar and Outlook all import it, and importing a newer
+  export updates the event rather than adding a second. It is in Options and in the
+  popup's share menu, and needs no alerts switched on.
 
 ## Accessibility
 
@@ -389,6 +396,7 @@ claudemeter/
 │   │   ├── webhooks.js                # Slack / Discord / ntfy: address checks, request shapes, delivery
 │   │   ├── quiet-hours.js             # per-weekday silent windows: "is it quiet now", "until when", editing
 │   │   ├── digest.js                  # today's figures as one notification, and when the next is due
+│   │   ├── ics.js                     # the weekly reset as an iCalendar file (RFC 5545 escaping and folding)
 │   │   ├── sounds.js                  # the alert sounds as notes, and scheduling them on an AudioContext
 │   │   ├── share.js                   # usage summary as text, and as a card drawn on a canvas
 │   │   ├── demo-data.js               # the deterministic made-up dataset behind demo mode
@@ -452,7 +460,7 @@ a second endpoint, below), with the month's running total at the end of each day
 Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `history`
 (last 500 snapshots) that feeds the dashboard chart and the burn-rate maths. Settings
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
-`notifyThresholds`, `paceAlertFactor`, `resetAlertPercent`, `dailyDigest`, `digestTime`, `quietHours`, `soundAlerts`, `soundName`, `soundVolume`, `webhooks`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
+`notifyThresholds`, `paceAlertFactor`, `resetAlertPercent`, `dailyDigest`, `digestTime`, `calendarReminder`, `quietHours`, `soundAlerts`, `soundName`, `soundVolume`, `webhooks`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
 `longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
@@ -670,6 +678,12 @@ written when Developer mode is on, from Options.
   claude.ai tab the page hook isn't running in, counts as elsewhere. Usage that built
   up while the browser was closed is counted as elsewhere but, having no known hour,
   is left out of the heatmap and the forecasts.
+- The calendar export is a snapshot, not a subscription: it repeats weekly from the
+  reset time known when you exported, on the assumption that the weekly window stays
+  put. If claude.ai moves your reset, export again — the event has a fixed identity,
+  so the new file replaces the old event. Only weekly limits are exported; the 5-hour
+  session has no fixed schedule to put in a calendar. Times are written in UTC, so
+  the event keeps to the real reset through daylight-saving changes.
 - The digest is an alert like the others: it needs alerts switched on, and one that
   falls inside quiet hours or a snooze is skipped for that day. If the browser is
   closed at the chosen time it is sent when the browser next starts, if that is still
@@ -738,6 +752,8 @@ written when Developer mode is on, from Options.
   snoozed this card says until when and offers Resume.
 - **Pace alert** — Off, or at 1.5× / 2× (default) / 3× your usual pace for the day so far.
 - **Reset alert** — Off, or when the limit had reached 80% / 90% (default) / 100%.
+- **Reset calendar** — choose a reminder (none, 15 minutes, 1 hour, 1 day before) and
+  download the `.ics`.
 - **Daily digest** — off by default; pick the time (18:00 to begin with).
 - **Quiet hours** — off by default; per weekday, up to four windows each.
 - **Play a sound** — off by default; pick the sound and volume, and Play to hear it.

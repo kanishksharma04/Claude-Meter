@@ -2,6 +2,7 @@ import { getAll, getSettings, setSettings, setSnoozeUntil, clearAllData, onStora
 import { formatClock, formatHour, timeAgo } from "../lib/time-format.js";
 import { SERVICES, checkWebhookUrl } from "../lib/webhooks.js";
 import { SOUNDS } from "../lib/sounds.js";
+import { buildResetCalendar, weeklyResets, reminderLabel, REMINDER_OPTIONS, CALENDAR_FILENAME } from "../lib/ics.js";
 import {
   isQuiet,
   quietUntil,
@@ -123,6 +124,41 @@ function renderWorkday(settings) {
   workdayStartSelect.value = String(settings.workdayStart);
   workdayEndSelect.value = String(settings.workdayEnd);
 }
+
+// ---------------------------------------------------------- reset calendar --
+
+const calendarReminderSelect = document.getElementById("calendarReminderSelect");
+const calendarNote = document.getElementById("calendarNote");
+
+function renderCalendar(settings) {
+  calendarReminderSelect.replaceChildren(
+    ...REMINDER_OPTIONS.map((minutes) => new Option(reminderLabel(minutes), String(minutes)))
+  );
+  calendarReminderSelect.value = String(settings.calendarReminder);
+}
+
+calendarReminderSelect.addEventListener("change", async () => {
+  await setSettings({ calendarReminder: Number(calendarReminderSelect.value) });
+});
+
+document.getElementById("calendarBtn").addEventListener("click", async () => {
+  const { latestSnapshot, settings } = await getAll();
+  const calendar = buildResetCalendar(latestSnapshot, { reminderMinutes: settings.calendarReminder });
+  if (!calendar) {
+    calendarNote.textContent = "No weekly reset time is known yet. Sign in to claude.ai, then try again.";
+    return;
+  }
+
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([calendar], { type: "text/calendar;charset=utf-8" }));
+  link.download = CALENDAR_FILENAME;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+
+  const [next] = weeklyResets(latestSnapshot);
+  const when = new Date(next.resetsAt).toLocaleString([], { weekday: "long", hour: "numeric", minute: "2-digit" });
+  calendarNote.textContent = `Saved ${CALENDAR_FILENAME} to your downloads: every week on ${when}. Open it to add it to your calendar.`;
+});
 
 // ------------------------------------------------------------- quiet hours --
 
@@ -464,6 +500,7 @@ async function init() {
   soundVolume.value = settings.soundVolume;
   soundVolume.setAttribute("aria-valuetext", `${settings.soundVolume}%`);
   renderThresholds(settings.notifyThresholds);
+  renderCalendar(settings);
   renderQuietHours(settings.quietHours);
   renderWebhooks();
 
