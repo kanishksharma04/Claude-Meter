@@ -14,6 +14,7 @@ const thresholdList = document.getElementById("thresholdList");
 const thresholdForm = document.getElementById("thresholdForm");
 const thresholdInput = document.getElementById("thresholdInput");
 const thresholdNote = document.getElementById("thresholdNote");
+const paceAlertSelect = document.getElementById("paceAlertSelect");
 const inlinePillToggle = document.getElementById("inlinePillToggle");
 const tabIndicatorSelect = document.getElementById("tabIndicatorSelect");
 const preSendWarnSelect = document.getElementById("preSendWarnSelect");
@@ -139,9 +140,12 @@ async function renderShortcuts() {
 }
 
 function updateThresholdsRowState(enabled) {
-  thresholdsRow.classList.toggle("disabled", !enabled);
-  // Really disabled, not just dimmed — otherwise the keyboard can still reach and change them.
-  for (const control of thresholdsRow.querySelectorAll("input, button")) control.disabled = !enabled;
+  // Everything that only matters while alerts are on: really disabled, not just
+  // dimmed — otherwise the keyboard can still reach and change it.
+  for (const row of [thresholdsRow, ...document.querySelectorAll(".alert-option")]) {
+    row.classList.toggle("disabled", !enabled);
+    for (const control of row.querySelectorAll("input, button, select")) control.disabled = !enabled;
+  }
 }
 
 /** One chip per threshold, each with its own remove button. */
@@ -186,6 +190,7 @@ async function init() {
   updateThresholdsRowState(settings.notificationsEnabled);
   renderSnooze();
 
+  paceAlertSelect.value = String(settings.paceAlertFactor);
   renderThresholds(settings.notifyThresholds);
 
   inlinePillToggle.checked = settings.inlinePill;
@@ -234,6 +239,10 @@ refreshIntervalSlider.addEventListener("change", async () => {
 notificationsToggle.addEventListener("change", async () => {
   updateThresholdsRowState(notificationsToggle.checked);
   await setSettings({ notificationsEnabled: notificationsToggle.checked });
+});
+
+paceAlertSelect.addEventListener("change", async () => {
+  await setSettings({ paceAlertFactor: Number(paceAlertSelect.value) });
 });
 
 thresholdForm.addEventListener("submit", async (event) => {

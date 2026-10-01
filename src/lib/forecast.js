@@ -52,12 +52,14 @@ function walk(profile, from, to, level, paceUntil, pace) {
 }
 
 /**
- * How today compares with a usual one, within PACE_RANGE: session points used
- * in the hours on record today against what those same hours typically see.
- * Session points are used whichever limit is being forecast — they are the
- * finest-grained measure of how heavy a day is.
+ * Today against a usual one: session points used in the hours on record today,
+ * and what those same hours typically see. Session points are used whichever
+ * limit is in question — they are the finest-grained measure of how heavy a day is.
+ * @returns {{ actual: number, expected: number, ratio: number | null, days: number }}
+ *   `ratio` is null while the expected figure is too small to divide by;
+ *   `days` is how many days of history the "usual" rests on
  */
-export function paceToday(usageLog, now = Date.now()) {
+export function todayAgainstUsual(usageLog, now = Date.now()) {
   const typical = averageBySlot(usageLog, (record) => record.burn);
   const dayStart = startOfDay(now);
   let actual = 0;
@@ -70,8 +72,13 @@ export function paceToday(usageLog, now = Date.now()) {
     expected += typical.cells[weekdayIndex(date)][date.getHours()] * share;
     actual += record.burn ?? 0;
   }
-  if (expected < MIN_PACE_BASIS) return 1;
-  return Math.max(PACE_RANGE[0], Math.min(PACE_RANGE[1], actual / expected));
+  return { actual, expected, ratio: expected >= MIN_PACE_BASIS ? actual / expected : null, days: typical.days };
+}
+
+/** How far today's pace should bend the rest of today's forecast: the ratio above, kept within PACE_RANGE. */
+export function paceToday(usageLog, now = Date.now()) {
+  const { ratio } = todayAgainstUsual(usageLog, now);
+  return ratio == null ? 1 : Math.max(PACE_RANGE[0], Math.min(PACE_RANGE[1], ratio));
 }
 
 function linearForecast(bucket, windowMs, now) {

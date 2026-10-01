@@ -33,6 +33,7 @@ import { SNOOZE_OPTIONS, DEFAULT_SNOOZE, snoozeEnd, isSnoozed } from "../lib/sno
 import { describeSpike } from "../lib/spikes.js";
 import { tokensOf } from "../lib/value.js";
 import { crossedThreshold } from "../lib/thresholds.js";
+import { paceAlert, describePace } from "../lib/pace.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
 const ALARM_NAME = "claudemeter-refresh-check";
@@ -259,6 +260,7 @@ async function refreshUsage() {
     const snapshot = await fetchUsageSnapshot();
     await applySnapshot(snapshot);
     await maybeNotify(previous, snapshot);
+    await watchPace();
     console.log(LOG_PREFIX, "refreshed usage snapshot");
     return { ok: true, snapshot };
   } catch (err) {
@@ -375,11 +377,32 @@ function bucketsOf(snapshot) {
   return buckets;
 }
 
-async function maybeNotify(previousSnapshot, snapshot) {
+/**
+ * The one way an alert leaves the extension. It decides whether the user wants
+ * to hear anything right now, and words it for the room: `discreet` is what
+ * goes out in privacy mode, where a notification over a shared screen must
+ * carry no figures.
+ * @returns {Promise<boolean>} whether it was sent
+ */
+async function sendAlert({ id, message, discreet }) {
   const { settings, snoozeUntil } = await getAll();
+  if (!settings.notificationsEnabled || isSnoozed(snoozeUntil)) return false;
+
+  chrome.notifications.create(`claudemeter-${id}`, {
+    type: "basic",
+    iconUrl: chrome.runtime.getURL("src/icons/icon128.png"),
+    title: "ClaudeMeter",
+    message: settings.privacyMode ? discreet : message,
+    priority: 1,
+  });
+  return true;
+}
+
+async function maybeNotify(previousSnapshot, snapshot) {
+  const { settings } = await getAll();
   // Skip the very first successful fetch — there's no prior reading to
   // compare against, so "crossing" a threshold isn't meaningful yet.
-  if (!settings.notificationsEnabled || !previousSnapshot || isSnoozed(snoozeUntil)) return;
+  if (!previousSnapshot) return;
 
   const previousByLabel = new Map(bucketsOf(previousSnapshot).map((b) => [b.label, b.percentUsed]));
 
@@ -388,36 +411,40 @@ async function maybeNotify(previousSnapshot, snapshot) {
     const crossed = crossedThreshold(settings.notifyThresholds, before, bucket.percentUsed);
     if (crossed == null) continue;
 
-    chrome.notifications.create(`claudemeter-${bucket.label}-${crossed}`, {
-      type: "basic",
-      iconUrl: chrome.runtime.getURL("src/icons/icon128.png"),
-      title: "ClaudeMeter",
-      // A notification pops up over whatever is being shared, so it gets no numbers in privacy mode.
-      message: settings.privacyMode
-        ? "A usage alert you set has been reached."
-        : `${bucket.subject ?? `${bucket.label} usage`} just crossed ${crossed}%${bucket.of ?? ""} (now ${bucket.percentUsed}%).`,
-      priority: 1,
+    await sendAlert({
+      id: `${bucket.label}-${crossed}`,
+      message: `${bucket.subject ?? `${bucket.label} usage`} just crossed ${crossed}%${bucket.of ?? ""} (now ${bucket.percentUsed}%).`,
+      discreet: "A usage alert you set has been reached.",
     });
   }
 }
 
 /** Logs a sudden jump in any limit and, if alerts are on, says so. */
 async function watchForSpike(snapshot) {
-  const { settings, snoozeUntil } = await getAll();
-  const spike = await recordSpike(snapshot, settings.spikePercent);
+  const spike = await recordSpike(snapshot, (await getSettings()).spikePercent);
   if (!spike) return;
   console.log(LOG_PREFIX, "spike:", spike.label, describeSpike(spike));
-  if (!settings.notificationsEnabled || isSnoozed(snoozeUntil)) return;
-
-  chrome.notifications.create(`claudemeter-spike-${spike.at}`, {
-    type: "basic",
-    iconUrl: chrome.runtime.getURL("src/icons/icon128.png"),
-    title: "ClaudeMeter",
-    message: settings.privacyMode
-      ? "A sudden jump in usage was detected."
-      : `${spike.label} jumped: ${describeSpike(spike)}.`,
-    priority: 1,
+  await sendAlert({
+    id: `spike-${spike.at}`,
+    message: `${spike.label} jumped: ${describeSpike(spike)}.`,
+    discreet: "A sudden jump in usage was detected.",
   });
+}
+
+/** Says so, once a day, when today is running well above a usual one (lib/pace.js). */
+async function watchPace() {
+  const { settings, usageLog } = await getAll();
+  const { paceAlertDay } = await chrome.storage.local.get("paceAlertDay");
+  const alert = paceAlert(usageLog, { factor: settings.paceAlertFactor, lastAlertDay: paceAlertDay });
+  if (!alert) return;
+
+  const sent = await sendAlert({
+    id: `pace-${alert.day}`,
+    message: describePace(alert),
+    discreet: "You're using Claude well above your usual pace today.",
+  });
+  // Only a delivered alert uses up the day's one: if alerts were snoozed, it can still come later.
+  if (sent) await chrome.storage.local.set({ paceAlertDay: alert.day });
 }
 
 // ------------------------------------------------------------ action surface --

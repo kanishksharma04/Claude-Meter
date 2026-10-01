@@ -221,6 +221,11 @@ privacy mode (no figures in the text).
 - **Your own thresholds** — alert at any whole percentage from 1 to 100, up to eight of
   them, instead of a fixed pair. Add and remove them as chips in Options. When one
   jump clears several thresholds at once, you get one alert, naming the highest.
+- **Pace alert** — once a day, a heads-up when today is running well above a usual
+  one: "You're using Claude at 2.3× your usual pace today: 84% of a session so far,
+  against a usual 37% by now." Usual means what the same hours typically see on this
+  weekday, so a heavy Monday morning is compared with Monday mornings. Set it to
+  1.5×, 2× (default) or 3×, or off.
 
 ## Accessibility
 
@@ -344,6 +349,7 @@ claudemeter/
 │   │   ├── omnibox.js                 # "cm" keyword: suggestion rows + command resolution
 │   │   ├── snooze.js                  # snooze options -> end time, and the "is it snoozed" check
 │   │   ├── thresholds.js              # the alert levels: any 1–100, tidied, and which one a jump crossed
+│   │   ├── pace.js                    # today against the usual for these hours -> the once-a-day pace alert
 │   │   ├── share.js                   # usage summary as text, and as a card drawn on a canvas
 │   │   ├── demo-data.js               # the deterministic made-up dataset behind demo mode
 │   │   ├── extra-usage.js             # extra-usage spend: day-by-day record, "today", wording
@@ -406,7 +412,7 @@ a second endpoint, below), with the month's running total at the end of each day
 Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `history`
 (last 500 snapshots) that feeds the dashboard chart and the burn-rate maths. Settings
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
-`notifyThresholds`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
+`notifyThresholds`, `paceAlertFactor`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
 `longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
@@ -620,6 +626,11 @@ written when Developer mode is on, from Options.
   claude.ai tab the page hook isn't running in, counts as elsewhere. Usage that built
   up while the browser was closed is counted as elsewhere but, having no known hour,
   is left out of the heatmap and the forecasts.
+- The pace alert needs seven days on record before it knows what usual is, and stays
+  quiet until the day has something to compare: at least 10 points of usual usage for
+  the hours so far and 20 actually used. Today's own hours are part of the average it
+  is compared with, which blunts the ratio a little in the first weeks. It is sent at
+  most once a day; if alerts were snoozed when it came due, it can still come later.
 - A spike can only be seen between two readings at most five minutes apart (plus a
   minute's slack for a late timer). At the default 5-minute refresh that means
   consecutive readings; with per-message cost on, the readings around each message
@@ -656,6 +667,7 @@ written when Developer mode is on, from Options.
   your thresholds (80% and 95% to begin with; add any others, up to eight). It only
   fires on the transition, not on every fetch above a threshold. While alerts are
   snoozed this card says until when and offers Resume.
+- **Pace alert** — Off, or at 1.5× / 2× (default) / 3× your usual pace for the day so far.
 - **Usage pill next to the composer** — show/hide the in-page pill on claude.ai.
 - **Usage in the tab** — Off, title prefix (default), favicon, or both.
 - **Warn before sending** — Off, or 50 / 70 / 80 / 90 / 95%; the usage level at which

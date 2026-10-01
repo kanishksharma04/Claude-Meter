@@ -51,6 +51,21 @@
           <small id="thresholdNote" class="threshold-note" role="status"></small>
         </div>
       </div>
+      <label class="row alert-option">
+        <span>
+          Pace alert
+          <small>
+            Once a day, when today is running well above what you usually use by this time on this weekday. Needs
+            a week of history to know what usual is.
+          </small>
+        </span>
+        <select id="paceAlertSelect">
+          <option value="0">Off</option>
+          <option value="1.5">At 1.5× usual</option>
+          <option value="2">At 2× usual</option>
+          <option value="3">At 3× usual</option>
+        </select>
+      </label>
       <div class="row" id="snoozeRow" hidden>
         <span>
           <span id="snoozeInfo"></span>

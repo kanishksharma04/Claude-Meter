@@ -20,6 +20,7 @@ export const DEFAULT_SETTINGS = {
   refreshIntervalMinutes: 5,
   notificationsEnabled: false,
   notifyThresholds: [80, 95], // any whole percentages, up to eight (lib/thresholds.js)
+  paceAlertFactor: 2, // alert when today runs at this many times the usual pace; 0 = off (lib/pace.js)
   theme: "auto", // "auto" | "light" | "dark" | "contrast"
   accent: "clay", // preset name from lib/theme.js
   warnAt: 80, // meters turn amber at this %…
