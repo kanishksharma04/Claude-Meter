@@ -32,6 +32,7 @@ import { formatDuration, formatClock } from "../lib/time-format.js";
 import { SNOOZE_OPTIONS, DEFAULT_SNOOZE, snoozeEnd, isSnoozed } from "../lib/snooze.js";
 import { describeSpike } from "../lib/spikes.js";
 import { tokensOf } from "../lib/value.js";
+import { crossedThreshold } from "../lib/thresholds.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
 const ALARM_NAME = "claudemeter-refresh-check";
@@ -380,12 +381,11 @@ async function maybeNotify(previousSnapshot, snapshot) {
   // compare against, so "crossing" a threshold isn't meaningful yet.
   if (!settings.notificationsEnabled || !previousSnapshot || isSnoozed(snoozeUntil)) return;
 
-  const thresholds = [...settings.notifyThresholds].sort((a, b) => a - b);
   const previousByLabel = new Map(bucketsOf(previousSnapshot).map((b) => [b.label, b.percentUsed]));
 
   for (const bucket of bucketsOf(snapshot)) {
     const before = previousByLabel.get(bucket.label) ?? 0;
-    const crossed = thresholds.find((t) => before < t && bucket.percentUsed >= t);
+    const crossed = crossedThreshold(settings.notifyThresholds, before, bucket.percentUsed);
     if (crossed == null) continue;
 
     chrome.notifications.create(`claudemeter-${bucket.label}-${crossed}`, {

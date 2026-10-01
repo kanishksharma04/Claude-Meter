@@ -4,12 +4,16 @@ import { isSnoozed } from "../lib/snooze.js";
 import { drawGauge } from "../lib/gauge-icon.js";
 import { normalizeCutoffs, severityColor, severityColors } from "../lib/severity.js";
 import { ACCENTS, applyTheme, onSystemThemeChange } from "../lib/theme.js";
+import { normalizeThresholds, thresholdProblem, addThreshold, removeThreshold, MAX_THRESHOLDS } from "../lib/thresholds.js";
 
 const refreshIntervalSlider = document.getElementById("refreshIntervalSlider");
 const refreshIntervalValue = document.getElementById("refreshIntervalValue");
 const notificationsToggle = document.getElementById("notificationsToggle");
 const thresholdsRow = document.getElementById("thresholdsRow");
-const thresholdChecks = [...document.querySelectorAll(".threshold-check")];
+const thresholdList = document.getElementById("thresholdList");
+const thresholdForm = document.getElementById("thresholdForm");
+const thresholdInput = document.getElementById("thresholdInput");
+const thresholdNote = document.getElementById("thresholdNote");
 const inlinePillToggle = document.getElementById("inlinePillToggle");
 const tabIndicatorSelect = document.getElementById("tabIndicatorSelect");
 const preSendWarnSelect = document.getElementById("preSendWarnSelect");
@@ -136,9 +140,36 @@ async function renderShortcuts() {
 
 function updateThresholdsRowState(enabled) {
   thresholdsRow.classList.toggle("disabled", !enabled);
-  // Really disabled, not just dimmed — otherwise the keyboard can still reach and flip them.
-  for (const check of thresholdChecks) check.disabled = !enabled;
+  // Really disabled, not just dimmed — otherwise the keyboard can still reach and change them.
+  for (const control of thresholdsRow.querySelectorAll("input, button")) control.disabled = !enabled;
 }
+
+/** One chip per threshold, each with its own remove button. */
+function renderThresholds(list) {
+  const thresholds = normalizeThresholds(list);
+  thresholdList.replaceChildren(
+    ...thresholds.map((value) => {
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "\u00d7";
+      remove.dataset.remove = String(value);
+      remove.setAttribute("aria-label", `Remove the ${value}% threshold`);
+      remove.title = `Remove ${value}%`;
+
+      const chip = document.createElement("li");
+      chip.append(`${value}%`, remove);
+      return chip;
+    })
+  );
+  if (thresholds.length === 0) thresholdNote.textContent = "No thresholds: nothing will alert until you add one.";
+  updateThresholdsRowState(notificationsToggle.checked);
+}
+
+const THRESHOLD_PROBLEMS = {
+  invalid: "Enter a whole number from 1 to 100.",
+  duplicate: "That threshold is already in the list.",
+  full: `That's the most there can be (${MAX_THRESHOLDS}). Remove one first.`,
+};
 
 function describeInterval(minutes) {
   return `${minutes} minute${Number(minutes) === 1 ? "" : "s"}`;
@@ -155,9 +186,7 @@ async function init() {
   updateThresholdsRowState(settings.notificationsEnabled);
   renderSnooze();
 
-  for (const check of thresholdChecks) {
-    check.checked = settings.notifyThresholds.includes(Number(check.value));
-  }
+  renderThresholds(settings.notifyThresholds);
 
   inlinePillToggle.checked = settings.inlinePill;
   tabIndicatorSelect.value = settings.tabIndicator;
@@ -207,12 +236,30 @@ notificationsToggle.addEventListener("change", async () => {
   await setSettings({ notificationsEnabled: notificationsToggle.checked });
 });
 
-for (const check of thresholdChecks) {
-  check.addEventListener("change", async () => {
-    const thresholds = thresholdChecks.filter((c) => c.checked).map((c) => Number(c.value));
-    await setSettings({ notifyThresholds: thresholds });
-  });
-}
+thresholdForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const { notifyThresholds } = await getSettings();
+  const problem = thresholdProblem(notifyThresholds, thresholdInput.value);
+  if (problem) {
+    thresholdNote.textContent = THRESHOLD_PROBLEMS[problem];
+    return thresholdInput.focus();
+  }
+
+  const value = Number(thresholdInput.value);
+  thresholdNote.textContent = `Added ${value}%.`;
+  renderThresholds((await setSettings({ notifyThresholds: addThreshold(notifyThresholds, value) })).notifyThresholds);
+  thresholdInput.value = "";
+  thresholdInput.focus();
+});
+
+thresholdList.addEventListener("click", async (event) => {
+  const value = event.target.closest("[data-remove]")?.dataset.remove;
+  if (value == null) return;
+  const { notifyThresholds } = await getSettings();
+  thresholdNote.textContent = `Removed ${value}%.`;
+  renderThresholds((await setSettings({ notifyThresholds: removeThreshold(notifyThresholds, value) })).notifyThresholds);
+  thresholdInput.focus(); // the button that had focus is gone
+});
 
 inlinePillToggle.addEventListener("change", async () => {
   await setSettings({ inlinePill: inlinePillToggle.checked });

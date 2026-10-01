@@ -34,10 +34,21 @@
         <input type="checkbox" id="notificationsToggle" />
       </label>
       <div class="row" id="thresholdsRow" role="group" aria-labelledby="thresholdsLabel">
-        <span id="thresholdsLabel">Thresholds</span>
-        <div class="threshold-checks">
-          <label><input type="checkbox" class="threshold-check" value="80" /> 80%</label>
-          <label><input type="checkbox" class="threshold-check" value="95" /> 95%</label>
+        <span id="thresholdsLabel">
+          Thresholds
+          <small>Any whole percentage from 1 to 100, up to eight of them.</small>
+        </span>
+        <div class="thresholds">
+          <ul id="thresholdList" class="threshold-list" aria-label="Current thresholds"></ul>
+          <!-- novalidate: the page gives its own message, in the same place for every kind of mistake -->
+          <form id="thresholdForm" class="threshold-form" novalidate>
+            <span class="unit-input">
+              <input type="number" id="thresholdInput" min="1" max="100" step="1" placeholder="60" aria-label="New threshold, in percent" />
+              %
+            </span>
+            <button type="submit" class="secondary inline">Add</button>
+          </form>
+          <small id="thresholdNote" class="threshold-note" role="status"></small>
         </div>
       </div>
       <div class="row" id="snoozeRow" hidden>

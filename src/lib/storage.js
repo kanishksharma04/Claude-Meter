@@ -19,7 +19,7 @@ export const MAX_HISTORY = 500;
 export const DEFAULT_SETTINGS = {
   refreshIntervalMinutes: 5,
   notificationsEnabled: false,
-  notifyThresholds: [80, 95],
+  notifyThresholds: [80, 95], // any whole percentages, up to eight (lib/thresholds.js)
   theme: "auto", // "auto" | "light" | "dark" | "contrast"
   accent: "clay", // preset name from lib/theme.js
   warnAt: 80, // meters turn amber at this %…

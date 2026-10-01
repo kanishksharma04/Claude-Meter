@@ -213,6 +213,15 @@ record per hour, eight weeks deep — and builds its analytics from that:
   on the chart ("used elsewhere"), and the dashboard splits the last seven days into
   **This browser** and **Elsewhere**.
 
+### Alerts
+
+Alerts are off until you turn them on, and everything below respects a snooze and
+privacy mode (no figures in the text).
+
+- **Your own thresholds** — alert at any whole percentage from 1 to 100, up to eight of
+  them, instead of a fixed pair. Add and remove them as chips in Options. When one
+  jump clears several thresholds at once, you get one alert, naming the highest.
+
 ## Accessibility
 
 - Every meter is a real `progressbar` with a name, a spoken value ("86% used") and
@@ -334,6 +343,7 @@ claudemeter/
 │   │   ├── theme.js                   # resolves auto/light/dark/contrast + accent presets
 │   │   ├── omnibox.js                 # "cm" keyword: suggestion rows + command resolution
 │   │   ├── snooze.js                  # snooze options -> end time, and the "is it snoozed" check
+│   │   ├── thresholds.js              # the alert levels: any 1–100, tidied, and which one a jump crossed
 │   │   ├── share.js                   # usage summary as text, and as a card drawn on a canvas
 │   │   ├── demo-data.js               # the deterministic made-up dataset behind demo mode
 │   │   ├── extra-usage.js             # extra-usage spend: day-by-day record, "today", wording
@@ -642,9 +652,10 @@ written when Developer mode is on, from Options.
 ## Options
 
 - **Refresh interval** — 1–30 minutes, default 5.
-- **Notifications** — desktop notification when session or weekly usage crosses 80%
-  and/or 95% (configurable), only fires on the transition, not on every fetch above
-  threshold. While alerts are snoozed this card says until when and offers Resume.
+- **Notifications** — desktop notification when session or weekly usage crosses one of
+  your thresholds (80% and 95% to begin with; add any others, up to eight). It only
+  fires on the transition, not on every fetch above a threshold. While alerts are
+  snoozed this card says until when and offers Resume.
 - **Usage pill next to the composer** — show/hide the in-page pill on claude.ai.
 - **Usage in the tab** — Off, title prefix (default), favicon, or both.
 - **Warn before sending** — Off, or 50 / 70 / 80 / 90 / 95%; the usage level at which

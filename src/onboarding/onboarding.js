@@ -4,6 +4,7 @@
 
 import { getSettings, setSettings } from "../lib/storage.js";
 import { applyTheme, onSystemThemeChange } from "../lib/theme.js";
+import { addThreshold, removeThreshold } from "../lib/thresholds.js";
 
 const signinStatus = document.getElementById("signinStatus");
 const openClaudeBtn = document.getElementById("openClaudeBtn");
@@ -120,8 +121,10 @@ notificationsToggle.addEventListener("change", async () => {
 
 for (const check of thresholdChecks) {
   check.addEventListener("change", async () => {
-    const notifyThresholds = thresholdChecks.filter((c) => c.checked).map((c) => Number(c.value));
-    await setSettings({ notifyThresholds });
+    // Only this one value changes: thresholds added in Options are left as they are.
+    const { notifyThresholds } = await getSettings();
+    const change = check.checked ? addThreshold : removeThreshold;
+    await setSettings({ notifyThresholds: change(notifyThresholds, check.value) });
   });
 }
 
