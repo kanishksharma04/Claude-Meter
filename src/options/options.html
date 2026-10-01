@@ -81,6 +81,19 @@
           <option value="100">Only if I was locked out</option>
         </select>
       </label>
+      <div class="row alert-option" role="group" aria-labelledby="digestLabel">
+        <span id="digestLabel">
+          Daily digest
+          <small>
+            One notification a day with the day's usage, its peak, where the weekly limits stand and any lockouts.
+            Click it to open the dashboard.
+          </small>
+        </span>
+        <span class="digest-controls">
+          <input type="time" id="digestTimeInput" aria-label="Time of the daily digest" />
+          <input type="checkbox" id="digestToggle" aria-label="Send a daily digest" />
+        </span>
+      </div>
       <label class="row alert-option">
         <span>
           Play a sound

@@ -246,6 +246,11 @@ privacy mode (no figures in the text).
   one standing meeting on Wednesdays and all of Sunday can coexist. A window whose
   end is earlier than its start runs into the next morning; "Copy to all" gives every
   day the same set. The popup and Options say when a quiet stretch ends.
+- **Daily digest** — one notification a day, at a time you pick, instead of (or as
+  well as) the threshold pings: "Today: about 128% of a session's allowance over 3
+  sessions, peaking at 88%. That is 46% more than a usual day so far. Weekly: All
+  models 38%, Opus 71% (resets in 3 days 6 hr). A limit ran out once." Usage is
+  refreshed first so the figures are current, and clicking it opens the dashboard.
 
 ## Accessibility
 
@@ -383,6 +388,7 @@ claudemeter/
 │   │   ├── reset-alert.js             # which resets are worth announcing, and when to look for the next
 │   │   ├── webhooks.js                # Slack / Discord / ntfy: address checks, request shapes, delivery
 │   │   ├── quiet-hours.js             # per-weekday silent windows: "is it quiet now", "until when", editing
+│   │   ├── digest.js                  # today's figures as one notification, and when the next is due
 │   │   ├── sounds.js                  # the alert sounds as notes, and scheduling them on an AudioContext
 │   │   ├── share.js                   # usage summary as text, and as a card drawn on a canvas
 │   │   ├── demo-data.js               # the deterministic made-up dataset behind demo mode
@@ -446,7 +452,7 @@ a second endpoint, below), with the month's running total at the end of each day
 Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `history`
 (last 500 snapshots) that feeds the dashboard chart and the burn-rate maths. Settings
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
-`notifyThresholds`, `paceAlertFactor`, `resetAlertPercent`, `quietHours`, `soundAlerts`, `soundName`, `soundVolume`, `webhooks`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
+`notifyThresholds`, `paceAlertFactor`, `resetAlertPercent`, `dailyDigest`, `digestTime`, `quietHours`, `soundAlerts`, `soundName`, `soundVolume`, `webhooks`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
 `longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
@@ -552,6 +558,8 @@ written when Developer mode is on, from Options.
 
 - **Background alarm**: fetches on the interval set in Options (default 5 min),
   regardless of whether a claude.ai tab is open.
+- **For the daily digest**: one fetch at the digest's time, so it reports the day as it
+  stands.
 - **At a reset**: when a limit is high enough for the reset alert, one extra fetch is
   timed for ten seconds after its reset time.
 - **Popup open**: triggers a silent background refresh every time you open the popup,
@@ -662,6 +670,11 @@ written when Developer mode is on, from Options.
   claude.ai tab the page hook isn't running in, counts as elsewhere. Usage that built
   up while the browser was closed is counted as elsewhere but, having no known hour,
   is left out of the heatmap and the forecasts.
+- The digest is an alert like the others: it needs alerts switched on, and one that
+  falls inside quiet hours or a snooze is skipped for that day. If the browser is
+  closed at the chosen time it is sent when the browser next starts, if that is still
+  the same day's worth of news — once a day at most. "Today" is since local midnight,
+  and counts only what this browser has on record.
 - An alert that comes due in quiet hours is dropped, not held: a threshold crossed at
   3 AM is not announced at 7. (The pace alert is the exception only because it is
   re-checked on every refresh, so it can still go out later the same day.) Quiet
@@ -725,6 +738,7 @@ written when Developer mode is on, from Options.
   snoozed this card says until when and offers Resume.
 - **Pace alert** — Off, or at 1.5× / 2× (default) / 3× your usual pace for the day so far.
 - **Reset alert** — Off, or when the limit had reached 80% / 90% (default) / 100%.
+- **Daily digest** — off by default; pick the time (18:00 to begin with).
 - **Quiet hours** — off by default; per weekday, up to four windows each.
 - **Play a sound** — off by default; pick the sound and volume, and Play to hear it.
 - **Webhooks** — Slack, Discord and ntfy, each with its own switch, address and test

@@ -561,3 +561,23 @@ button.danger {
   opacity: 0.4;
   cursor: default;
 }
+
+/* --------------------------------------------------------------- digest -- */
+
+.digest-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.digest-controls input[type="time"] {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}

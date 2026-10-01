@@ -38,11 +38,13 @@ import { paceAlert, describePace } from "../lib/pace.js";
 import { resetsToAnnounce, nextResetCheck, describeReset } from "../lib/reset-alert.js";
 import { deliverWebhooks } from "../lib/webhooks.js";
 import { isQuiet } from "../lib/quiet-hours.js";
+import { buildDigest, nextDigestAt } from "../lib/digest.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
 const ALARM_NAME = "claudemeter-refresh-check";
 const SNOOZE_ALARM_NAME = "claudemeter-snooze-end";
 const RESET_ALARM_NAME = "claudemeter-reset-check";
+const DIGEST_ALARM_NAME = "claudemeter-digest";
 // How long a keyboard shortcut's confirmation stays on the toolbar badge.
 const BADGE_FLASH_MS = 1500;
 const USAGE_ENDPOINT_PATTERN = /\/api\/organizations\/[^/]+\/usage(?:[/?]|$)/;
@@ -424,6 +426,40 @@ async function sendAlert({ id, message, discreet }) {
   return true;
 }
 
+// ------------------------------------------------------------------ digest --
+// One notification a day, at a time the user picks, summing the day up.
+
+/** Arms (or disarms) the alarm for the next digest. Runs at start-up and whenever its settings change. */
+async function scheduleDigest() {
+  const { dailyDigest, digestTime } = await getSettings();
+  if (dailyDigest) chrome.alarms.create(DIGEST_ALARM_NAME, { when: nextDigestAt(digestTime) });
+  else chrome.alarms.clear(DIGEST_ALARM_NAME);
+}
+
+async function sendDigest() {
+  await scheduleDigest(); // tomorrow's, before anything below can fail
+  const { dailyDigest, demoMode } = await getSettings();
+  if (!dailyDigest) return;
+
+  // An alarm that was missed while the browser was closed fires at start-up; one digest a day is enough.
+  const today = new Date().toDateString();
+  const { digestDay } = await chrome.storage.local.get("digestDay");
+  if (digestDay === today) return;
+
+  if (!demoMode) await refreshUsage(); // sum up the day as it stands now, not as of the last refresh
+  const digest = buildDigest(await getAll());
+  if (!digest) return;
+  const sent = await sendAlert({ id: `digest-${today}`, ...digest });
+  if (sent) await chrome.storage.local.set({ digestDay: today });
+}
+
+// A digest is an invitation to look closer: clicking it opens the dashboard.
+chrome.notifications.onClicked.addListener((notificationId) => {
+  if (!notificationId.startsWith("claudemeter-digest-")) return;
+  chrome.notifications.clear(notificationId);
+  openUrl(DASHBOARD_URL);
+});
+
 // ------------------------------------------------------------------- sound --
 // A service worker has no audio output. The sound is played by an offscreen
 // document — a page with no window — opened for as long as the sound lasts.
@@ -755,6 +791,7 @@ async function ensureAlarm() {
 chrome.runtime.onInstalled.addListener((details) => {
   console.log(LOG_PREFIX, "extension installed");
   ensureAlarm();
+  scheduleDigest();
   applyActionSurface();
   createContextMenu();
   // A brand-new install gets the welcome page; updates and reloads don't.
@@ -766,6 +803,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 
 chrome.runtime.onStartup.addListener(() => {
   ensureAlarm();
+  scheduleDigest();
   applyActionSurface(); // action.setPopup() doesn't survive a browser restart
   syncSnooze(); // a snooze may have run out while the browser was closed
   refreshUsage();
@@ -774,6 +812,7 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === SNOOZE_ALARM_NAME) setSnoozeUntil(0);
   if (alarm.name === ALARM_NAME || alarm.name === RESET_ALARM_NAME) refreshUsage();
+  if (alarm.name === DIGEST_ALARM_NAME) sendDigest();
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -787,6 +826,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     if (changes.settings.oldValue?.modelHintPercent !== changes.settings.newValue?.modelHintPercent) {
       updateModelHint();
     }
+    const digestKeys = (settings) => `${Boolean(settings?.dailyDigest)}@${settings?.digestTime}`;
+    if (digestKeys(changes.settings.oldValue) !== digestKeys(changes.settings.newValue)) scheduleDigest();
     if (changes.settings.oldValue?.resetAlertPercent !== changes.settings.newValue?.resetAlertPercent) {
       getAll().then(({ latestSnapshot }) => latestSnapshot && scheduleResetCheck(latestSnapshot));
     }

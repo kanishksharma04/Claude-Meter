@@ -30,6 +30,8 @@ const thresholdInput = document.getElementById("thresholdInput");
 const thresholdNote = document.getElementById("thresholdNote");
 const paceAlertSelect = document.getElementById("paceAlertSelect");
 const resetAlertSelect = document.getElementById("resetAlertSelect");
+const digestToggle = document.getElementById("digestToggle");
+const digestTimeInput = document.getElementById("digestTimeInput");
 const soundToggle = document.getElementById("soundToggle");
 const soundSelect = document.getElementById("soundSelect");
 const soundVolume = document.getElementById("soundVolume");
@@ -454,6 +456,8 @@ async function init() {
 
   paceAlertSelect.value = String(settings.paceAlertFactor);
   resetAlertSelect.value = String(settings.resetAlertPercent);
+  digestToggle.checked = settings.dailyDigest;
+  digestTimeInput.value = toTimeValue(settings.digestTime);
   soundSelect.replaceChildren(...Object.entries(SOUNDS).map(([id, { label }]) => new Option(label, id)));
   soundToggle.checked = settings.soundAlerts;
   soundSelect.value = settings.soundName;
@@ -517,6 +521,17 @@ paceAlertSelect.addEventListener("change", async () => {
 
 resetAlertSelect.addEventListener("change", async () => {
   await setSettings({ resetAlertPercent: Number(resetAlertSelect.value) });
+});
+
+digestToggle.addEventListener("change", async () => {
+  await setSettings({ dailyDigest: digestToggle.checked });
+});
+
+digestTimeInput.addEventListener("change", async () => {
+  const minutes = fromTimeValue(digestTimeInput.value);
+  // A cleared field isn't a time: put back what was there.
+  if (minutes == null) return (digestTimeInput.value = toTimeValue((await getSettings()).digestTime));
+  await setSettings({ digestTime: minutes });
 });
 
 soundToggle.addEventListener("change", async () => {
