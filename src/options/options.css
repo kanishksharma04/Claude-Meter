@@ -356,6 +356,7 @@ button.secondary:hover {
 #thresholdsRow.disabled,
 .alert-option.disabled,
 #claudeCodeLiveRow.disabled,
+#statusFileRow.disabled,
 #demoLabelRow.disabled {
   opacity: 0.4;
 }
@@ -634,4 +635,11 @@ button.danger {
   overflow-x: auto;
   white-space: nowrap;
   user-select: all;
+}
+
+.hint code,
+.row small code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.95em;
+  overflow-wrap: anywhere;
 }

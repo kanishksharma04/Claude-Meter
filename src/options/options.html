@@ -288,12 +288,18 @@
         </div>
         <button id="claudeCodeCheckBtn" class="secondary" type="button">Check again</button>
       </div>
-      <p class="hint" id="claudeCodeTerminal" hidden>
-        With the companion connected, your plan usage is also available in the terminal:
-        <code>claudemeter status</code> prints a line such as <code>5h 62% · wk 71%</code> for the Claude Code
-        status line, tmux or a shell prompt. The installer says where the command is; <code>claudemeter help</code>
-        lists the options.
-      </p>
+      <label class="row" id="statusFileRow">
+        <span>
+          Share usage with local tools
+          <small>
+            The companion keeps a small file up to date with your plan usage and Claude Code totals, for the
+            <code>claudemeter</code> terminal command, Raycast, Stream Deck and menu-bar tools to read. It stays on
+            this computer. Off, the file is removed.
+          </small>
+        </span>
+        <input type="checkbox" id="statusFileToggle" />
+      </label>
+      <p class="hint" id="claudeCodeTerminal" hidden></p>
     </section>
 
     <section class="card">

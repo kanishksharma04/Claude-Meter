@@ -129,6 +129,7 @@ function renderWorkday(settings) {
 
 const claudeCodeToggle = document.getElementById("claudeCodeToggle");
 const claudeCodeLiveToggle = document.getElementById("claudeCodeLiveToggle");
+const statusFileToggle = document.getElementById("statusFileToggle");
 const claudeCodeStatusNote = document.getElementById("claudeCodeStatus");
 const INSTALL_COMMAND = `node companion/install.mjs ${chrome.runtime.id}`;
 
@@ -143,7 +144,26 @@ async function renderClaudeCode() {
 
   const working = settings.claudeCode && claudeCodeStatus?.ok;
   document.getElementById("claudeCodeSetup").hidden = working;
-  document.getElementById("claudeCodeTerminal").hidden = !working || settings.demoMode;
+  statusFileToggle.checked = settings.statusFile;
+  statusFileToggle.disabled = !settings.claudeCode;
+  document.getElementById("statusFileRow").classList.toggle("disabled", !settings.claudeCode);
+
+  // Where the file is, in the companion's own words, once it has said.
+  const terminal = document.getElementById("claudeCodeTerminal");
+  const file = claudeCodeStatus?.statusFile;
+  terminal.hidden = !working || settings.demoMode || !settings.statusFile || !file;
+  if (!terminal.hidden) {
+    const code = (text) => Object.assign(document.createElement("code"), { textContent: text });
+    terminal.replaceChildren(
+      "Writing ",
+      code(file),
+      " (and status.txt beside it). In a terminal, ",
+      code("claudemeter status"),
+      " prints a line such as ",
+      code("5h 62% · wk 71%"),
+      "; companion/examples has scripts for Raycast and the menu bar."
+    );
+  }
   claudeCodeStatusNote.classList.toggle("problem", settings.claudeCode && claudeCodeStatus?.ok === false);
   claudeCodeStatusNote.textContent = !settings.claudeCode
     ? ""
@@ -167,6 +187,11 @@ claudeCodeToggle.addEventListener("change", async () => {
 
 claudeCodeLiveToggle.addEventListener("change", async () => {
   await setSettings({ claudeCodeLive: claudeCodeLiveToggle.checked });
+  renderClaudeCode();
+});
+
+statusFileToggle.addEventListener("change", async () => {
+  await setSettings({ statusFile: statusFileToggle.checked });
   renderClaudeCode();
 });
 

@@ -371,7 +371,8 @@ async function connectCompanion() {
 
   port.onMessage.addListener((message) => {
     if (message?.type === "usage") {
-      setClaudeCode(message.data, { ok: true, version: message.version, live: true, watching: message.watching });
+      const status = { ok: true, version: message.version, live: true, watching: message.watching, statusFile: message.statusFile ?? null };
+      setClaudeCode(message.data, status);
     } else if (message?.type === "error") {
       console.warn(LOG_PREFIX, "claude code (live):", message.message);
     }
@@ -390,7 +391,7 @@ async function connectCompanion() {
   });
 
   companionWindow = await sessionResetsAt();
-  port.postMessage({ type: "watch", sessionResetsAt: companionWindow, plan: await companionPlan() });
+  port.postMessage({ type: "watch", sessionResetsAt: companionWindow, ...(await companionExtras()) });
 }
 
 /**
@@ -402,10 +403,18 @@ async function companionPlan() {
   return planForCompanion(latestSnapshot, await getSettings());
 }
 
-/** Passes the current plan usage to a connected companion. */
+/** What rides along on every request: the plan usage, and whether the user wants the status file written at all. */
+async function companionExtras() {
+  const { statusFile } = await getSettings();
+  // With the file switched off there is no reason for the figures to leave the browser.
+  return { statusFile, plan: statusFile ? await companionPlan() : null };
+}
+
+/** Passes the current plan usage to a connected companion — or, with the status file off, tells it to remove the file. */
 async function tellCompanionPlan() {
-  const plan = companionPort && (await companionPlan());
-  if (plan) companionPort?.postMessage({ type: "plan", plan });
+  if (!companionPort) return;
+  const extras = await companionExtras();
+  if (extras.plan || !extras.statusFile) companionPort?.postMessage({ type: "plan", ...extras });
 }
 
 function disconnectCompanion() {
@@ -450,10 +459,10 @@ async function refreshClaudeCode({ force = false } = {}) {
   claudeCodeReadAt = Date.now();
 
   try {
-    const request = { type: "get", sessionResetsAt: await sessionResetsAt(), plan: await companionPlan() };
+    const request = { type: "get", sessionResetsAt: await sessionResetsAt(), ...(await companionExtras()) };
     const reply = await chrome.runtime.sendNativeMessage(COMPANION_HOST, request);
     if (reply?.type !== "usage") throw new Error(reply?.message ?? "The companion sent an unexpected reply.");
-    await setClaudeCode(reply.data, { ok: true, version: reply.version, live: false });
+    await setClaudeCode(reply.data, { ok: true, version: reply.version, live: false, statusFile: reply.statusFile ?? null });
     return { ok: true };
   } catch (err) {
     const problem = companionProblem(err?.message);
@@ -988,8 +997,13 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       chrome.contextMenus.update("privacy", { checked }).catch(() => {});
     }
     // What the terminal shows follows privacy mode and the warning levels too.
-    const planKeys = (settings) => JSON.stringify([settings?.privacyMode, settings?.warnAt, settings?.dangerAt]);
-    if (planKeys(changes.settings.oldValue) !== planKeys(changes.settings.newValue)) tellCompanionPlan();
+    const planKeys = (settings) =>
+      JSON.stringify([settings?.privacyMode, settings?.warnAt, settings?.dangerAt, settings?.statusFile !== false]);
+    if (planKeys(changes.settings.oldValue) !== planKeys(changes.settings.newValue)) {
+      // Connected, it hears at once; when polling, ask now rather than leave the file wrong until the next refresh.
+      if (companionPort) tellCompanionPlan().then(() => tellCompanionWindow({ force: true }));
+      else refreshClaudeCode({ force: true });
+    }
     const toolbarKeys = ["iconStyle", "warnAt", "dangerAt", "severityColors", "privacyMode"];
     const pick = (settings) => JSON.stringify(toolbarKeys.map((key) => settings?.[key]));
     if (pick(changes.settings.oldValue) !== pick(changes.settings.newValue)) {

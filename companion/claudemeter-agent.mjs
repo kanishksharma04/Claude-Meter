@@ -12,7 +12,8 @@
 //   { type: "ping" }                     -> { type: "pong", version }
 //   { type: "get", sessionResetsAt? }    -> { type: "usage", version, data }
 //   { type: "watch", sessionResetsAt? }  -> a "usage" now, and another whenever the logs change
-//   { type: "plan", plan }               -> (no reply) the plan usage is written to the status file
+//   { type: "plan", plan, statusFile? }  -> (no reply) the plan usage is written to the status file,
+//                                           or the file removed if `statusFile` is false
 //   anything that goes wrong             -> { type: "error", version, message }
 //
 // "get" is one question and one answer, after which the browser closes the
@@ -23,10 +24,10 @@ import { join } from "node:path";
 import { claudeDir } from "./paths.mjs";
 import { createLogReader } from "./read-logs.mjs";
 import { watchLogs } from "./watch-logs.mjs";
-import { buildStatus, writeStatus } from "./status-file.mjs";
+import { buildStatus, writeStatus, removeStatus, statusPath } from "./status-file.mjs";
 import { summarizeClaudeCode } from "../src/lib/claude-code.js";
 
-export const VERSION = "1.2.0";
+export const VERSION = "1.3.0";
 
 /** While watching with nothing changing, send the figures again this often: "today" and the session window move on their own. */
 const HEARTBEAT_MS = 5 * 60 * 1000;
@@ -42,10 +43,29 @@ const readLogs = createLogReader(); // remembers what it has read, so a re-read 
 let sessionResetsAt = null;
 let watching = null;
 
+// What the status file is built from: the plan usage the extension last passed on, and the last summary of the logs.
+let latestPlan = null;
+let latestUsage = null;
+let statusFileWanted = true;
+
+/** Rewrites the status file from what is known now — or removes it, if the user has switched it off. */
+async function refreshStatusFile() {
+  if (!statusFileWanted) return removeStatus();
+  if (latestPlan || latestUsage) await writeStatus(buildStatus(latestPlan, latestUsage));
+}
+
 async function sendUsage(extra = {}) {
   const { records, titles, files } = await readLogs(claudeDir());
-  const data = summarizeClaudeCode(records, { titles, sessionResetsAt });
-  send({ type: "usage", version: VERSION, ...extra, data: { ...data, files } });
+  latestUsage = summarizeClaudeCode(records, { titles, sessionResetsAt });
+  await refreshStatusFile();
+  send({
+    type: "usage",
+    version: VERSION,
+    ...extra,
+    data: { ...latestUsage, files },
+    // Where the status file is, so Options can say; null while it is switched off.
+    statusFile: statusFileWanted ? statusPath() : null,
+  });
 }
 
 /** A failed push is reported, never thrown: the next change gets another try. */
@@ -59,9 +79,10 @@ async function handle(message) {
   try {
     if (message?.type === "ping") return send({ type: "pong", version: VERSION });
 
-    // The plan figures can ride along with any request, or come on their own.
-    if (message?.plan) await writeStatus(buildStatus(message.plan));
-    if (message?.type === "plan") return;
+    // The plan figures, and whether the status file is wanted at all, can ride along with any request or come alone.
+    if (typeof message?.statusFile === "boolean") statusFileWanted = message.statusFile;
+    if (message?.plan) latestPlan = message.plan;
+    if (message?.type === "plan") return await refreshStatusFile();
 
     if (message?.type === "get" || message?.type === "watch") {
       sessionResetsAt = message.sessionResetsAt ?? null;

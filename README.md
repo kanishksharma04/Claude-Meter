@@ -255,6 +255,13 @@ see [companion/README.md](companion/README.md)), ClaudeMeter reads those logs:
   (`{session}`, `{weekly}`, `{weekly:Opus}`, `{session_reset}`…). It only reads a
   file, so it returns in a few hundredths of a second. Privacy mode hides the
   figures here too, and figures older than 15 minutes are marked with `~`.
+- **Local JSON output** — the companion keeps `~/.claudemeter/status.json` up to date
+  with your plan usage and a digest of Claude Code's (session, today, week, cache hit
+  rate, top project), plus `status.txt` with the one-line form, for anything outside
+  the browser to read: Raycast, Stream Deck, SwiftBar or xbar, a script of your own.
+  The format is fixed by a JSON Schema, and `companion/examples/` has a Raycast
+  script command and a menu-bar plugin ready to use. One switch in Options turns it
+  off and removes the files.
 - **One installer for macOS, Linux and Windows** — `node companion/install.mjs <id>`
   registers the companion with Chrome, Chromium, Edge, Brave and Vivaldi. On Windows
   that means writing the manifest, a `.cmd` launcher and the registry values under
@@ -354,7 +361,8 @@ account usage panel yourself) and reuses that response immediately, without wait
 for the next scheduled fetch. See `src/content/inject-hook.js`.
 
 Nothing is sent to any third-party server unless you set up a webhook — everything
-stays in `chrome.storage.local` on your machine. A webhook is the one exception, and
+stays on your machine: in `chrome.storage.local`, and, if you install the Claude Code
+companion, in the status file it writes to its own folder for your other local tools. A webhook is the one exception, and
 only what you opt into: the text of each alert, posted to the Slack, Discord or ntfy
 address you gave, after the browser has asked you to allow that one site.
 
@@ -405,7 +413,9 @@ claudemeter/
 │   ├── read-logs.mjs                  # finds and parses ~/.claude/projects/**/*.jsonl, read-only, incrementally
 │   ├── watch-logs.mjs                 # notices when a log changes (file events, or polling where there are none)
 │   ├── claudemeter.mjs                # the `claudemeter` terminal command
-│   ├── status-file.mjs                # the status file the companion writes and the command reads
+│   ├── status-file.mjs                # status.json / status.txt: what the companion writes for other tools
+│   ├── status.schema.json             # the status file's format, as a JSON Schema
+│   ├── examples/                      # a Raycast script command and a SwiftBar/xbar plugin that read it
 │   ├── status-format.mjs              # status file -> one line, with templates and colours
 │   ├── install.mjs                    # registers it with your browsers on macOS, Linux and Windows
 │   └── paths.mjs                      # where ~/.claude and the companion's own folder are
@@ -524,7 +534,7 @@ Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `his
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
 `notifyThresholds`, `paceAlertFactor`, `resetAlertPercent`, `dailyDigest`, `digestTime`, `calendarReminder`, `quietHours`, `soundAlerts`, `soundName`, `soundVolume`, `webhooks`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
-`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `claudeCode`, `claudeCodeLive`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
+`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `claudeCode`, `claudeCodeLive`, `statusFile`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300), and the mini window's last position and size
 are kept under `miniWindowBounds`:
@@ -732,6 +742,13 @@ written when Developer mode is on, from Options.
   that `cd`s into a subfolder is split between the two, and running Claude Code from
   your home directory makes "home" a project. Only the twelve costliest directories
   of the week are listed.
+- The status file is plain, unencrypted JSON in your own home folder, readable by any
+  program running as you — which is the point of it, and the reason for the switch.
+  It holds percentages, reset times, Claude Code totals and the name of the week's
+  costliest project folder; no chat text, session titles or full paths. It goes stale
+  when the browser closes (check `updatedAt`), and Stream Deck needs a third-party
+  plugin that can show a text file or a command's output, since it has no such
+  action of its own.
 - The terminal command shows what the browser last knew. The plan percentages exist
   only inside the browser (they come from claude.ai with your sign-in), so the
   extension passes them to the companion, which writes them to a status file; with
@@ -879,7 +896,9 @@ written when Developer mode is on, from Options.
   two extra usage reads around each message.
 - **Claude Code** — off by default. Shows the install command for the companion, and
   whether it is connected. **Update live** (on by default) keeps it running and
-  watching; off, it is asked once per refresh.
+  watching; off, it is asked once per refresh. **Share usage with local tools** (on by
+  default) lets it write the status file; off, the file is removed and the plan
+  figures stay in the browser.
 - **Weekly budget** — show/hide the "% a day until reset" line under each weekly limit.
 - **Forecast** — from your usual week (default), straight line, or off.
 - **Working hours** — start and end (9:00–17:00 by default), used for the window-start

@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ClaudeMeter status file",
+  "description": "Written by the ClaudeMeter companion to <data folder>/status.json whenever the figures change. Times are epoch milliseconds unless the name ends in Iso. New fields may be added without the schema number changing; existing ones keep their meaning.",
+  "type": "object",
+  "required": ["schema", "updatedAt", "plan", "display"],
+  "properties": {
+    "schema": { "const": 1, "description": "Goes up only for a change that would break a reader." },
+    "updatedAt": { "type": "integer", "description": "When this file was written. Compare with the clock to tell whether it is stale: nothing updates it while the browser is closed." },
+    "updatedAtIso": { "type": "string", "format": "date-time" },
+    "plan": {
+      "type": "object",
+      "description": "claude.ai plan usage, as the extension last read it.",
+      "required": ["hidden", "session", "weekly", "thresholds"],
+      "properties": {
+        "fetchedAt": { "type": ["integer", "null"], "description": "When the extension last heard from claude.ai." },
+        "tier": { "type": ["string", "null"], "description": "The plan's name, when claude.ai reports one." },
+        "hidden": { "type": "boolean", "description": "True while privacy mode is on in the browser; session, weekly and claudeCode are then empty." },
+        "session": { "$ref": "#/$defs/limit", "description": "The 5-hour session; null when unknown or hidden." },
+        "weekly": {
+          "type": "array",
+          "description": "One entry per weekly limit: \"All models\", and model-specific ones such as \"Opus\".",
+          "items": {
+            "allOf": [{ "$ref": "#/$defs/limit" }],
+            "type": "object",
+            "required": ["label"],
+            "properties": { "label": { "type": "string" } }
+          }
+        },
+        "thresholds": {
+          "type": "object",
+          "description": "The percentages at which the user has meters turn amber and red.",
+          "required": ["warnAt", "dangerAt"],
+          "properties": { "warnAt": { "type": "integer" }, "dangerAt": { "type": "integer" } }
+        }
+      }
+    },
+    "claudeCode": {
+      "type": ["object", "null"],
+      "description": "A digest of Claude Code usage from its local logs; null until the logs have been read, or while hidden. Costs are US dollars at API list prices, not money charged.",
+      "properties": {
+        "generatedAt": { "type": "integer" },
+        "session": {
+          "description": "The current 5-hour window; null when none is open.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "allOf": [{ "$ref": "#/$defs/totals" }],
+              "type": "object",
+              "properties": { "from": { "type": "integer" }, "to": { "type": "integer" } }
+            }
+          ]
+        },
+        "today": { "$ref": "#/$defs/totals" },
+        "week": { "$ref": "#/$defs/totals" },
+        "cacheHitRate": { "type": ["number", "null"], "description": "Share of the week's prompt tokens served from the prompt cache, 0 to 1." },
+        "topProject": {
+          "description": "The week's costliest working directory.",
+          "oneOf": [
+            { "type": "null" },
+            { "type": "object", "required": ["name", "cost"], "properties": { "name": { "type": "string" }, "cost": { "type": "number" } } }
+          ]
+        }
+      }
+    },
+    "display": {
+      "type": "object",
+      "required": ["line"],
+      "properties": {
+        "line": { "type": "string", "description": "The plan usage as one line, e.g. \"5h 62% · wk 71%\" — also the whole of status.txt." }
+      }
+    }
+  },
+  "$defs": {
+    "limit": {
+      "type": ["object", "null"],
+      "required": ["percent"],
+      "properties": {
+        "percent": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "resetsAt": { "type": ["integer", "null"] },
+        "resetsAtIso": { "type": ["string", "null"], "format": "date-time" }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "required": ["cost", "tokens", "messages"],
+      "properties": {
+        "cost": { "type": "number", "description": "US dollars, to the cent." },
+        "tokens": { "type": "integer", "description": "Input, output and cached tokens together." },
+        "messages": { "type": "integer" }
+      }
+    }
+  }
+}

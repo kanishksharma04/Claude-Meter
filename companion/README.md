@@ -12,8 +12,10 @@ time the logs change — and that is all it does.
 - It makes no network connections. What it reads goes to the extension over the
   browser's own [native messaging](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging)
   pipe and nowhere else.
-- The one thing it writes is its own status file, `~/.claudemeter/status.json`, with
-  the plan usage the extension passes it, for the `claudemeter` terminal command.
+- The one thing it writes is its own status file, `~/.claudemeter/status.json` (and
+  `status.txt` beside it), with the plan usage the extension passes it and a digest
+  of the Claude Code figures — for the `claudemeter` terminal command and for any
+  other local tool you point at it. One switch in Options turns that off.
 - It has no dependencies beyond Node.js itself.
 
 ## What you need
@@ -116,6 +118,18 @@ mode on in the browser, it prints `usage hidden`.
 `claudemeter status` exits 0 when it printed figures, 1 when there were none yet, and
 2 for a mistake in the options.
 
+## For other tools: `status.json`
+
+The file the command reads is there for anything else to read too — Raycast, Stream
+Deck, a menu-bar tool, a script. It is plain JSON with a fixed format
+([`status.schema.json`](status.schema.json)), rewritten whenever the figures change,
+with `status.txt` beside it holding the one-line form. [`examples/`](examples/) has a
+Raycast script command and a SwiftBar/xbar plugin ready to use, and a walk through
+the fields.
+
+To stop it being written, switch off **Share usage with local tools** in Options; the
+companion removes both files, and `claudemeter status` goes back to "no data yet".
+
 ## Uninstall
 
 ```sh
@@ -154,10 +168,13 @@ companion exits as soon as it has answered.
 
 | Request | Reply |
 |---|---|
-| `{ "type": "ping" }` | `{ "type": "pong", "version": "1.2.0" }` |
-| `{ "type": "plan", "plan": { … } }` | none — the plan usage is written to the status file. `plan` may also ride along on a `get` or `watch` |
+| `{ "type": "ping" }` | `{ "type": "pong", "version": "1.3.0" }` |
+| `{ "type": "plan", "plan": { … }, "statusFile": true }` | none — the plan usage is written to the status file, or with `"statusFile": false` the file is removed. Both may also ride along on a `get` or `watch` |
 | `{ "type": "watch", "sessionResetsAt": 1790000000000 }` | a `usage` reply now, and another — with `"live": true` — every time the logs change, for as long as the connection stays open |
 | `{ "type": "get", "sessionResetsAt": 1790000000000 }` | `{ "type": "usage", "version": "…", "data": { "session", "today", "week", "models", "cache", "buckets", "projects", "sessions", "files", "generatedAt" } }` |
+
+A `usage` reply also carries `statusFile`: the path of the status file, or null while
+it is switched off.
 
 `session`, `today` and `week` are totals: `tokens`, `input`, `output`, `cacheRead`,
 `cacheWrite`, `cost` (US$ at API list prices) and `messages`. `sessionResetsAt` is
