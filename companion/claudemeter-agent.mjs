@@ -28,8 +28,8 @@ async function handle(message) {
   try {
     if (message?.type === "ping") return send({ type: "pong", version: VERSION });
     if (message?.type === "get") {
-      const { records, files } = await readUsage(claudeDir());
-      const data = summarizeClaudeCode(records, { sessionResetsAt: message.sessionResetsAt ?? null });
+      const { records, titles, files } = await readUsage(claudeDir());
+      const data = summarizeClaudeCode(records, { titles, sessionResetsAt: message.sessionResetsAt ?? null });
       return send({ type: "usage", version: VERSION, data: { ...data, files } });
     }
     send({ type: "error", version: VERSION, message: `Unknown request: ${message?.type}` });

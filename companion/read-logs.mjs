@@ -2,8 +2,8 @@
 // Read-only: nothing under ~/.claude is ever written, moved or deleted.
 
 import { readdir, readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
-import { parseUsageLine, SUMMARY_DAYS } from "../src/lib/claude-code.js";
+import { basename, join } from "node:path";
+import { parseUsageLine, parseTitleLine, SUMMARY_DAYS } from "../src/lib/claude-code.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -33,14 +33,27 @@ async function findLogs(dir, since, depth = 0, found = []) {
   return depth === 0 ? found.sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, MAX_FILES) : found;
 }
 
-function parseLines(text) {
+/**
+ * @param {string} text - one log file
+ * @param {string} fileSessionId - the session the file is named after
+ * @param {Record<string, string>} titles - filled in as title lines are met; a later title replaces an earlier one
+ */
+function parseLines(text, fileSessionId, titles) {
   const records = [];
   for (const line of text.split("\n")) {
-    // Cheap pre-check: only lines with a usage block can become a record, and most lines are long.
-    if (!line.includes('"usage"')) continue;
+    // Cheap pre-checks: most lines are long, and only a few kinds are of any use here.
+    const usage = line.includes('"usage"');
+    const title = !usage && (line.includes('"ai-title"') || line.includes('"summary"'));
+    if (!usage && !title) continue;
     try {
-      const record = parseUsageLine(JSON.parse(line));
-      if (record) records.push(record);
+      const parsed = JSON.parse(line);
+      if (usage) {
+        const record = parseUsageLine(parsed);
+        if (record) records.push(record);
+      } else {
+        const named = parseTitleLine(parsed, fileSessionId);
+        if (named) titles[named.sessionId] = named.title;
+      }
     } catch {
       // A half-written last line, or one that isn't JSON: skip it.
     }
@@ -50,16 +63,17 @@ function parseLines(text) {
 
 /**
  * @param {string} claudeDirectory - usually ~/.claude
- * @returns {Promise<{ records: object[], files: number }>} every usage record from the
- *   logs touched in the last week or so
+ * @returns {Promise<{ records: object[], titles: Record<string, string>, files: number }>} every usage
+ *   record from the logs touched in the last week or so, and the titles of the sessions in them
  */
 export async function readUsage(claudeDirectory, now = Date.now()) {
   // A day's margin: a file last touched just outside the window can still hold lines inside it.
   const logs = await findLogs(join(claudeDirectory, "projects"), now - (SUMMARY_DAYS + 1) * DAY_MS);
   const records = [];
+  const titles = {};
   for (const log of logs) {
     const text = await readFile(log.path, "utf8").catch(() => "");
-    records.push(...parseLines(text));
+    records.push(...parseLines(text, basename(log.path, ".jsonl"), titles));
   }
-  return { records, files: logs.length };
+  return { records, titles, files: logs.length };
 }

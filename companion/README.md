@@ -6,7 +6,8 @@ The companion is the small program that can. The browser starts it when ClaudeMe
 asks, it reads Claude Code's logs, answers with a summary, and that is all it does.
 
 - It reads `~/.claude/projects/**/*.jsonl` (or wherever `CLAUDE_CONFIG_DIR` points).
-  It never writes, moves or deletes anything there.
+  It never writes, moves or deletes anything there. From each file it takes the token
+  counts, the model, the working directory, the time, and the session's title.
 - It makes no network connections. What it reads goes to the extension over the
   browser's own [native messaging](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging)
   pipe and nowhere else.
@@ -80,7 +81,7 @@ Options says which of these it is:
 | Request | Reply |
 |---|---|
 | `{ "type": "ping" }` | `{ "type": "pong", "version": "1.0.0" }` |
-| `{ "type": "get", "sessionResetsAt": 1790000000000 }` | `{ "type": "usage", "version": "…", "data": { "session", "today", "week", "models", "buckets", "projects", "files", "generatedAt" } }` |
+| `{ "type": "get", "sessionResetsAt": 1790000000000 }` | `{ "type": "usage", "version": "…", "data": { "session", "today", "week", "models", "buckets", "projects", "sessions", "files", "generatedAt" } }` |
 
 `session`, `today` and `week` are totals: `tokens`, `input`, `output`, `cacheRead`,
 `cacheWrite`, `cost` (US$ at API list prices) and `messages`. `sessionResetsAt` is
@@ -93,3 +94,8 @@ with empty slots left out — what the chart's Claude Code bars are drawn from.
 
 `projects` is the week by working directory, costliest first, up to twelve:
 `cwd`, a short `name`, `tokens`, `cost`, `costToday`, `messages`, `sessions`, `lastAt`.
+
+`sessions` is the week's eight costliest sessions: `sessionId`, `title` (the one Claude
+Code wrote, or null), `project`, `model`, `startedAt`, `lastAt`, `tokens`, `cost`,
+`messages`. Titles are the only free text the companion ever passes on; prompts and
+replies are never read beyond their token counts.

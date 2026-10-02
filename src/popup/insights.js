@@ -12,6 +12,7 @@ import { recentSpikes, describeSpike, spikeSource } from "../lib/spikes.js";
 import { attribution, describeAttribution } from "../lib/attribution.js";
 import { valueForMoney, describeValue, monthlyPriceFor, formatDollars, formatTokens } from "../lib/value.js";
 import { timeAgo } from "../lib/time-format.js";
+import { modelLabel } from "../lib/claude-code.js";
 import { formatHour, formatDuration, formatClock, formatMoment } from "../lib/time-format.js";
 
 const $ = (id) => document.getElementById(id);
@@ -233,6 +234,38 @@ function renderProjects({ settings, claudeCode }) {
   );
 }
 
+// ------------------------------------------------- claude code: sessions --
+
+function renderSessions({ settings, claudeCode }) {
+  const sessions = settings.claudeCode ? (claudeCode?.sessions ?? []) : [];
+  const section = $("sessionSection");
+  section.hidden = sessions.length === 0;
+  if (section.hidden) return;
+
+  $("sessionList").replaceChildren(
+    ...sessions.map((session) => {
+      const length = session.lastAt - session.startedAt;
+      return el(
+        "li",
+        {},
+        el(
+          "div",
+          { className: "project-head" },
+          el("span", { className: `project-name${session.title ? "" : " untitled"}` }, session.title ?? "Untitled session"),
+          el("span", { className: "project-cost" }, formatDollars(session.cost))
+        ),
+        el(
+          "p",
+          { className: "project-meta" },
+          `${session.project} · ${modelLabel(session.model)} · ${plural(session.messages, "message")}` +
+            (length >= 60_000 ? ` over ${span(length)}` : "") +
+            ` · ${timeAgo(session.lastAt)}`
+        )
+      );
+    })
+  );
+}
+
 // --------------------------------------------------------------- lockouts --
 
 function renderLockouts({ limitHits }) {
@@ -289,6 +322,7 @@ export function renderInsights(state) {
   renderSpikes(state);
   renderAttribution(state);
   renderProjects(state);
+  renderSessions(state);
   renderLockouts(state);
   renderPlanFit(state);
   renderValue(state);

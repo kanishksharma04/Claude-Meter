@@ -234,6 +234,10 @@ see [companion/README.md](companion/README.md)), ClaudeMeter reads those logs:
   tokens, when it was last used and what it has cost today. Folders are shown by name
   (with enough of the path to tell two of the same name apart) and by full path on
   hover. In the dashboard.
+- **Most expensive sessions** — the week's costliest Claude Code sessions, each under
+  the title Claude Code gave it, with its project, model, number of messages, how
+  long it ran and what it cost. Sub-agent work counts towards the session that
+  started it. In the dashboard.
 - **One installer for macOS, Linux and Windows** — `node companion/install.mjs <id>`
   registers the companion with Chrome, Chromium, Edge, Brave and Vivaldi. On Windows
   that means writing the manifest, a `.cmd` launcher and the registry values under
@@ -691,6 +695,9 @@ written when Developer mode is on, from Options.
   hourly profile (the tooltip says which method produced the figure), and "today is
   running at N× your usual" is capped between 0.5× and 2×. A straight-line forecast
   isn't offered in the first 2% of a window, where one message would swing it wildly.
+- A session's title is the one Claude Code wrote into its own log; sessions it never
+  titled are listed as untitled, and no prompt or reply text is read to make one up.
+  A session that started more than a week ago is ranked on what it used this week.
 - Projects are grouped by the exact working directory in each log line, so a session
   that `cd`s into a subfolder is split between the two, and running Claude Code from
   your home directory makes "home" a project. Only the twelve costliest directories

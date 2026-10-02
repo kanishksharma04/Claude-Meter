@@ -70,6 +70,35 @@ export function parseUsageLine(line) {
   return tokensOf(record) > 0 ? record : null;
 }
 
+/** Titles are for a list row, not for reading: one line, and not a long one. */
+export const MAX_TITLE_LENGTH = 80;
+
+/**
+ * A session's title, from the lines Claude Code writes for it: the newer
+ * "ai-title" lines name their session; the older "summary" lines don't, so the
+ * caller supplies the session the file belongs to.
+ * @returns {{ sessionId: string, title: string } | null}
+ */
+export function parseTitleLine(line, fileSessionId = null) {
+  const title = line?.type === "ai-title" ? line.aiTitle : line?.type === "summary" ? line.summary : null;
+  const sessionId = line?.sessionId ?? fileSessionId;
+  if (typeof title !== "string" || !title.trim() || typeof sessionId !== "string") return null;
+  return { sessionId, title: title.replace(/\s+/g, " ").trim().slice(0, MAX_TITLE_LENGTH) };
+}
+
+/** "claude-opus-5-5" -> "Opus 5.5"; "claude-3-7-sonnet-20250219" -> "Sonnet 3.7". Unknown shapes come back as they are. */
+export function modelLabel(model) {
+  const parts = String(model ?? "")
+    .replace(/^claude-/, "")
+    .replace(/-\d{8}$/, "")
+    .split("-");
+  const words = parts.filter((part) => /^[a-z]+$/i.test(part));
+  const numbers = parts.filter((part) => /^\d+$/.test(part));
+  if (words.length === 0 || words.length + numbers.length !== parts.length) return String(model ?? "unknown");
+  const name = words.map((word) => word[0].toUpperCase() + word.slice(1)).join(" ");
+  return numbers.length > 0 ? `${name} ${numbers.join(".")}` : name;
+}
+
 export function tokensOf(record) {
   return record.input + record.output + record.cacheRead + record.cacheWrite5m + record.cacheWrite1h;
 }
@@ -104,6 +133,8 @@ export function dedupeRecords(records) {
 
 /** How many projects the summary lists; the rest are a long tail of one-off directories. */
 export const MAX_PROJECTS = 12;
+/** How many sessions make the "most expensive" list. */
+export const MAX_SESSIONS = 8;
 
 /** A path's segments, whichever way its slashes lean. */
 function segments(path) {
@@ -164,13 +195,15 @@ export function currentWindow(records, now) {
  * @param {object} [options]
  * @param {number} [options.sessionResetsAt] - when the claude.ai session resets, if the extension knows;
  *   Claude Code draws on the same 5-hour allowance, so that is its window too
+ * @param {Record<string, string>} [options.titles] - session id -> the title Claude Code gave it
  * @returns {{ generatedAt: number, session: object, today: object, week: object,
  *   models: Array<{ model: string, tokens: number, cost: number }>, buckets: Array<[number, number, number]>,
- *   projects: Array<{ cwd: string, name: string, tokens: number, cost: number, costToday: number, messages: number, sessions: number, lastAt: number }> }}
+ *   projects: Array<{ cwd: string, name: string, tokens: number, cost: number, costToday: number, messages: number, sessions: number, lastAt: number }>,
+ *   sessions: Array<{ sessionId: string, title: string | null, project: string, model: string, startedAt: number, lastAt: number, tokens: number, cost: number, messages: number }> }}
  *   `session`, `today` and `week` are totals ({ tokens, input, output, cacheRead, cacheWrite, cost, messages });
  *   `session` also has `from` / `to`, null when no window is open
  */
-export function summarizeClaudeCode(records, { now = Date.now(), sessionResetsAt = null } = {}) {
+export function summarizeClaudeCode(records, { now = Date.now(), sessionResetsAt = null, titles = {} } = {}) {
   const all = dedupeRecords(records).filter((record) => record.ts <= now && record.ts > now - SUMMARY_DAYS * DAY_MS);
 
   const window =
@@ -185,6 +218,7 @@ export function summarizeClaudeCode(records, { now = Date.now(), sessionResetsAt
   const models = new Map();
   const buckets = new Map(); // start of a 15-minute slot -> [tokens, cost]
   const projects = new Map(); // working directory -> its totals
+  const sessions = new Map(); // session id -> its totals
 
   for (const record of all) {
     addTo(week, record);
@@ -206,11 +240,35 @@ export function summarizeClaudeCode(records, { now = Date.now(), sessionResetsAt
     project.lastAt = Math.max(project.lastAt, record.ts);
     projects.set(cwd, project);
 
+    if (record.sessionId) {
+      const session = sessions.get(record.sessionId) ?? {
+        sessionId: record.sessionId,
+        startedAt: record.ts, // records arrive oldest first
+        lastAt: record.ts,
+        tokens: 0,
+        cost: 0,
+        messages: 0,
+        byModel: new Map(),
+        byCwd: new Map(),
+      };
+      session.lastAt = record.ts;
+      session.tokens += tokensOf(record);
+      session.cost += costOf(record);
+      session.messages += 1;
+      session.byModel.set(record.model, (session.byModel.get(record.model) ?? 0) + costOf(record));
+      session.byCwd.set(cwd, (session.byCwd.get(cwd) ?? 0) + 1);
+      sessions.set(record.sessionId, session);
+    }
+
     const model = models.get(record.model) ?? { model: record.model, tokens: 0, cost: 0 };
     model.tokens += tokensOf(record);
     model.cost += costOf(record);
     models.set(record.model, model);
   }
+
+  const named = nameProjects([...projects.values()].map((project) => ({ ...project, sessions: project.sessions.size })));
+  const projectName = new Map(named.map((project) => [project.cwd, project.name]));
+  const top = (counts) => [...counts].sort((a, b) => b[1] - a[1])[0][0];
 
   return {
     generatedAt: now,
@@ -219,12 +277,17 @@ export function summarizeClaudeCode(records, { now = Date.now(), sessionResetsAt
     week,
     models: [...models.values()].sort((a, b) => b.cost - a.cost),
     // The week by working directory, costliest first. `cwd` is "" for lines that didn't record one.
-    projects: nameProjects(
-      [...projects.values()]
-        .map((project) => ({ ...project, sessions: project.sessions.size }))
-        .sort((a, b) => b.cost - a.cost)
-        .slice(0, MAX_PROJECTS)
-    ),
+    projects: named.sort((a, b) => b.cost - a.cost).slice(0, MAX_PROJECTS),
+    // The week's costliest sessions. A session that began before the week only counts what it used inside it.
+    sessions: [...sessions.values()]
+      .sort((a, b) => b.cost - a.cost)
+      .slice(0, MAX_SESSIONS)
+      .map(({ byModel, byCwd, ...rest }) => ({
+        ...rest,
+        title: titles[rest.sessionId] ?? null,
+        model: top(byModel), // the one most of its cost went to
+        project: projectName.get(top(byCwd)), // the directory most of its messages came from
+      })),
     // Activity over the week in 15-minute slots, empty ones left out: [start, tokens, cost in US$ to 4 places].
     buckets: [...buckets].map(([t, [tokens, cost]]) => [t, tokens, Math.round(cost * 10_000) / 10_000]),
   };

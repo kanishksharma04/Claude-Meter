@@ -328,6 +328,24 @@ export function buildDemoAnalytics(demo) {
     })),
   };
 
+  claudeCode.sessions = [
+    ["Refactor the billing module", "code/billing-api", "claude-opus-5-5", 0.21, 3 * HOUR + 10 * MIN, 6 * MIN, 212],
+    ["Migrate invoices to the new schema", "code/billing-api", "claude-opus-5-5", 0.16, 2 * DAY + 5 * HOUR, 2 * DAY + 1 * HOUR, 174],
+    ["Landing page rewrite", "marketing-site", "claude-opus-5-5", 0.13, 27 * HOUR, 26 * HOUR, 96],
+    [null, "code/billing-api", "claude-opus-5-5", 0.08, 4 * DAY + 3 * HOUR, 4 * DAY + 2 * HOUR, 71],
+    ["Tidy zsh startup time", "dotfiles", "claude-haiku-4-5", 0.05, 3 * DAY + 40 * MIN, 3 * DAY, 58],
+  ].map(([title, project, model, share, startedAgo, lastAgo, messages], index) => ({
+    sessionId: `d3m0c0de-0000-4000-8000-00000000000${index}`,
+    title,
+    project,
+    model,
+    startedAt: now - startedAgo,
+    lastAt: now - lastAgo,
+    tokens: Math.round(week.tokens * share),
+    cost: week.cost * share,
+    messages,
+  }));
+
   return {
     usageLog,
     sessionWindows,
