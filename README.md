@@ -243,6 +243,11 @@ see [companion/README.md](companion/README.md)), ClaudeMeter reads those logs:
   a bar and a percentage, plus how many times each written token was read back and
   what caching saved (or cost) in dollars against sending everything fresh. In the
   dashboard.
+- **Live push** — instead of being asked every few minutes, the companion stays
+  running while the browser is open, watches Claude Code's log folder, and sends new
+  figures within a second or two of a reply being written. It only re-reads the lines
+  that were added. If the connection is lost ClaudeMeter says so, carries on by
+  asking at each refresh, and reconnects at the next one. Can be switched off.
 - **One installer for macOS, Linux and Windows** — `node companion/install.mjs <id>`
   registers the companion with Chrome, Chromium, Edge, Brave and Vivaldi. On Windows
   that means writing the manifest, a `.cmd` launcher and the registry values under
@@ -360,9 +365,10 @@ address you gave, after the browser has asked you to allow that one site.
 - **`chrome.offscreen`** — a service worker can't play audio, so alert sounds are
   played by `src/offscreen/offscreen.html`, opened with the `AUDIO_PLAYBACK` reason and
   closed as soon as the sound ends; the sounds themselves are Web Audio oscillators
-- **`chrome.runtime.sendNativeMessage`** — the only way out of the browser sandbox to
-  the Claude Code logs; it starts `companion/claudemeter-agent.mjs`, a Node.js script
-  with no dependencies that shares `src/lib/claude-code.js` with the extension
+- **`chrome.runtime.connectNative` / `sendNativeMessage`** — the only way out of the
+  browser sandbox to the Claude Code logs. They start `companion/claudemeter-agent.mjs`,
+  a Node.js script with no dependencies that shares `src/lib/claude-code.js` with the
+  extension: a long-lived connection for live updates, a one-off message otherwise
 - **`chrome.permissions`** — the four webhook hosts are `optional_host_permissions`,
   requested one at a time from Options when a webhook is switched on, and given back
   when it is switched off
@@ -389,7 +395,8 @@ claudemeter/
 ├── manifest.json
 ├── companion/                         # the optional local helper that reads Claude Code's logs (Node.js)
 │   ├── claudemeter-agent.mjs          # native-messaging host: answers the extension over stdin/stdout
-│   ├── read-logs.mjs                  # finds and parses ~/.claude/projects/**/*.jsonl, read-only
+│   ├── read-logs.mjs                  # finds and parses ~/.claude/projects/**/*.jsonl, read-only, incrementally
+│   ├── watch-logs.mjs                 # notices when a log changes (file events, or polling where there are none)
 │   ├── install.mjs                    # registers it with your browsers on macOS, Linux and Windows
 │   └── paths.mjs                      # where ~/.claude and the companion's own folder are
 ├── src/
@@ -507,7 +514,7 @@ Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `his
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
 `notifyThresholds`, `paceAlertFactor`, `resetAlertPercent`, `dailyDigest`, `digestTime`, `calendarReminder`, `quietHours`, `soundAlerts`, `soundName`, `soundVolume`, `webhooks`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
-`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `claudeCode`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
+`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `claudeCode`, `claudeCodeLive`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300), and the mini window's last position and size
 are kept under `miniWindowBounds`:
@@ -614,8 +621,9 @@ written when Developer mode is on, from Options.
 
 - **Background alarm**: fetches on the interval set in Options (default 5 min),
   regardless of whether a claude.ai tab is open.
-- **Claude Code**: read with each refresh, but at most once a minute — the companion
-  is started, reads the logs touched in the last week, answers and exits.
+- **Claude Code**: pushed by the companion as the logs change, when "Update live" is
+  on. Otherwise read with each refresh, but at most once a minute — the companion is
+  started, reads the logs touched in the last week, answers and exits.
 - **For the daily digest**: one fetch at the digest's time, so it reports the day as it
   stands.
 - **At a reset**: when a limit is high enough for the reset alert, one extra fetch is
@@ -714,6 +722,13 @@ written when Developer mode is on, from Options.
   that `cd`s into a subfolder is split between the two, and running Claude Code from
   your home directory makes "home" a project. Only the twelve costliest directories
   of the week are listed.
+- Live updates keep two things running that otherwise wouldn't be: the companion
+  process, and ClaudeMeter's background worker, which the browser can't put to sleep
+  while the connection is open. Both are small and idle between changes, and both
+  stop when the browser closes or the switch goes off. A burst of writes is reported
+  once it pauses for a second, or every five seconds while it doesn't. Where the
+  system can't watch a folder tree (Linux with Node.js older than 20), the companion
+  checks every 15 seconds instead, and Options says so.
 - Claude Code's bars on the chart share its time axis but not its percentage scale:
   the tallest bar in view is always the same height, whatever it cost. They are there
   to show *when*, and the legend to say *how much*.
@@ -847,7 +862,8 @@ written when Developer mode is on, from Options.
 - **Measure what each message costs** — on by default; turning it off also stops the
   two extra usage reads around each message.
 - **Claude Code** — off by default. Shows the install command for the companion, and
-  whether it is connected.
+  whether it is connected. **Update live** (on by default) keeps it running and
+  watching; off, it is asked once per refresh.
 - **Weekly budget** — show/hide the "% a day until reset" line under each weekly limit.
 - **Forecast** — from your usual week (default), straight line, or off.
 - **Working hours** — start and end (9:00–17:00 by default), used for the window-start

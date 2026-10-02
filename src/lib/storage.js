@@ -53,6 +53,7 @@ export const DEFAULT_SETTINGS = {
   lockoutOverlay: true, // live "back at 4:30 PM" countdown on claude.ai while a limit is exhausted
   messageCost: true, // measure session % before/after each reply (two extra usage fetches per message)
   claudeCode: false, // show Claude Code usage, read from its local logs by the companion (lib/claude-code.js)
+  claudeCodeLive: true, // keep the companion running and let it push changes, instead of asking on a timer
   weeklyBudget: true, // "12% a day until reset · 9% used today" under each weekly limit (lib/budget.js)
   forecast: "profile", // where each limit is heading: "profile" (your usual week) | "linear" | "off" (lib/forecast.js)
   workdayStart: 9, // assumed working hours (0–24), for the window-start suggestion until the

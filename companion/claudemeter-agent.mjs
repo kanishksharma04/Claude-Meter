@@ -9,13 +9,23 @@
 //
 //   { type: "ping" }                     -> { type: "pong", version }
 //   { type: "get", sessionResetsAt? }    -> { type: "usage", version, data }
+//   { type: "watch", sessionResetsAt? }  -> a "usage" now, and another whenever the logs change
 //   anything that goes wrong             -> { type: "error", version, message }
+//
+// "get" is one question and one answer, after which the browser closes the
+// pipe and this exits. "watch" is the long-lived form: the extension keeps the
+// pipe open and this keeps answering, unasked, for as long as it does.
 
+import { join } from "node:path";
 import { claudeDir } from "./paths.mjs";
-import { readUsage } from "./read-logs.mjs";
+import { createLogReader } from "./read-logs.mjs";
+import { watchLogs } from "./watch-logs.mjs";
 import { summarizeClaudeCode } from "../src/lib/claude-code.js";
 
-export const VERSION = "1.0.0";
+export const VERSION = "1.1.0";
+
+/** While watching with nothing changing, send the figures again this often: "today" and the session window move on their own. */
+const HEARTBEAT_MS = 5 * 60 * 1000;
 
 function send(message) {
   const body = Buffer.from(JSON.stringify(message), "utf8");
@@ -24,13 +34,37 @@ function send(message) {
   process.stdout.write(Buffer.concat([header, body]));
 }
 
+const readLogs = createLogReader(); // remembers what it has read, so a re-read costs only the new lines
+let sessionResetsAt = null;
+let watching = null;
+
+async function sendUsage(extra = {}) {
+  const { records, titles, files } = await readLogs(claudeDir());
+  const data = summarizeClaudeCode(records, { titles, sessionResetsAt });
+  send({ type: "usage", version: VERSION, ...extra, data: { ...data, files } });
+}
+
+/** A failed push is reported, never thrown: the next change gets another try. */
+function push() {
+  return sendUsage({ live: true, watching: watching.mode }).catch((err) =>
+    send({ type: "error", version: VERSION, message: String(err?.message ?? err) })
+  );
+}
+
 async function handle(message) {
   try {
     if (message?.type === "ping") return send({ type: "pong", version: VERSION });
-    if (message?.type === "get") {
-      const { records, titles, files } = await readUsage(claudeDir());
-      const data = summarizeClaudeCode(records, { titles, sessionResetsAt: message.sessionResetsAt ?? null });
-      return send({ type: "usage", version: VERSION, data: { ...data, files } });
+
+    if (message?.type === "get" || message?.type === "watch") {
+      sessionResetsAt = message.sessionResetsAt ?? null;
+      if (message.type === "get") return await sendUsage();
+
+      if (!watching) {
+        // Each push waits for the one before, so two can't read the logs at once.
+        watching = watchLogs(join(claudeDir(), "projects"), () => (pending = pending.then(push)));
+        setInterval(() => (pending = pending.then(push)), HEARTBEAT_MS).unref();
+      }
+      return await push(); // straight away, and again on every later "watch" (the window moved)
     }
     send({ type: "error", version: VERSION, message: `Unknown request: ${message?.type}` });
   } catch (err) {
@@ -61,4 +95,7 @@ process.stdin.on("data", (chunk) => {
 });
 
 // The browser closes stdin when it is done with us; finish what's in hand, then go.
-process.stdin.on("end", () => pending.finally(() => process.exit(0)));
+process.stdin.on("end", () => {
+  watching?.close();
+  pending.finally(() => process.exit(0));
+});

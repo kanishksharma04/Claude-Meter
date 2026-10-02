@@ -128,6 +128,7 @@ function renderWorkday(settings) {
 // -------------------------------------------------------------- claude code --
 
 const claudeCodeToggle = document.getElementById("claudeCodeToggle");
+const claudeCodeLiveToggle = document.getElementById("claudeCodeLiveToggle");
 const claudeCodeStatusNote = document.getElementById("claudeCodeStatus");
 const INSTALL_COMMAND = `node companion/install.mjs ${chrome.runtime.id}`;
 
@@ -135,6 +136,9 @@ const INSTALL_COMMAND = `node companion/install.mjs ${chrome.runtime.id}`;
 async function renderClaudeCode() {
   const { settings, claudeCodeStatus, claudeCode } = await getAll();
   claudeCodeToggle.checked = settings.claudeCode;
+  claudeCodeLiveToggle.checked = settings.claudeCodeLive;
+  claudeCodeLiveToggle.disabled = !settings.claudeCode;
+  document.getElementById("claudeCodeLiveRow").classList.toggle("disabled", !settings.claudeCode);
   document.getElementById("installCommand").textContent = INSTALL_COMMAND;
 
   const working = settings.claudeCode && claudeCodeStatus?.ok;
@@ -148,12 +152,20 @@ async function renderClaudeCode() {
         ? "Asking the companion…"
         : claudeCodeStatus.ok
           ? `Connected to the companion (version ${claudeCodeStatus.version}). ` +
-            `Read ${claudeCode?.files ?? 0} log file${claudeCode?.files === 1 ? "" : "s"} ${timeAgo(claudeCodeStatus.at)}.`
+            (claudeCodeStatus.live
+              ? `Live: watching ${claudeCode?.files ?? 0} log file${claudeCode?.files === 1 ? "" : "s"}` +
+                (claudeCodeStatus.watching === "polling" ? ", checked every 15 seconds." : " for changes.")
+              : `Read ${claudeCode?.files ?? 0} log file${claudeCode?.files === 1 ? "" : "s"} ${timeAgo(claudeCodeStatus.at)}; asked again at each refresh.`)
           : claudeCodeStatus.problem.text;
 }
 
 claudeCodeToggle.addEventListener("change", async () => {
   await setSettings({ claudeCode: claudeCodeToggle.checked });
+  renderClaudeCode();
+});
+
+claudeCodeLiveToggle.addEventListener("change", async () => {
+  await setSettings({ claudeCodeLive: claudeCodeLiveToggle.checked });
   renderClaudeCode();
 });
 

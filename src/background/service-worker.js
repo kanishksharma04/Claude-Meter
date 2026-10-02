@@ -332,31 +332,112 @@ async function applySnapshot(snapshot) {
   await watchForSpike(snapshot);
   await watchPace();
   await scheduleResetCheck(snapshot);
+  // This reading may have brought a new session window; Claude Code's figures are counted in the same one.
+  await tellCompanionWindow();
 }
 
 // ------------------------------------------------------------- claude code --
 // Claude Code usage comes from the companion (companion/), a native-messaging
-// host: the browser starts it on request, it reads the logs under ~/.claude,
-// answers, and exits.
+// host. There are two ways of using it. Live: one long-lived connection, over
+// which the companion — watching the logs under ~/.claude — sends new figures
+// the moment something changes. Polled: the browser starts it, asks once, and
+// it exits; that happens with each refresh. Live is the default, and falls
+// back to polling whenever the connection can't be made or is lost.
 
-/** Readings around a single message arrive seconds apart; the logs needn't be re-read for each. */
+/** Readings around a single message arrive seconds apart; when polling, the logs needn't be re-read for each. */
 const CLAUDE_CODE_MIN_INTERVAL_MS = 60_000;
 let claudeCodeReadAt = 0;
+
+/** The live connection, when there is one, and the session window the companion was last told about. */
+let companionPort = null;
+let companionWindow = null;
+
+async function sessionResetsAt() {
+  const { latestSnapshot } = await chrome.storage.local.get("latestSnapshot");
+  // Claude Code draws on the same 5-hour allowance, so claude.ai's window is its window too.
+  return latestSnapshot?.session?.resetsAt ?? null;
+}
+
+/**
+ * Opens the live connection and asks the companion to watch. An open native
+ * port also keeps this worker from being put to sleep, which is what lets the
+ * pushes arrive at all.
+ */
+async function connectCompanion() {
+  if (companionPort) return;
+  const port = chrome.runtime.connectNative(COMPANION_HOST);
+  companionPort = port;
+
+  port.onMessage.addListener((message) => {
+    if (message?.type === "usage") {
+      setClaudeCode(message.data, { ok: true, version: message.version, live: true, watching: message.watching });
+    } else if (message?.type === "error") {
+      console.warn(LOG_PREFIX, "claude code (live):", message.message);
+    }
+  });
+
+  port.onDisconnect.addListener(async () => {
+    const reason = chrome.runtime.lastError?.message;
+    if (companionPort === port) companionPort = null;
+    companionWindow = null;
+    const settings = await getSettings();
+    // Closed on purpose (switched off, or to live off): nothing to report.
+    if (!settings.claudeCode || !settings.claudeCodeLive || settings.demoMode) return;
+    console.warn(LOG_PREFIX, "claude code: live connection lost:", reason);
+    // Say so, and carry on by polling; the next refresh tries to reconnect.
+    await setClaudeCode(null, { ok: false, problem: companionProblem(reason) });
+  });
+
+  companionWindow = await sessionResetsAt();
+  port.postMessage({ type: "watch", sessionResetsAt: companionWindow });
+}
+
+function disconnectCompanion() {
+  companionPort?.disconnect();
+  companionPort = null;
+  companionWindow = null;
+}
+
+/** Brings the connection in line with the settings. Runs at start-up and when they change. */
+async function syncCompanion() {
+  const settings = await getSettings();
+  const live = settings.claudeCode && settings.claudeCodeLive && !settings.demoMode;
+  if (!live) return disconnectCompanion();
+  await connectCompanion();
+}
+
+/**
+ * Tells a connected companion which session window to count in, when that has
+ * changed (or regardless, with `force`). It answers with fresh figures.
+ */
+async function tellCompanionWindow({ force = false } = {}) {
+  if (!companionPort) return;
+  const window = await sessionResetsAt();
+  if (!force && window === companionWindow) return;
+  companionWindow = window;
+  companionPort.postMessage({ type: "watch", sessionResetsAt: window });
+}
 
 /** @returns {Promise<{ ok: boolean, problem?: object } | null>} null when switched off or skipped */
 async function refreshClaudeCode({ force = false } = {}) {
   const settings = await getSettings();
   if (!settings.claudeCode || settings.demoMode) return null;
+
+  if (settings.claudeCodeLive) {
+    await connectCompanion(); // a no-op while connected; otherwise this is the retry
+    // Nothing to ask for: changes arrive unasked. Only a moved session window, or a forced check, needs saying.
+    await tellCompanionWindow({ force });
+    if (companionPort) return { ok: true };
+  }
+
   if (!force && Date.now() - claudeCodeReadAt < CLAUDE_CODE_MIN_INTERVAL_MS) return null;
   claudeCodeReadAt = Date.now();
 
   try {
-    const { latestSnapshot } = await chrome.storage.local.get("latestSnapshot");
-    // Claude Code draws on the same 5-hour allowance, so claude.ai's window is its window too.
-    const request = { type: "get", sessionResetsAt: latestSnapshot?.session?.resetsAt ?? null };
+    const request = { type: "get", sessionResetsAt: await sessionResetsAt() };
     const reply = await chrome.runtime.sendNativeMessage(COMPANION_HOST, request);
     if (reply?.type !== "usage") throw new Error(reply?.message ?? "The companion sent an unexpected reply.");
-    await setClaudeCode(reply.data, { ok: true, version: reply.version });
+    await setClaudeCode(reply.data, { ok: true, version: reply.version, live: false });
     return { ok: true };
   } catch (err) {
     const problem = companionProblem(err?.message);
@@ -365,6 +446,9 @@ async function refreshClaudeCode({ force = false } = {}) {
     return { ok: false, problem };
   }
 }
+
+// A worker that was restarted (an update, a reload) has lost its connection; pick it up again.
+syncCompanion().catch((err) => console.warn(LOG_PREFIX, "claude code: could not start the live connection", err));
 
 // ------------------------------------------------------------- model hint --
 
@@ -867,8 +951,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     if (changes.settings.oldValue?.modelHintPercent !== changes.settings.newValue?.modelHintPercent) {
       updateModelHint();
     }
-    if (!changes.settings.oldValue?.claudeCode && changes.settings.newValue?.claudeCode) {
-      refreshClaudeCode({ force: true });
+    const companionKeys = (settings) => `${Boolean(settings?.claudeCode)}:${settings?.claudeCodeLive !== false}:${Boolean(settings?.demoMode)}`;
+    if (companionKeys(changes.settings.oldValue) !== companionKeys(changes.settings.newValue)) {
+      syncCompanion().then(() => refreshClaudeCode({ force: true }));
     }
     const digestKeys = (settings) => `${Boolean(settings?.dailyDigest)}@${settings?.digestTime}`;
     if (digestKeys(changes.settings.oldValue) !== digestKeys(changes.settings.newValue)) scheduleDigest();

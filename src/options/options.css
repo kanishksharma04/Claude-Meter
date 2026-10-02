@@ -355,6 +355,7 @@ button.secondary:hover {
 
 #thresholdsRow.disabled,
 .alert-option.disabled,
+#claudeCodeLiveRow.disabled,
 #demoLabelRow.disabled {
   opacity: 0.4;
 }

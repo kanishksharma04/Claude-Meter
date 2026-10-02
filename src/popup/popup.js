@@ -357,7 +357,7 @@ function renderClaudeCode({ settings, claudeCode, claudeCodeStatus }) {
   note.textContent = failed
     ? `${claudeCode ? "Showing the last figures. " : ""}Can't reach the companion — see Claude Code in Options.`
     : claudeCode
-      ? `From Claude Code's logs on this computer · ${timeAgo(claudeCode.generatedAt)}`
+      ? `From Claude Code's logs on this computer · ${claudeCodeStatus?.live ? "live" : timeAgo(claudeCode.generatedAt)}`
       : "Waiting for the companion…";
 }
 

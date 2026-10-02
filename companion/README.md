@@ -3,7 +3,8 @@
 The extension can see your claude.ai plan limits, but not what **Claude Code** is
 doing: that lives in log files on your disk, which a browser extension can't read.
 The companion is the small program that can. The browser starts it when ClaudeMeter
-asks, it reads Claude Code's logs, answers with a summary, and that is all it does.
+asks, it reads Claude Code's logs and answers with a summary — once, or again each
+time the logs change — and that is all it does.
 
 - It reads `~/.claude/projects/**/*.jsonl` (or wherever `CLAUDE_CONFIG_DIR` points).
   It never writes, moves or deletes anything there. From each file it takes the token
@@ -76,11 +77,23 @@ Options says which of these it is:
   ClaudeMeter folder has moved since you installed, or (if you use a version manager)
   the Node.js you installed with has been removed. Run the install command again.
 
+## Live or on request
+
+With **Update live** on in Options (the default), the extension opens one connection
+and leaves it open. The companion watches `~/.claude/projects`, and when a log
+changes it reads the new lines and sends the figures again — after a second's lull,
+or every five seconds while a reply is still streaming in. It stays running for as
+long as the browser keeps the connection, and exits when it is closed.
+
+With it off, the browser starts the companion at each refresh, asks once, and the
+companion exits as soon as it has answered.
+
 ## What it sends the extension
 
 | Request | Reply |
 |---|---|
-| `{ "type": "ping" }` | `{ "type": "pong", "version": "1.0.0" }` |
+| `{ "type": "ping" }` | `{ "type": "pong", "version": "1.1.0" }` |
+| `{ "type": "watch", "sessionResetsAt": 1790000000000 }` | a `usage` reply now, and another — with `"live": true` — every time the logs change, for as long as the connection stays open |
 | `{ "type": "get", "sessionResetsAt": 1790000000000 }` | `{ "type": "usage", "version": "…", "data": { "session", "today", "week", "models", "cache", "buckets", "projects", "sessions", "files", "generatedAt" } }` |
 
 `session`, `today` and `week` are totals: `tokens`, `input`, `output`, `cacheRead`,
