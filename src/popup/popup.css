@@ -501,6 +501,24 @@ hr {
   opacity: 0.35;
 }
 
+/* Claude Code's activity: bars to their own scale along the foot of the chart (lib/history-chart.js). */
+.history-chart .cc-bar {
+  fill: var(--text);
+  opacity: 0.22;
+}
+
+.history-chart .cc-bar:hover {
+  opacity: 0.45;
+}
+
+.history-legend .swatch.code {
+  width: 6px;
+  height: 9px;
+  border-radius: 1px;
+  background: var(--text);
+  opacity: 0.4;
+}
+
 /* ---------------------------------------------------------- chart notes -- */
 
 .chart-wrap {

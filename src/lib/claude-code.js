@@ -20,6 +20,8 @@ const DAY_MS = 24 * HOUR_MS;
 export const COMPANION_HOST = "com.claudemeter.agent";
 
 export const SESSION_WINDOW_MS = 5 * HOUR_MS;
+/** The grain of the activity series the chart draws. */
+export const BUCKET_MS = 15 * 60 * 1000;
 /** How far back the summary looks. */
 export const SUMMARY_DAYS = 7;
 
@@ -138,7 +140,7 @@ export function currentWindow(records, now) {
  * @param {number} [options.sessionResetsAt] - when the claude.ai session resets, if the extension knows;
  *   Claude Code draws on the same 5-hour allowance, so that is its window too
  * @returns {{ generatedAt: number, session: object, today: object, week: object,
- *   models: Array<{ model: string, tokens: number, cost: number }> }}
+ *   models: Array<{ model: string, tokens: number, cost: number }>, buckets: Array<[number, number, number]> }}
  *   `session`, `today` and `week` are totals ({ tokens, input, output, cacheRead, cacheWrite, cost, messages });
  *   `session` also has `from` / `to`, null when no window is open
  */
@@ -155,9 +157,15 @@ export function summarizeClaudeCode(records, { now = Date.now(), sessionResetsAt
   const today = emptyTotals();
   const week = emptyTotals();
   const models = new Map();
+  const buckets = new Map(); // start of a 15-minute slot -> [tokens, cost]
 
   for (const record of all) {
     addTo(week, record);
+    const slot = Math.floor(record.ts / BUCKET_MS) * BUCKET_MS;
+    const bucket = buckets.get(slot) ?? [0, 0];
+    bucket[0] += tokensOf(record);
+    bucket[1] += costOf(record);
+    buckets.set(slot, bucket);
     if (record.ts >= dayStart) addTo(today, record);
     if (window && record.ts >= window.from) addTo(session, record);
 
@@ -173,6 +181,8 @@ export function summarizeClaudeCode(records, { now = Date.now(), sessionResetsAt
     today,
     week,
     models: [...models.values()].sort((a, b) => b.cost - a.cost),
+    // Activity over the week in 15-minute slots, empty ones left out: [start, tokens, cost in US$ to 4 places].
+    buckets: [...buckets].map(([t, [tokens, cost]]) => [t, tokens, Math.round(cost * 10_000) / 10_000]),
   };
 }
 

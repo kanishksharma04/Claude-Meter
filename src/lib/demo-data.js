@@ -279,27 +279,37 @@ export function buildDemoAnalytics(demo) {
     used,
   }));
 
-  // Claude Code, as the companion would report it: a busy session today, a steady week.
-  const totals = (cost, input, output, cacheRead, cacheWrite, messages) => ({
-    tokens: input + output + cacheRead + cacheWrite,
-    input,
-    output,
-    cacheRead,
-    cacheWrite,
-    cost,
-    messages,
-  });
+  // Claude Code, as the companion would report it. Its activity follows the made-up plan usage —
+  // busiest in the hours the session climbed fastest — and every total below is summed from it.
+  const buckets = usageLog
+    .filter((record) => record.t > now - 7 * DAY && record.burn > 0)
+    .flatMap((record) =>
+      [0, 1, 2, 3].map((quarter) => {
+        const share = 0.15 + 0.2 * noise(record.t / HOUR + quarter); // the hour's four quarters, unevenly
+        const cost = Math.round(record.burn * share * 480) / 10_000;
+        return [record.t + quarter * 15 * MIN, Math.round(cost * 1_800_000), cost];
+      })
+    )
+    .filter(([t]) => t <= now);
+  /** Totals for the buckets from `since` on, with a token mix typical of a long cached session. */
+  const totals = (since) => {
+    const cost = buckets.filter(([t]) => t >= since).reduce((sum, bucket) => sum + bucket[2], 0);
+    const [input, output, cacheRead, cacheWrite] = [620, 10_900, 1_694_000, 94_480].map((perDollar) => Math.round(cost * perDollar));
+    return { tokens: input + output + cacheRead + cacheWrite, input, output, cacheRead, cacheWrite, cost, messages: Math.round(cost * 23) };
+  };
   const sessionResetsAt = demo.latestSnapshot.session.resetsAt;
+  const week = totals(0);
   const claudeCode = {
     generatedAt: now,
     files: 14,
-    session: { from: sessionResetsAt - SESSION_LENGTH, to: sessionResetsAt, ...totals(3.84, 2_100, 41_000, 6_900_000, 310_000, 86) },
-    today: totals(7.12, 4_300, 78_000, 12_400_000, 640_000, 163),
-    week: totals(41.6, 26_000, 455_000, 71_000_000, 3_900_000, 948),
+    session: { from: sessionResetsAt - SESSION_LENGTH, to: sessionResetsAt, ...totals(sessionResetsAt - SESSION_LENGTH) },
+    today: totals(new Date(now).setHours(0, 0, 0, 0)),
+    week,
     models: [
-      { model: "claude-opus-5-5", tokens: 61_800_000, cost: 35.9 },
-      { model: "claude-haiku-4-5", tokens: 13_600_000, cost: 5.7 },
+      { model: "claude-opus-5-5", tokens: Math.round(week.tokens * 0.82), cost: week.cost * 0.86 },
+      { model: "claude-haiku-4-5", tokens: Math.round(week.tokens * 0.18), cost: week.cost * 0.14 },
     ],
+    buckets,
   };
 
   return {

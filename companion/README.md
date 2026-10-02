@@ -80,10 +80,13 @@ Options says which of these it is:
 | Request | Reply |
 |---|---|
 | `{ "type": "ping" }` | `{ "type": "pong", "version": "1.0.0" }` |
-| `{ "type": "get", "sessionResetsAt": 1790000000000 }` | `{ "type": "usage", "version": "…", "data": { "session", "today", "week", "models", "files", "generatedAt" } }` |
+| `{ "type": "get", "sessionResetsAt": 1790000000000 }` | `{ "type": "usage", "version": "…", "data": { "session", "today", "week", "models", "buckets", "files", "generatedAt" } }` |
 
 `session`, `today` and `week` are totals: `tokens`, `input`, `output`, `cacheRead`,
 `cacheWrite`, `cost` (US$ at API list prices) and `messages`. `sessionResetsAt` is
 optional — it lets the extension say when the claude.ai session window ends, since
 Claude Code draws on the same allowance; without it the window is inferred from the
 activity in the logs.
+
+`buckets` is the week's activity in 15-minute slots, as `[slot start, tokens, cost]`
+with empty slots left out — what the chart's Claude Code bars are drawn from.

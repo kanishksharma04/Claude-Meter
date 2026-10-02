@@ -19,7 +19,10 @@ import {
   describeChart,
   WEEK_WINDOW_MS,
   LOG_GAP_MS,
+  claudeCodeBars,
+  CLAUDE_CODE_HEIGHT,
 } from "../lib/history-chart.js";
+import { BUCKET_MS } from "../lib/claude-code.js";
 import { severityOf, isHexColor } from "../lib/severity.js";
 import { arrangeBuckets, moveBucket, togglePinned, toggleHidden } from "../lib/bucket-prefs.js";
 import { applyTheme, onSystemThemeChange } from "../lib/theme.js";
@@ -404,7 +407,7 @@ function svgEl(tag, attrs) {
   return node;
 }
 
-function renderHistory({ history, usageLog, settings, annotations, spikes }) {
+function renderHistory({ history, usageLog, settings, annotations, spikes, claudeCode }) {
   historySection.hidden = VIEW !== "panel";
   if (historySection.hidden) return;
 
@@ -426,6 +429,14 @@ function renderHistory({ history, usageLog, settings, annotations, spikes }) {
   historyRange.textContent = drawable.length > 0 ? `last ${formatDuration(chart.from, chart.to)}` : "";
   historyFrom.textContent = timeAgo(chart.from);
   historyChart.setAttribute("aria-label", describeChart({ series: drawable }, earlier));
+  if (settings.claudeCode && claudeCode?.buckets) {
+    // Said in the chart's description too: the bars carry no text of their own for a screen reader.
+    const inView = claudeCodeBars(claudeCode.buckets, chart, BUCKET_MS).total;
+    historyChart.setAttribute(
+      "aria-label",
+      `${historyChart.getAttribute("aria-label")} Claude Code used about ${formatDollars(inView)} at API prices over the same span.`
+    );
+  }
 
   const marks = drawable.length > 0 ? placeAnnotations(annotations, chart) : [];
   // Spikes sit on the same axis as notes, so the same placing works for them.
@@ -435,10 +446,32 @@ function renderHistory({ history, usageLog, settings, annotations, spikes }) {
   const away = drawable.length > 0 ? elsewhereSpans(chart, week ? { usageLog } : { history }) : [];
   const xOf = (t) => ((t - chart.from) / Math.max(1, chart.to - chart.from)) * CHART_WIDTH;
 
+  // Claude Code's activity as bars along the foot of the chart: quarter-hours over a day, hours over a week.
+  const code =
+    drawable.length > 0 && settings.claudeCode && claudeCode?.buckets
+      ? claudeCodeBars(claudeCode.buckets, chart, week ? 60 * 60 * 1000 : BUCKET_MS)
+      : null;
+  const codeBars = (code?.bars ?? []).map((bar) => {
+    const left = Math.max(0, xOf(bar.t));
+    const height = bar.share * CLAUDE_CODE_HEIGHT * CHART_HEIGHT;
+    const rect = svgEl("rect", {
+      class: "cc-bar",
+      x: left,
+      width: Math.max(0.4, Math.min(CHART_WIDTH, xOf(bar.t + code.stepMs)) - left),
+      y: CHART_HEIGHT - height,
+      height,
+    });
+    const tip = svgEl("title", {});
+    tip.textContent = `Claude Code · ${formatMoment(bar.t)} · ${formatDollars(bar.cost)}`;
+    rect.append(tip);
+    return rect;
+  });
+
   historyChart.replaceChildren(
     ...away.map(([from, to]) =>
       svgEl("rect", { class: "away-band", x: xOf(from), width: Math.max(0.5, xOf(to) - xOf(from)), y: 0, height: CHART_HEIGHT })
     ),
+    ...codeBars,
     // Gridlines at 0 / 50 / 100%.
     ...[0, 0.5, 1].map((f) =>
       svgEl("line", { class: "grid", x1: 0, x2: CHART_WIDTH, y1: f * CHART_HEIGHT, y2: f * CHART_HEIGHT })
@@ -474,6 +507,14 @@ function renderHistory({ history, usageLog, settings, annotations, spikes }) {
       return item;
     })
   );
+  if (codeBars.length > 0) {
+    const swatch = document.createElement("span");
+    swatch.className = "swatch code";
+    const item = document.createElement("li");
+    item.title = "Claude Code activity from its logs, in API-equivalent dollars. Drawn to its own scale: the bars are not percentages.";
+    item.append(swatch, `Claude Code · ${formatDollars(code.total)}`);
+    historyLegend.append(item);
+  }
   if (away.length > 0) {
     const swatch = document.createElement("span");
     swatch.className = "swatch away";

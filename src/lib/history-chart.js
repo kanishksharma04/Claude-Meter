@@ -79,6 +79,36 @@ export function weekSeries(usageLog, { now = Date.now(), windowMs = WEEK_WINDOW_
   return { ...chart, from: first - chart.from > LOG_GAP_MS && Number.isFinite(first) ? first : chart.from };
 }
 
+/** How much of the chart's height Claude Code's tallest bar takes: enough to read, not enough to bury the lines. */
+export const CLAUDE_CODE_HEIGHT = 0.45;
+
+/**
+ * Claude Code's activity as bars for the chart. Its usage is in dollars, not
+ * percent of a limit, so it has no place on the 0–100% axis: the bars are
+ * drawn to their own scale, tallest bar = CLAUDE_CODE_HEIGHT of the chart.
+ *
+ * @param {Array<[number, number, number]>} buckets - [slot start, tokens, cost] from the companion
+ * @param {object} chart - { from, to } of the chart being drawn
+ * @param {number} stepMs - how wide a bar is; slots are summed into steps of this size
+ * @returns {{ bars: Array<{ t: number, cost: number, share: number }>, total: number, max: number, stepMs: number }}
+ *   `share` is each bar's height as a 0–1 fraction of the tallest
+ */
+export function claudeCodeBars(buckets, { from, to }, stepMs) {
+  const sums = new Map();
+  for (const [t, , cost] of buckets ?? []) {
+    if (t + stepMs <= from || t > to) continue;
+    const step = Math.floor(t / stepMs) * stepMs;
+    sums.set(step, (sums.get(step) ?? 0) + cost);
+  }
+  const max = Math.max(0, ...sums.values());
+  return {
+    bars: [...sums].sort((a, b) => a[0] - b[0]).map(([t, cost]) => ({ t, cost, share: max > 0 ? cost / max : 0 })),
+    total: [...sums.values()].reduce((sum, cost) => sum + cost, 0),
+    max,
+    stepMs,
+  };
+}
+
 /**
  * SVG path data for one series, scaled into a width × height box with 0% at
  * the bottom. With `gapMs`, the line is broken wherever two points are further
