@@ -143,6 +143,7 @@ async function renderClaudeCode() {
 
   const working = settings.claudeCode && claudeCodeStatus?.ok;
   document.getElementById("claudeCodeSetup").hidden = working;
+  document.getElementById("claudeCodeTerminal").hidden = !working || settings.demoMode;
   claudeCodeStatusNote.classList.toggle("problem", settings.claudeCode && claudeCodeStatus?.ok === false);
   claudeCodeStatusNote.textContent = !settings.claudeCode
     ? ""

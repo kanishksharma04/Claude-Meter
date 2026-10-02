@@ -24,6 +24,7 @@ import { dirname, join, resolve } from "node:path";
 import { posix, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HOST_NAME, dataDir } from "./paths.mjs";
+import { statusPath } from "./status-file.mjs";
 
 /** Chromium-family browsers: where each keeps its profile, and its registry root on Windows. */
 const BROWSERS = [
@@ -50,11 +51,13 @@ export function isExtensionId(value) {
  * @param {string} options.extensionId
  * @param {string} options.nodePath - the Node.js binary to run the agent with
  * @param {string} options.agentPath - companion/claudemeter-agent.mjs
+ * @param {string} [options.cliPath] - companion/claudemeter.mjs; when given, a `claudemeter` command is set up too
  * @param {(path: string) => boolean} [options.exists] - "is this browser installed?"
  * @returns {{ files: Array<{ path: string, content: string, mode?: number }>,
- *   registry: Array<{ key: string, value: string }>, browsers: string[], launcher: string }}
+ *   registry: Array<{ key: string, value: string }>, browsers: string[], launcher: string, command: string | null }}
+ *   `command` is where the `claudemeter` terminal command was put
  */
-export function installPlan({ platform, home, env, extensionId, nodePath, agentPath, exists = existsSync }) {
+export function installPlan({ platform, home, env, extensionId, nodePath, agentPath, cliPath = null, exists = existsSync }) {
   const windows = platform === "win32";
   const path = windows ? win32 : posix;
   const directory = dataDir(platform, env, home);
@@ -62,9 +65,11 @@ export function installPlan({ platform, home, env, extensionId, nodePath, agentP
   // The browser needs something it can execute directly. Naming Node by its full path matters:
   // a browser started from the dock or the Start menu doesn't have your shell's PATH.
   const launcher = path.join(directory, windows ? "claudemeter-agent.cmd" : "claudemeter-agent");
-  const launcherContent = windows
-    ? `@echo off\r\n"${nodePath}" "${agentPath}" %*\r\n`
-    : `#!/bin/sh\nexec "${nodePath}" "${agentPath}" "$@"\n`;
+  const script = (target) =>
+    windows ? `@echo off\r\n"${nodePath}" "${target}" %*\r\n` : `#!/bin/sh\nexec "${nodePath}" "${target}" "$@"\n`;
+  const launcherContent = script(agentPath);
+  // The terminal command, in a folder of its own so it can go on PATH without the launcher coming too.
+  const command = cliPath ? path.join(directory, "bin", windows ? "claudemeter.cmd" : "claudemeter") : null;
 
   const manifest =
     JSON.stringify(
@@ -80,6 +85,7 @@ export function installPlan({ platform, home, env, extensionId, nodePath, agentP
     ) + "\n";
 
   const files = [{ path: launcher, content: launcherContent, mode: 0o755 }];
+  if (command) files.push({ path: command, content: script(cliPath), mode: 0o755 });
   const registry = [];
   const browsers = [];
 
@@ -91,7 +97,7 @@ export function installPlan({ platform, home, env, extensionId, nodePath, agentP
       registry.push({ key: `HKCU\\Software\\${browser.registry}\\NativeMessagingHosts\\${HOST_NAME}`, value: manifestPath });
       browsers.push(browser.name);
     }
-    return { files, registry, browsers, launcher };
+    return { files, registry, browsers, launcher, command };
   }
 
   const base = platform === "darwin" ? path.join(home, "Library", "Application Support") : path.join(home, ".config");
@@ -101,7 +107,7 @@ export function installPlan({ platform, home, env, extensionId, nodePath, agentP
     files.push({ path: path.join(base, browser[platform], "NativeMessagingHosts", `${HOST_NAME}.json`), content: manifest });
     browsers.push(browser.name);
   }
-  return { files, registry, browsers, launcher };
+  return { files, registry, browsers, launcher, command };
 }
 
 /** Carries a plan out. `run` executes one command; it is a parameter so tests can watch instead. */
@@ -160,6 +166,7 @@ async function main() {
     extensionId: extensionId ?? "a".repeat(32),
     nodePath: process.execPath,
     agentPath: resolve(here, "claudemeter-agent.mjs"),
+    cliPath: resolve(here, "claudemeter.mjs"),
     // When uninstalling, clear out every browser's folder, not just the ones that look installed.
     exists: uninstall ? () => true : existsSync,
   });
@@ -171,12 +178,16 @@ async function main() {
   }
 
   await applyPlan(plan, { uninstall });
+  // The status file isn't part of the plan — the companion writes it later — but it goes when the companion does.
+  if (uninstall) await rm(statusPath(), { force: true });
   console.log(describe(plan, uninstall));
   console.log(
     uninstall
       ? "\nRemoved. The extension will say the companion isn't installed; switch Claude Code off in its Options."
       : `\nDone, for ${plan.browsers.join(", ")}. Now open ClaudeMeter's Options and switch on "Claude Code".\n` +
-          "Keep this folder where it is: the browser runs the companion from here."
+          "Keep this folder where it is: the browser runs the companion from here.\n\n" +
+          `For plan usage in the terminal, the command is:\n  ${plan.command} status\n` +
+          `Put ${dirname(plan.command)} on your PATH to call it as plain "claudemeter" (try "claudemeter help").`
   );
 }
 

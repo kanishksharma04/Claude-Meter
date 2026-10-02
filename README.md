@@ -248,6 +248,13 @@ see [companion/README.md](companion/README.md)), ClaudeMeter reads those logs:
   figures within a second or two of a reply being written. It only re-reads the lines
   that were added. If the connection is lost ClaudeMeter says so, carries on by
   asking at each refresh, and reconnects at the next one. Can be switched off.
+- **Terminal command** — `claudemeter status` prints your claude.ai plan usage as one
+  line, `5h 62% · wk 71%`, for the Claude Code status line, a tmux status bar or a
+  shell prompt. `--resets` adds the time to each reset, `--color` and `--tmux` colour
+  the figures by your own warning levels, and `--format` takes a template
+  (`{session}`, `{weekly}`, `{weekly:Opus}`, `{session_reset}`…). It only reads a
+  file, so it returns in a few hundredths of a second. Privacy mode hides the
+  figures here too, and figures older than 15 minutes are marked with `~`.
 - **One installer for macOS, Linux and Windows** — `node companion/install.mjs <id>`
   registers the companion with Chrome, Chromium, Edge, Brave and Vivaldi. On Windows
   that means writing the manifest, a `.cmd` launcher and the registry values under
@@ -397,6 +404,9 @@ claudemeter/
 │   ├── claudemeter-agent.mjs          # native-messaging host: answers the extension over stdin/stdout
 │   ├── read-logs.mjs                  # finds and parses ~/.claude/projects/**/*.jsonl, read-only, incrementally
 │   ├── watch-logs.mjs                 # notices when a log changes (file events, or polling where there are none)
+│   ├── claudemeter.mjs                # the `claudemeter` terminal command
+│   ├── status-file.mjs                # the status file the companion writes and the command reads
+│   ├── status-format.mjs              # status file -> one line, with templates and colours
 │   ├── install.mjs                    # registers it with your browsers on macOS, Linux and Windows
 │   └── paths.mjs                      # where ~/.claude and the companion's own folder are
 ├── src/
@@ -722,6 +732,12 @@ written when Developer mode is on, from Options.
   that `cd`s into a subfolder is split between the two, and running Claude Code from
   your home directory makes "home" a project. Only the twelve costliest directories
   of the week are listed.
+- The terminal command shows what the browser last knew. The plan percentages exist
+  only inside the browser (they come from claude.ai with your sign-in), so the
+  extension passes them to the companion, which writes them to a status file; with
+  the browser closed nothing updates it, and the figures gain a `~`. A session whose
+  reset time has passed is shown as 0%. The command needs the Claude Code switch on
+  in Options, since that is what puts the companion to work.
 - Live updates keep two things running that otherwise wouldn't be: the companion
   process, and ClaudeMeter's background worker, which the browser can't put to sleep
   while the connection is open. Both are small and idle between changes, and both

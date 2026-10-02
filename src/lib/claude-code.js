@@ -368,3 +368,22 @@ export function companionProblem(message) {
   }
   return { code: "unknown", text: `Couldn't reach the companion: ${error || "no reason given"}.` };
 }
+
+/**
+ * The plan usage as the companion's status file wants it (companion/status-file.mjs):
+ * the figures a terminal status line shows. In privacy mode the figures are
+ * left out and `hidden` says why — a terminal is as visible as any window.
+ */
+export function planForCompanion(snapshot, settings) {
+  if (!snapshot) return null;
+  const bucket = (b) => ({ percent: b.percentUsed, resetsAt: b.resetsAt ?? null });
+  const hidden = Boolean(settings?.privacyMode);
+  return {
+    fetchedAt: snapshot.fetchedAt,
+    tier: snapshot.planTier ?? null,
+    hidden,
+    session: hidden || !snapshot.session ? null : bucket(snapshot.session),
+    weekly: hidden ? [] : (snapshot.weekly ?? []).map((b) => ({ label: b.label, ...bucket(b) })),
+    thresholds: { warnAt: settings?.warnAt ?? 80, dangerAt: settings?.dangerAt ?? 95 },
+  };
+}

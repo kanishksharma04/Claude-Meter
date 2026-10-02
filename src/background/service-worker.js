@@ -40,7 +40,7 @@ import { resetsToAnnounce, nextResetCheck, describeReset } from "../lib/reset-al
 import { deliverWebhooks } from "../lib/webhooks.js";
 import { isQuiet } from "../lib/quiet-hours.js";
 import { buildDigest, nextDigestAt } from "../lib/digest.js";
-import { COMPANION_HOST, companionProblem } from "../lib/claude-code.js";
+import { COMPANION_HOST, companionProblem, planForCompanion } from "../lib/claude-code.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
 const ALARM_NAME = "claudemeter-refresh-check";
@@ -334,6 +334,7 @@ async function applySnapshot(snapshot) {
   await scheduleResetCheck(snapshot);
   // This reading may have brought a new session window; Claude Code's figures are counted in the same one.
   await tellCompanionWindow();
+  await tellCompanionPlan();
 }
 
 // ------------------------------------------------------------- claude code --
@@ -389,7 +390,22 @@ async function connectCompanion() {
   });
 
   companionWindow = await sessionResetsAt();
-  port.postMessage({ type: "watch", sessionResetsAt: companionWindow });
+  port.postMessage({ type: "watch", sessionResetsAt: companionWindow, plan: await companionPlan() });
+}
+
+/**
+ * The plan usage, for the companion to put in its status file — which is how
+ * the `claudemeter` terminal command gets figures that only the browser has.
+ */
+async function companionPlan() {
+  const { latestSnapshot } = await chrome.storage.local.get("latestSnapshot");
+  return planForCompanion(latestSnapshot, await getSettings());
+}
+
+/** Passes the current plan usage to a connected companion. */
+async function tellCompanionPlan() {
+  const plan = companionPort && (await companionPlan());
+  if (plan) companionPort?.postMessage({ type: "plan", plan });
 }
 
 function disconnectCompanion() {
@@ -434,7 +450,7 @@ async function refreshClaudeCode({ force = false } = {}) {
   claudeCodeReadAt = Date.now();
 
   try {
-    const request = { type: "get", sessionResetsAt: await sessionResetsAt() };
+    const request = { type: "get", sessionResetsAt: await sessionResetsAt(), plan: await companionPlan() };
     const reply = await chrome.runtime.sendNativeMessage(COMPANION_HOST, request);
     if (reply?.type !== "usage") throw new Error(reply?.message ?? "The companion sent an unexpected reply.");
     await setClaudeCode(reply.data, { ok: true, version: reply.version, live: false });
@@ -971,6 +987,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       const checked = Boolean(changes.settings.newValue?.privacyMode);
       chrome.contextMenus.update("privacy", { checked }).catch(() => {});
     }
+    // What the terminal shows follows privacy mode and the warning levels too.
+    const planKeys = (settings) => JSON.stringify([settings?.privacyMode, settings?.warnAt, settings?.dangerAt]);
+    if (planKeys(changes.settings.oldValue) !== planKeys(changes.settings.newValue)) tellCompanionPlan();
     const toolbarKeys = ["iconStyle", "warnAt", "dangerAt", "severityColors", "privacyMode"];
     const pick = (settings) => JSON.stringify(toolbarKeys.map((key) => settings?.[key]));
     if (pick(changes.settings.oldValue) !== pick(changes.settings.newValue)) {

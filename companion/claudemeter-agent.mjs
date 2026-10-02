@@ -2,7 +2,9 @@
 // The ClaudeMeter companion: a native-messaging host. The browser starts it
 // when the extension asks, and talks to it over stdin/stdout; it reads Claude
 // Code's logs under ~/.claude and answers with a summary of the usage in them.
-// It reads, and that is all — no network, nothing written under ~/.claude.
+// No network, and nothing written under ~/.claude. The one file it does write
+// is its own status file (status-file.mjs), with the plan usage the extension
+// passes it, so the `claudemeter` command has something to print.
 //
 // Wire format (the browser's, not ours): each message is a 32-bit
 // little-endian length followed by that many bytes of UTF-8 JSON.
@@ -10,6 +12,7 @@
 //   { type: "ping" }                     -> { type: "pong", version }
 //   { type: "get", sessionResetsAt? }    -> { type: "usage", version, data }
 //   { type: "watch", sessionResetsAt? }  -> a "usage" now, and another whenever the logs change
+//   { type: "plan", plan }               -> (no reply) the plan usage is written to the status file
 //   anything that goes wrong             -> { type: "error", version, message }
 //
 // "get" is one question and one answer, after which the browser closes the
@@ -20,9 +23,10 @@ import { join } from "node:path";
 import { claudeDir } from "./paths.mjs";
 import { createLogReader } from "./read-logs.mjs";
 import { watchLogs } from "./watch-logs.mjs";
+import { buildStatus, writeStatus } from "./status-file.mjs";
 import { summarizeClaudeCode } from "../src/lib/claude-code.js";
 
-export const VERSION = "1.1.0";
+export const VERSION = "1.2.0";
 
 /** While watching with nothing changing, send the figures again this often: "today" and the session window move on their own. */
 const HEARTBEAT_MS = 5 * 60 * 1000;
@@ -54,6 +58,10 @@ function push() {
 async function handle(message) {
   try {
     if (message?.type === "ping") return send({ type: "pong", version: VERSION });
+
+    // The plan figures can ride along with any request, or come on their own.
+    if (message?.plan) await writeStatus(buildStatus(message.plan));
+    if (message?.type === "plan") return;
 
     if (message?.type === "get" || message?.type === "watch") {
       sessionResetsAt = message.sessionResetsAt ?? null;

@@ -12,6 +12,8 @@ time the logs change — and that is all it does.
 - It makes no network connections. What it reads goes to the extension over the
   browser's own [native messaging](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging)
   pipe and nowhere else.
+- The one thing it writes is its own status file, `~/.claudemeter/status.json`, with
+  the plan usage the extension passes it, for the `claudemeter` terminal command.
 - It has no dependencies beyond Node.js itself.
 
 ## What you need
@@ -40,11 +42,11 @@ without doing it, add `--dry-run`.
 A browser will only start a native-messaging host it has been told about, by a small
 manifest naming the program and the one extension allowed to use it.
 
-| | Launcher | Manifest |
-|---|---|---|
-| **macOS** | `~/.claudemeter/claudemeter-agent` | `~/Library/Application Support/<browser>/NativeMessagingHosts/com.claudemeter.agent.json` |
-| **Linux** | `~/.claudemeter/claudemeter-agent` | `~/.config/<browser>/NativeMessagingHosts/com.claudemeter.agent.json` |
-| **Windows** | `%LOCALAPPDATA%\ClaudeMeter\claudemeter-agent.cmd` | `%LOCALAPPDATA%\ClaudeMeter\com.claudemeter.agent.json`, pointed to by `HKCU\Software\<browser>\NativeMessagingHosts\com.claudemeter.agent` |
+| | Launcher | Manifest | Terminal command |
+|---|---|---|---|
+| **macOS** | `~/.claudemeter/claudemeter-agent` | `~/Library/Application Support/<browser>/NativeMessagingHosts/com.claudemeter.agent.json` | `~/.claudemeter/bin/claudemeter` |
+| **Linux** | `~/.claudemeter/claudemeter-agent` | `~/.config/<browser>/NativeMessagingHosts/com.claudemeter.agent.json` | `~/.claudemeter/bin/claudemeter` |
+| **Windows** | `%LOCALAPPDATA%\ClaudeMeter\claudemeter-agent.cmd` | `%LOCALAPPDATA%\ClaudeMeter\com.claudemeter.agent.json`, pointed to by `HKCU\Software\<browser>\NativeMessagingHosts\com.claudemeter.agent` | `%LOCALAPPDATA%\ClaudeMeter\bin\claudemeter.cmd` |
 
 The launcher is a two-line script that runs the companion with the full path of the
 Node.js you ran the installer with. That matters: a browser started from the dock or
@@ -55,13 +57,73 @@ manifest for each of those it finds a profile for; on Windows it sets the regist
 value for all of them. Everything is under your own user account — no administrator
 rights, nothing system-wide.
 
+## In the terminal: `claudemeter status`
+
+The installer also sets up a `claudemeter` command (it prints where). It shows your
+**claude.ai plan usage** — the same percentages as the popup — as one line:
+
+```console
+$ claudemeter status
+5h 62% · wk 71%
+$ claudemeter status --resets
+5h 62% (2h14m) · wk 71% (3d6h)
+```
+
+`5h` is the session, `wk` the fullest of your weekly limits.
+
+| Option | |
+|---|---|
+| `--resets` | add the time until each reset |
+| `--format <template>` | say exactly what to print, with the placeholders below |
+| `--color` | colour each figure green, amber or red (ANSI), by the warning levels you set in Options |
+| `--tmux` | the same, with tmux's `#[fg=…]` codes |
+| `--max-age <minutes>` | mark figures older than this with `~` (default 15; 0 = never) |
+| `--json` | print the status file itself |
+
+Placeholders: `{session}`, `{session_reset}`, `{weekly}` (the fullest weekly limit),
+`{weekly:Opus}` (one by name), `{weekly_label}`, `{weekly_reset}`, `{tier}`, `{age}`.
+
+Where to put it:
+
+```jsonc
+// Claude Code status line — ~/.claude/settings.json
+{ "statusLine": { "type": "command", "command": "claudemeter status" } }
+```
+
+```tmux
+# tmux — ~/.tmux.conf
+set -g status-right "#(claudemeter status --tmux)"
+```
+
+```zsh
+# zsh prompt — ~/.zshrc
+setopt prompt_subst
+RPROMPT='$(claudemeter status)'
+```
+
+If `claudemeter` isn't on your `PATH`, use the full path the installer printed
+(`~/.claudemeter/bin/claudemeter`, or `%LOCALAPPDATA%\ClaudeMeter\bin\claudemeter.cmd`).
+
+**How it knows.** Plan usage only exists inside the browser, so the extension hands
+it to the companion with each refresh, and the companion writes it to
+`~/.claudemeter/status.json` (`claudemeter path` prints the exact place). The
+command just reads that file: it starts nothing, contacts nothing, and takes a few
+hundredths of a second, so it is safe to run on every prompt. The other side of that
+is that the figures stop moving when the browser is closed — that is what `~` means
+— and that it needs **Show Claude Code usage** switched on in Options. With privacy
+mode on in the browser, it prints `usage hidden`.
+
+`claudemeter status` exits 0 when it printed figures, 1 when there were none yet, and
+2 for a mistake in the options.
+
 ## Uninstall
 
 ```sh
 node companion/install.mjs --uninstall
 ```
 
-removes the launcher, the manifests and (on Windows) the registry values.
+removes the launcher, the terminal command, the manifests, the status file and (on
+Windows) the registry values.
 
 ## If it doesn't connect
 
@@ -92,7 +154,8 @@ companion exits as soon as it has answered.
 
 | Request | Reply |
 |---|---|
-| `{ "type": "ping" }` | `{ "type": "pong", "version": "1.1.0" }` |
+| `{ "type": "ping" }` | `{ "type": "pong", "version": "1.2.0" }` |
+| `{ "type": "plan", "plan": { … } }` | none — the plan usage is written to the status file. `plan` may also ride along on a `get` or `watch` |
 | `{ "type": "watch", "sessionResetsAt": 1790000000000 }` | a `usage` reply now, and another — with `"live": true` — every time the logs change, for as long as the connection stays open |
 | `{ "type": "get", "sessionResetsAt": 1790000000000 }` | `{ "type": "usage", "version": "…", "data": { "session", "today", "week", "models", "cache", "buckets", "projects", "sessions", "files", "generatedAt" } }` |
 
