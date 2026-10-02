@@ -229,6 +229,11 @@ see [companion/README.md](companion/README.md)), ClaudeMeter reads those logs:
   7-day one, so you can see whether a climb in the session line was Claude Code or
   something else. The bars are dollars, not percent, so they are drawn to their own
   scale; the legend gives the total for the span and each bar its figure on hover.
+- **Per-project breakdown** — the week's Claude Code usage grouped by the working
+  directory each message was sent from: cost and share of the total, sessions,
+  tokens, when it was last used and what it has cost today. Folders are shown by name
+  (with enough of the path to tell two of the same name apart) and by full path on
+  hover. In the dashboard.
 - **One installer for macOS, Linux and Windows** — `node companion/install.mjs <id>`
   registers the companion with Chrome, Chromium, Edge, Brave and Vivaldi. On Windows
   that means writing the manifest, a `.cmd` launcher and the registry values under
@@ -686,6 +691,10 @@ written when Developer mode is on, from Options.
   hourly profile (the tooltip says which method produced the figure), and "today is
   running at N× your usual" is capped between 0.5× and 2×. A straight-line forecast
   isn't offered in the first 2% of a window, where one message would swing it wildly.
+- Projects are grouped by the exact working directory in each log line, so a session
+  that `cd`s into a subfolder is split between the two, and running Claude Code from
+  your home directory makes "home" a project. Only the twelve costliest directories
+  of the week are listed.
 - Claude Code's bars on the chart share its time axis but not its percentage scale:
   the tallest bar in view is always the same height, whatever it cost. They are there
   to show *when*, and the legend to say *how much*.

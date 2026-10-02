@@ -310,6 +310,22 @@ export function buildDemoAnalytics(demo) {
       { model: "claude-haiku-4-5", tokens: Math.round(week.tokens * 0.18), cost: week.cost * 0.14 },
     ],
     buckets,
+    projects: [
+      ["/Users/demo/code/billing-api", 0.56, 9, 6 * MIN],
+      ["/Users/demo/code/marketing-site", 0.25, 5, 26 * HOUR],
+      ["/Users/demo/dotfiles", 0.12, 3, 3 * DAY],
+      ["/Users/demo/code/scratch/billing-api", 0.07, 2, 5 * DAY],
+    ].map(([cwd, share, sessions, ago], index) => ({
+      cwd,
+      // Two of them share a folder name, so the names show how that is told apart.
+      name: ["code/billing-api", "marketing-site", "dotfiles", "scratch/billing-api"][index],
+      tokens: Math.round(week.tokens * share),
+      cost: week.cost * share,
+      costToday: index === 0 ? totals(new Date(now).setHours(0, 0, 0, 0)).cost : 0,
+      messages: Math.round(week.messages * share),
+      sessions,
+      lastAt: now - ago,
+    })),
   };
 
   return {

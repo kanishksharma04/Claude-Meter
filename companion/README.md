@@ -80,7 +80,7 @@ Options says which of these it is:
 | Request | Reply |
 |---|---|
 | `{ "type": "ping" }` | `{ "type": "pong", "version": "1.0.0" }` |
-| `{ "type": "get", "sessionResetsAt": 1790000000000 }` | `{ "type": "usage", "version": "…", "data": { "session", "today", "week", "models", "buckets", "files", "generatedAt" } }` |
+| `{ "type": "get", "sessionResetsAt": 1790000000000 }` | `{ "type": "usage", "version": "…", "data": { "session", "today", "week", "models", "buckets", "projects", "files", "generatedAt" } }` |
 
 `session`, `today` and `week` are totals: `tokens`, `input`, `output`, `cacheRead`,
 `cacheWrite`, `cost` (US$ at API list prices) and `messages`. `sessionResetsAt` is
@@ -90,3 +90,6 @@ activity in the logs.
 
 `buckets` is the week's activity in 15-minute slots, as `[slot start, tokens, cost]`
 with empty slots left out — what the chart's Claude Code bars are drawn from.
+
+`projects` is the week by working directory, costliest first, up to twelve:
+`cwd`, a short `name`, `tokens`, `cost`, `costToday`, `messages`, `sessions`, `lastAt`.

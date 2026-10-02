@@ -10,7 +10,8 @@ import { timelineDays, summarizeWindows } from "../lib/session-windows.js";
 import { severityOf } from "../lib/severity.js";
 import { recentSpikes, describeSpike, spikeSource } from "../lib/spikes.js";
 import { attribution, describeAttribution } from "../lib/attribution.js";
-import { valueForMoney, describeValue, monthlyPriceFor } from "../lib/value.js";
+import { valueForMoney, describeValue, monthlyPriceFor, formatDollars, formatTokens } from "../lib/value.js";
+import { timeAgo } from "../lib/time-format.js";
 import { formatHour, formatDuration, formatClock, formatMoment } from "../lib/time-format.js";
 
 const $ = (id) => document.getElementById(id);
@@ -195,6 +196,43 @@ function renderValue({ messageLog, usageLog, settings, latestSnapshot }) {
   section.dataset.verdict = value.ready ? "ready" : "learning";
 }
 
+// ------------------------------------------------- claude code: projects --
+
+function renderProjects({ settings, claudeCode }) {
+  const projects = settings.claudeCode ? (claudeCode?.projects ?? []) : [];
+  const section = $("projectSection");
+  section.hidden = projects.length === 0;
+  if (section.hidden) return;
+
+  const total = claudeCode.week.cost || 1;
+  $("projectNote").textContent = `${projects.length} ${projects.length === 1 ? "directory" : "directories"} · last 7 days`;
+  $("projectList").replaceChildren(
+    ...projects.map((project) => {
+      const share = Math.round((project.cost / total) * 100);
+      const bar = el("span", { className: "project-bar" });
+      bar.style.width = `${Math.max(1, (project.cost / projects[0].cost) * 100)}%`;
+      return el(
+        "li",
+        {},
+        el(
+          "div",
+          { className: "project-head" },
+          // The short name is what fits; the full path is one hover away.
+          el("span", { className: "project-name", title: project.cwd || "" }, project.name),
+          el("span", { className: "project-cost" }, `${formatDollars(project.cost)} · ${share}%`)
+        ),
+        el("div", { className: "project-track", ariaHidden: "true" }, bar),
+        el(
+          "p",
+          { className: "project-meta" },
+          `${plural(project.sessions, "session")} · ${formatTokens(project.tokens)} tokens · last used ${timeAgo(project.lastAt)}` +
+            (project.costToday > 0 ? ` · ${formatDollars(project.costToday)} today` : "")
+        )
+      );
+    })
+  );
+}
+
 // --------------------------------------------------------------- lockouts --
 
 function renderLockouts({ limitHits }) {
@@ -250,6 +288,7 @@ export function renderInsights(state) {
   renderTimeline(state);
   renderSpikes(state);
   renderAttribution(state);
+  renderProjects(state);
   renderLockouts(state);
   renderPlanFit(state);
   renderValue(state);

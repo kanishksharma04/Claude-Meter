@@ -241,6 +241,61 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* -------------------------------------------------- claude code: lists -- */
+
+.project-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.project-list li + li {
+  margin-top: 10px;
+}
+
+.project-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.project-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.project-cost {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.project-track {
+  height: 5px;
+  margin: 5px 0 4px;
+  border-radius: 999px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.project-bar {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ok-fill, var(--accent));
+}
+
+.project-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
 /* ------------------------------------------------------------- lockouts -- */
 
 .lockout-table {

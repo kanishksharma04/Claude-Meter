@@ -102,6 +102,31 @@ export function dedupeRecords(records) {
   return [...byKey.values(), ...unkeyed].sort((a, b) => a.ts - b.ts);
 }
 
+/** How many projects the summary lists; the rest are a long tail of one-off directories. */
+export const MAX_PROJECTS = 12;
+
+/** A path's segments, whichever way its slashes lean. */
+function segments(path) {
+  return String(path).split(/[\\/]+/).filter(Boolean);
+}
+
+/**
+ * Gives each project a short name: its directory's own name, or — where two
+ * projects share one — enough of the path before it to tell them apart.
+ */
+export function nameProjects(projects) {
+  const parts = projects.map((project) => segments(project.cwd));
+  return projects.map((project, index) => {
+    if (parts[index].length === 0) return { ...project, name: "(no directory recorded)" };
+    for (let depth = 1; depth <= parts[index].length; depth++) {
+      const name = parts[index].slice(-depth).join("/");
+      const clash = parts.some((other, i) => i !== index && other.slice(-depth).join("/") === name);
+      if (!clash) return { ...project, name };
+    }
+    return { ...project, name: project.cwd };
+  });
+}
+
 const emptyTotals = () => ({ tokens: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, messages: 0 });
 
 function addTo(totals, record) {
@@ -140,7 +165,8 @@ export function currentWindow(records, now) {
  * @param {number} [options.sessionResetsAt] - when the claude.ai session resets, if the extension knows;
  *   Claude Code draws on the same 5-hour allowance, so that is its window too
  * @returns {{ generatedAt: number, session: object, today: object, week: object,
- *   models: Array<{ model: string, tokens: number, cost: number }>, buckets: Array<[number, number, number]> }}
+ *   models: Array<{ model: string, tokens: number, cost: number }>, buckets: Array<[number, number, number]>,
+ *   projects: Array<{ cwd: string, name: string, tokens: number, cost: number, costToday: number, messages: number, sessions: number, lastAt: number }> }}
  *   `session`, `today` and `week` are totals ({ tokens, input, output, cacheRead, cacheWrite, cost, messages });
  *   `session` also has `from` / `to`, null when no window is open
  */
@@ -158,6 +184,7 @@ export function summarizeClaudeCode(records, { now = Date.now(), sessionResetsAt
   const week = emptyTotals();
   const models = new Map();
   const buckets = new Map(); // start of a 15-minute slot -> [tokens, cost]
+  const projects = new Map(); // working directory -> its totals
 
   for (const record of all) {
     addTo(week, record);
@@ -168,6 +195,16 @@ export function summarizeClaudeCode(records, { now = Date.now(), sessionResetsAt
     buckets.set(slot, bucket);
     if (record.ts >= dayStart) addTo(today, record);
     if (window && record.ts >= window.from) addTo(session, record);
+
+    const cwd = record.cwd ?? "";
+    const project = projects.get(cwd) ?? { cwd, tokens: 0, cost: 0, costToday: 0, messages: 0, sessions: new Set(), lastAt: 0 };
+    project.tokens += tokensOf(record);
+    project.cost += costOf(record);
+    if (record.ts >= dayStart) project.costToday += costOf(record);
+    project.messages += 1;
+    if (record.sessionId) project.sessions.add(record.sessionId);
+    project.lastAt = Math.max(project.lastAt, record.ts);
+    projects.set(cwd, project);
 
     const model = models.get(record.model) ?? { model: record.model, tokens: 0, cost: 0 };
     model.tokens += tokensOf(record);
@@ -181,6 +218,13 @@ export function summarizeClaudeCode(records, { now = Date.now(), sessionResetsAt
     today,
     week,
     models: [...models.values()].sort((a, b) => b.cost - a.cost),
+    // The week by working directory, costliest first. `cwd` is "" for lines that didn't record one.
+    projects: nameProjects(
+      [...projects.values()]
+        .map((project) => ({ ...project, sessions: project.sessions.size }))
+        .sort((a, b) => b.cost - a.cost)
+        .slice(0, MAX_PROJECTS)
+    ),
     // Activity over the week in 15-minute slots, empty ones left out: [start, tokens, cost in US$ to 4 places].
     buckets: [...buckets].map(([t, [tokens, cost]]) => [t, tokens, Math.round(cost * 10_000) / 10_000]),
   };
