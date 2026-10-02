@@ -43,6 +43,10 @@ const PERMISSION_REASONS = {
     name: "Offscreen document",
     why: "Play a short sound with an alert, if you turn that on in Options. It needs a hidden page to do it, which is opened for the second the sound lasts and nothing else.",
   },
+  nativeMessaging: {
+    name: "Native messaging",
+    why: "Talk to the ClaudeMeter companion, if you install it, to show Claude Code usage from the logs on this computer. Without the companion and its switch in Options, this is never used.",
+  },
   contextMenus: {
     name: "Context menu",
     why: "Add Refresh, Snooze and a few shortcuts to the menu you get by right-clicking the ClaudeMeter icon. Nothing is added to web pages' own menus.",

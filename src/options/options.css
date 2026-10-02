@@ -599,3 +599,38 @@ button.danger {
 .calendar-note:empty {
   display: none;
 }
+
+/* ---------------------------------------------------------- claude code -- */
+
+.companion-status {
+  margin: 10px 0 0;
+}
+
+.companion-status:empty {
+  display: none;
+}
+
+.companion-status.problem {
+  color: var(--danger);
+}
+
+.command {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+
+.command code {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: nowrap;
+  user-select: all;
+}

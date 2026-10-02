@@ -254,6 +254,33 @@
     </section>
 
     <section class="card">
+      <h2>Claude Code</h2>
+      <label class="row">
+        <span>
+          Show Claude Code usage
+          <small>
+            Claude Code keeps a log of every conversation on this computer, with exact token counts. A small
+            companion program, which you install once, reads those logs for ClaudeMeter. Nothing leaves your
+            machine.
+          </small>
+        </span>
+        <input type="checkbox" id="claudeCodeToggle" />
+      </label>
+      <p class="hint companion-status" id="claudeCodeStatus" role="status"></p>
+      <div id="claudeCodeSetup">
+        <p class="hint">
+          To install the companion, run this in a terminal, from the folder you loaded ClaudeMeter from. It needs
+          Node.js 18 or newer, and works on macOS, Linux and Windows.
+        </p>
+        <div class="command">
+          <code id="installCommand"></code>
+          <button id="copyInstallBtn" class="secondary inline" type="button">Copy</button>
+        </div>
+        <button id="claudeCodeCheckBtn" class="secondary" type="button">Check again</button>
+      </div>
+    </section>
+
+    <section class="card">
       <h2>Forecasting and analytics</h2>
       <a class="debug-link" href="../report/report.html">Open the weekly report &rarr;</a>
       <label class="row">

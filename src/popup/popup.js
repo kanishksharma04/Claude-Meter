@@ -4,6 +4,7 @@ import { placeAnnotations, parseWhen } from "../lib/annotations.js";
 import { describeSpike } from "../lib/spikes.js";
 import { elsewhereSpans } from "../lib/attribution.js";
 import { spentToday, describeExtraUsage } from "../lib/extra-usage.js";
+import { formatDollars, formatTokens } from "../lib/value.js";
 import { isSnoozed } from "../lib/snooze.js";
 import { isQuiet, quietUntil } from "../lib/quiet-hours.js";
 import { buildResetCalendar, CALENDAR_FILENAME } from "../lib/ics.js";
@@ -319,6 +320,44 @@ function renderExtraUsage({ extraUsage, extraUsageLog }) {
   fill.className = `progress-fill ${severityClass(extraUsage.percentUsed)}`.trim();
 }
 
+/**
+ * The Claude Code section: what its local logs add up to for this session,
+ * today and the week, priced at API rates. Shown only when switched on.
+ */
+function renderClaudeCode({ settings, claudeCode, claudeCodeStatus }) {
+  const section = document.getElementById("claudeCode");
+  section.hidden = !settings.claudeCode;
+  if (section.hidden) return;
+
+  const totals = document.getElementById("claudeCodeTotals");
+  const note = document.getElementById("claudeCodeNote");
+  const rows = claudeCode
+    ? [
+        ["This session", claudeCode.session.from != null ? claudeCode.session : null],
+        ["Today", claudeCode.today],
+        ["Last 7 days", claudeCode.week],
+      ]
+    : [];
+
+  totals.replaceChildren(
+    ...rows.flatMap(([label, total]) => {
+      const term = document.createElement("dt");
+      term.textContent = label;
+      const value = document.createElement("dd");
+      value.textContent = total ? `${formatDollars(total.cost)} · ${formatTokens(total.tokens)} tokens` : "no session open";
+      return [term, value];
+    })
+  );
+
+  const failed = claudeCodeStatus && !claudeCodeStatus.ok;
+  note.classList.toggle("problem", Boolean(failed));
+  note.textContent = failed
+    ? `${claudeCode ? "Showing the last figures. " : ""}Can't reach the companion — see Claude Code in Options.`
+    : claudeCode
+      ? `From Claude Code's logs on this computer · ${timeAgo(claudeCode.generatedAt)}`
+      : "Waiting for the companion…";
+}
+
 function renderTopChats(messageLog) {
   const ranked = rankConversations(messageLog, { limit: 5 });
   topChats.hidden = ranked.length === 0;
@@ -547,6 +586,7 @@ function render(state) {
 
   renderBuckets(latestSnapshot, settings, settings.messageCost ? messageLog : []);
   renderExtraUsage(state);
+  renderClaudeCode(state);
   renderTopChats(settings.messageCost ? messageLog : []);
   renderLimitHits(limitHits);
   renderHistory(state);
@@ -829,6 +869,8 @@ onStorageChanged((changes) => {
     "annotations",
     "spikes",
     "extraUsage",
+    "claudeCode",
+    "claudeCodeStatus",
   ];
   if (watched.some((key) => key in changes)) {
     loadAndRender();

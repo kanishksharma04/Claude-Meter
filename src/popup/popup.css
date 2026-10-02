@@ -224,6 +224,31 @@ hr {
   color: var(--warn);
 }
 
+/* ---------------------------------------------------------- claude code -- */
+
+.cc-totals {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px 12px;
+  margin: 0;
+}
+
+.cc-totals dt {
+  color: var(--text);
+}
+
+.cc-totals dd {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.usage-sub.problem {
+  color: var(--danger);
+}
+
 /* ----------------------------------------------------------- share menu -- */
 
 .share {
@@ -279,7 +304,7 @@ hr {
    width and colour that would give the number away. Screen readers still get
    the real values — this hides what is on screen, not what the user can know. */
 
-[data-privacy="on"] :is(.usage-pct, #lastMessage, .forecast, .budget-line, #extraUsageDetail, .note-list, .chat-list, #limitHits, #historyBody, #planBadge, .insight-body) {
+[data-privacy="on"] :is(.usage-pct, #lastMessage, .forecast, .budget-line, #extraUsageDetail, .cc-totals dd, .note-list, .chat-list, #limitHits, #historyBody, #planBadge, .insight-body) {
   filter: blur(5px);
   user-select: none;
 }
@@ -728,7 +753,7 @@ html[data-view="mini"] footer {
 }
 
 /* Everything that isn't a meter stays in the popup and the side panel. */
-html[data-view="mini"] :is(#topChats, #limitHits, #hiddenNote, #lastMessage, .budget-line, #extraUsage, .footer-actions, #learnMoreLink) {
+html[data-view="mini"] :is(#topChats, #limitHits, #hiddenNote, #lastMessage, .budget-line, #extraUsage, #claudeCode, .footer-actions, #learnMoreLink) {
   display: none;
 }
 

@@ -52,6 +52,7 @@ export const DEFAULT_SETTINGS = {
   attachmentWarnTokens: 25000, // warn when a draft's attachments (or project knowledge) are about this heavy; 0 = off
   lockoutOverlay: true, // live "back at 4:30 PM" countdown on claude.ai while a limit is exhausted
   messageCost: true, // measure session % before/after each reply (two extra usage fetches per message)
+  claudeCode: false, // show Claude Code usage, read from its local logs by the companion (lib/claude-code.js)
   weeklyBudget: true, // "12% a day until reset · 9% used today" under each weekly limit (lib/budget.js)
   forecast: "profile", // where each limit is heading: "profile" (your usual week) | "linear" | "off" (lib/forecast.js)
   workdayStart: 9, // assumed working hours (0–24), for the window-start suggestion until the
@@ -81,6 +82,8 @@ export const DEFAULT_STATE = {
   spikes: [], // sudden jumps in usage, oldest first (see lib/spikes.js)
   extraUsage: null, // latest extra-usage spend and cap, when the account has it (see lib/extra-usage.js)
   extraUsageLog: [], // that spend's running total, one entry per day
+  claudeCode: null, // the companion's latest summary of Claude Code usage (see lib/claude-code.js)
+  claudeCodeStatus: null, // { ok, at, version? , problem? } — how the last attempt to reach the companion went
 };
 
 export async function getAll() {
@@ -106,6 +109,8 @@ export async function getAll() {
     spikes: data.spikes ?? DEFAULT_STATE.spikes,
     extraUsage: data.extraUsage ?? DEFAULT_STATE.extraUsage,
     extraUsageLog: data.extraUsageLog ?? DEFAULT_STATE.extraUsageLog,
+    claudeCode: data.claudeCode ?? DEFAULT_STATE.claudeCode,
+    claudeCodeStatus: data.claudeCodeStatus ?? DEFAULT_STATE.claudeCodeStatus,
     // The user's own words, not a reading — so they are the real ones in demo mode too.
     annotations: stored.annotations ?? DEFAULT_STATE.annotations,
   };
@@ -254,6 +259,13 @@ export async function recordWebhookResults(results, at = Date.now()) {
   await chrome.storage.local.set({ webhookStatus });
 }
 
+/** Stores what the companion sent, or — with no summary — just how the attempt went. */
+export async function setClaudeCode(summary, status) {
+  const update = { claudeCodeStatus: { ...status, at: Date.now() } };
+  if (summary) update.claudeCode = summary;
+  await chrome.storage.local.set(update);
+}
+
 /** Remembers that a message was just sent, or its reply just ended, in this browser (lib/attribution.js). */
 export async function noteLocalActivity(event) {
   const { localActivity } = await chrome.storage.local.get("localActivity");
@@ -319,6 +331,8 @@ export async function clearAllData() {
     localActivity: null,
     extraUsage: null,
     extraUsageLog: [],
+    claudeCode: null,
+    claudeCodeStatus: null,
   });
 }
 

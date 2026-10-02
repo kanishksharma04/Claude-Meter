@@ -214,6 +214,22 @@ record per hour, eight weeks deep — and builds its analytics from that:
   on the chart ("used elsewhere"), and the dashboard splits the last seven days into
   **This browser** and **Elsewhere**.
 
+### Claude Code
+
+Claude Code draws on the same plan as claude.ai, and keeps an exact log of every
+conversation on your disk. With the **companion** installed (a small local program;
+see [companion/README.md](companion/README.md)), ClaudeMeter reads those logs:
+
+- **Claude Code usage in the popup** — tokens and API-equivalent cost for the current
+  5-hour session, today and the last seven days, from the token counts Claude Code
+  itself recorded. The session is the same window claude.ai reports, since both draw
+  on one allowance.
+- **One installer for macOS, Linux and Windows** — `node companion/install.mjs <id>`
+  registers the companion with Chrome, Chromium, Edge, Brave and Vivaldi. On Windows
+  that means writing the manifest, a `.cmd` launcher and the registry values under
+  your own user; no administrator rights. Options shows the exact command for your
+  copy and says plainly what is wrong if it doesn't connect.
+
 ### Alerts
 
 Alerts are off until you turn them on, and everything below respects a snooze and
@@ -325,6 +341,9 @@ address you gave, after the browser has asked you to allow that one site.
 - **`chrome.offscreen`** — a service worker can't play audio, so alert sounds are
   played by `src/offscreen/offscreen.html`, opened with the `AUDIO_PLAYBACK` reason and
   closed as soon as the sound ends; the sounds themselves are Web Audio oscillators
+- **`chrome.runtime.sendNativeMessage`** — the only way out of the browser sandbox to
+  the Claude Code logs; it starts `companion/claudemeter-agent.mjs`, a Node.js script
+  with no dependencies that shares `src/lib/claude-code.js` with the extension
 - **`chrome.permissions`** — the four webhook hosts are `optional_host_permissions`,
   requested one at a time from Options when a webhook is switched on, and given back
   when it is switched off
@@ -349,6 +368,11 @@ address you gave, after the browser has asked you to allow that one site.
 ```
 claudemeter/
 ├── manifest.json
+├── companion/                         # the optional local helper that reads Claude Code's logs (Node.js)
+│   ├── claudemeter-agent.mjs          # native-messaging host: answers the extension over stdin/stdout
+│   ├── read-logs.mjs                  # finds and parses ~/.claude/projects/**/*.jsonl, read-only
+│   ├── install.mjs                    # registers it with your browsers on macOS, Linux and Windows
+│   └── paths.mjs                      # where ~/.claude and the companion's own folder are
 ├── src/
 │   ├── background/service-worker.js   # active fetch on alarm/request, badge, notifications
 │   ├── content/
@@ -400,6 +424,8 @@ claudemeter/
 │   │   ├── sounds.js                  # the alert sounds as notes, and scheduling them on an AudioContext
 │   │   ├── share.js                   # usage summary as text, and as a card drawn on a canvas
 │   │   ├── demo-data.js               # the deterministic made-up dataset behind demo mode
+│   │   ├── claude-code.js             # Claude Code log lines -> usage records -> summary (shared with companion/)
+│   │   ├── package.json               # only says "these files are ES modules", so Node can load them too
 │   │   ├── extra-usage.js             # extra-usage spend: day-by-day record, "today", wording
 │   │   ├── usage-api.js               # org discovery + usage fetch + typed errors
 │   │   └── normalize-usage.js         # raw usage response -> UsageSnapshot (+ extra-usage block)
@@ -462,7 +488,7 @@ Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `his
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
 `notifyThresholds`, `paceAlertFactor`, `resetAlertPercent`, `dailyDigest`, `digestTime`, `calendarReminder`, `quietHours`, `soundAlerts`, `soundName`, `soundVolume`, `webhooks`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
-`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
+`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `claudeCode`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300), and the mini window's last position and size
 are kept under `miniWindowBounds`:
@@ -548,6 +574,9 @@ Spike = {
 }
 ```
 
+The companion's latest summary of Claude Code usage is kept as `claudeCode`, with how
+the last attempt to reach it went in `claudeCodeStatus`.
+
 Demo mode never overwrites any of this. `getAll()` in `src/lib/storage.js` swaps the
 made-up dataset in at read time, and the same dataset is written to a separate
 `demoState` key (removed again when demo mode goes off) so the page script on
@@ -566,6 +595,8 @@ written when Developer mode is on, from Options.
 
 - **Background alarm**: fetches on the interval set in Options (default 5 min),
   regardless of whether a claude.ai tab is open.
+- **Claude Code**: read with each refresh, but at most once a minute — the companion
+  is started, reads the logs touched in the last week, answers and exits.
 - **For the daily digest**: one fetch at the digest's time, so it reports the day as it
   stands.
 - **At a reset**: when a limit is high enough for the reset alert, one extra fetch is
@@ -650,6 +681,16 @@ written when Developer mode is on, from Options.
   hourly profile (the tooltip says which method produced the figure), and "today is
   running at N× your usual" is capped between 0.5× and 2×. A straight-line forecast
   isn't offered in the first 2% of a window, where one message would swing it wildly.
+- Claude Code figures are exact where the plan percentages are not — they are the
+  API's own token counts — but the dollar amounts are API list prices
+  (`src/lib/value.js`), not anything you were charged: on a subscription Claude Code
+  costs you nothing extra. Only this computer's logs are read, so Claude Code on
+  another machine is invisible, and Claude Code deletes old logs on its own schedule.
+  The log format isn't a published one; lines ClaudeMeter can't make sense of are
+  skipped rather than guessed at.
+- The Windows half of the installer has been checked for what it writes and which
+  `reg` commands it runs, but not run on a Windows machine. `--dry-run` shows the
+  plan first.
 - Extra-usage figures depend on a part of the response that is even less certain than
   the rest: the field names (`extra_usage` with `is_enabled` / `monthly_limit` /
   `used_credits`) and the unit (taken to be cents) are what other tools read, not
@@ -769,6 +810,8 @@ written when Developer mode is on, from Options.
 - **Lockout countdown** — show/hide the "back at …" timer while a limit is exhausted.
 - **Measure what each message costs** — on by default; turning it off also stops the
   two extra usage reads around each message.
+- **Claude Code** — off by default. Shows the install command for the companion, and
+  whether it is connected.
 - **Weekly budget** — show/hide the "% a day until reset" line under each weekly limit.
 - **Forecast** — from your usual week (default), straight line, or off.
 - **Working hours** — start and end (9:00–17:00 by default), used for the window-start

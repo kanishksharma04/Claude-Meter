@@ -27,15 +27,21 @@ export const PRICES_AS_OF = "2026-09-25";
 /**
  * US$ per million tokens, first match wins. A model older than the ones listed
  * falls through to its family's last row, which is close but not exact.
+ * `cacheRead` is what a token served from the prompt cache costs — a tenth of
+ * the input price on most models, less on the newest.
  */
 export const API_PRICES = [
-  { match: /fable|mythos/, input: 10, output: 50 }, // Fable 5, 5.1
-  { match: /opus-5-5/, input: 4, output: 20 },
-  { match: /opus/, input: 5, output: 25 }, // Opus 5, 4.8, 4.7, 4.6
-  { match: /sonnet-5/, input: 2, output: 10 }, // Sonnet 5.5, 5
-  { match: /sonnet/, input: 3, output: 15 }, // Sonnet 4.6
-  { match: /haiku/, input: 1, output: 5 }, // Haiku 4.5
+  { match: /(fable|mythos)-5-1/, input: 10, output: 50, cacheRead: 0.25 },
+  { match: /fable|mythos/, input: 10, output: 50, cacheRead: 1 }, // Fable 5
+  { match: /opus-5-5/, input: 4, output: 20, cacheRead: 0.2 },
+  { match: /opus/, input: 5, output: 25, cacheRead: 0.5 }, // Opus 5, 4.8, 4.7, 4.6
+  { match: /sonnet-5/, input: 2, output: 10, cacheRead: 0.2 }, // Sonnet 5.5, 5
+  { match: /sonnet/, input: 3, output: 15, cacheRead: 0.3 }, // Sonnet 4.6
+  { match: /haiku/, input: 1, output: 5, cacheRead: 0.1 }, // Haiku 4.5
 ];
+
+/** Writing to the prompt cache costs this many times the input price, by how long the entry is kept. */
+export const CACHE_WRITE_MULTIPLIER = { fiveMinutes: 1.25, oneHour: 2 };
 
 /** Used when the model a message went to couldn't be read from the request. */
 const FALLBACK_PRICE = API_PRICES.find((price) => price.match.test("sonnet-5-5"));

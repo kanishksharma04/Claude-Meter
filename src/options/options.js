@@ -125,6 +125,51 @@ function renderWorkday(settings) {
   workdayEndSelect.value = String(settings.workdayEnd);
 }
 
+// -------------------------------------------------------------- claude code --
+
+const claudeCodeToggle = document.getElementById("claudeCodeToggle");
+const claudeCodeStatusNote = document.getElementById("claudeCodeStatus");
+const INSTALL_COMMAND = `node companion/install.mjs ${chrome.runtime.id}`;
+
+/** Says how the companion is doing, and keeps the install steps in view until it answers. */
+async function renderClaudeCode() {
+  const { settings, claudeCodeStatus, claudeCode } = await getAll();
+  claudeCodeToggle.checked = settings.claudeCode;
+  document.getElementById("installCommand").textContent = INSTALL_COMMAND;
+
+  const working = settings.claudeCode && claudeCodeStatus?.ok;
+  document.getElementById("claudeCodeSetup").hidden = working;
+  claudeCodeStatusNote.classList.toggle("problem", settings.claudeCode && claudeCodeStatus?.ok === false);
+  claudeCodeStatusNote.textContent = !settings.claudeCode
+    ? ""
+    : settings.demoMode
+      ? "Demo mode is on, so these are made-up figures and the companion isn't being asked."
+      : !claudeCodeStatus
+        ? "Asking the companion…"
+        : claudeCodeStatus.ok
+          ? `Connected to the companion (version ${claudeCodeStatus.version}). ` +
+            `Read ${claudeCode?.files ?? 0} log file${claudeCode?.files === 1 ? "" : "s"} ${timeAgo(claudeCodeStatus.at)}.`
+          : claudeCodeStatus.problem.text;
+}
+
+claudeCodeToggle.addEventListener("change", async () => {
+  await setSettings({ claudeCode: claudeCodeToggle.checked });
+  renderClaudeCode();
+});
+
+document.getElementById("claudeCodeCheckBtn").addEventListener("click", async () => {
+  claudeCodeStatusNote.textContent = "Asking the companion…";
+  claudeCodeStatusNote.classList.remove("problem");
+  await chrome.runtime.sendMessage({ type: "CLAUDEMETER_REFRESH_CLAUDE_CODE" }).catch(() => null);
+  renderClaudeCode();
+});
+
+document.getElementById("copyInstallBtn").addEventListener("click", async (event) => {
+  await navigator.clipboard.writeText(INSTALL_COMMAND).catch(() => {});
+  event.target.textContent = "Copied";
+  setTimeout(() => (event.target.textContent = "Copy"), 1500);
+});
+
 // ---------------------------------------------------------- reset calendar --
 
 const calendarReminderSelect = document.getElementById("calendarReminderSelect");
@@ -500,6 +545,7 @@ async function init() {
   soundVolume.value = settings.soundVolume;
   soundVolume.setAttribute("aria-valuetext", `${settings.soundVolume}%`);
   renderThresholds(settings.notifyThresholds);
+  renderClaudeCode();
   renderCalendar(settings);
   renderQuietHours(settings.quietHours);
   renderWebhooks();
@@ -764,6 +810,7 @@ demoLabelToggle.addEventListener("change", async () => {
 });
 
 onStorageChanged((changes) => {
+  if (changes.claudeCodeStatus || changes.claudeCode) renderClaudeCode();
   if (changes.snoozeUntil) renderSnooze();
   // Demo data changes what the gauge preview should show.
   if (changes.demoState || changes.settings) renderGaugePreview();

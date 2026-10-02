@@ -279,10 +279,35 @@ export function buildDemoAnalytics(demo) {
     used,
   }));
 
+  // Claude Code, as the companion would report it: a busy session today, a steady week.
+  const totals = (cost, input, output, cacheRead, cacheWrite, messages) => ({
+    tokens: input + output + cacheRead + cacheWrite,
+    input,
+    output,
+    cacheRead,
+    cacheWrite,
+    cost,
+    messages,
+  });
+  const sessionResetsAt = demo.latestSnapshot.session.resetsAt;
+  const claudeCode = {
+    generatedAt: now,
+    files: 14,
+    session: { from: sessionResetsAt - SESSION_LENGTH, to: sessionResetsAt, ...totals(3.84, 2_100, 41_000, 6_900_000, 310_000, 86) },
+    today: totals(7.12, 4_300, 78_000, 12_400_000, 640_000, 163),
+    week: totals(41.6, 26_000, 455_000, 71_000_000, 3_900_000, 948),
+    models: [
+      { model: "claude-opus-5-5", tokens: 61_800_000, cost: 35.9 },
+      { model: "claude-haiku-4-5", tokens: 13_600_000, cost: 5.7 },
+    ],
+  };
+
   return {
     usageLog,
     sessionWindows,
     spikes,
+    claudeCode,
+    claudeCodeStatus: { ok: true, at: now, version: "demo" },
     limitHits: [...olderHits, ...demo.limitHits],
     extraUsage: { ...EXTRA_USAGE, fetchedAt: now },
     extraUsageLog,

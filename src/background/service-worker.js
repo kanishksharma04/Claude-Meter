@@ -16,6 +16,7 @@ import {
   noteLocalActivity,
   setExtraUsage,
   recordWebhookResults,
+  setClaudeCode,
   setSnoozeUntil,
   setDemoState,
 } from "../lib/storage.js";
@@ -39,6 +40,7 @@ import { resetsToAnnounce, nextResetCheck, describeReset } from "../lib/reset-al
 import { deliverWebhooks } from "../lib/webhooks.js";
 import { isQuiet } from "../lib/quiet-hours.js";
 import { buildDigest, nextDigestAt } from "../lib/digest.js";
+import { COMPANION_HOST, companionProblem } from "../lib/claude-code.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
 const ALARM_NAME = "claudemeter-refresh-check";
@@ -77,6 +79,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "CLAUDEMETER_OPEN_MINI") {
     openMiniWindow();
     return false;
+  }
+
+  if (message?.type === "CLAUDEMETER_REFRESH_CLAUDE_CODE") {
+    refreshClaudeCode({ force: true }).then(sendResponse);
+    return true;
   }
 
   if (message?.type === "CLAUDEMETER_TEST_SOUND") {
@@ -273,6 +280,8 @@ async function recordLimitHit(event) {
 async function refreshUsage() {
   try {
     if ((await getSettings()).demoMode) return await refreshDemo();
+    // Alongside, not after: Claude Code's figures don't depend on being signed in to claude.ai.
+    refreshClaudeCode().catch((err) => console.warn(LOG_PREFIX, "claude code refresh failed", err));
 
     const snapshot = await fetchUsageSnapshot();
     await applySnapshot(snapshot);
@@ -323,6 +332,38 @@ async function applySnapshot(snapshot) {
   await watchForSpike(snapshot);
   await watchPace();
   await scheduleResetCheck(snapshot);
+}
+
+// ------------------------------------------------------------- claude code --
+// Claude Code usage comes from the companion (companion/), a native-messaging
+// host: the browser starts it on request, it reads the logs under ~/.claude,
+// answers, and exits.
+
+/** Readings around a single message arrive seconds apart; the logs needn't be re-read for each. */
+const CLAUDE_CODE_MIN_INTERVAL_MS = 60_000;
+let claudeCodeReadAt = 0;
+
+/** @returns {Promise<{ ok: boolean, problem?: object } | null>} null when switched off or skipped */
+async function refreshClaudeCode({ force = false } = {}) {
+  const settings = await getSettings();
+  if (!settings.claudeCode || settings.demoMode) return null;
+  if (!force && Date.now() - claudeCodeReadAt < CLAUDE_CODE_MIN_INTERVAL_MS) return null;
+  claudeCodeReadAt = Date.now();
+
+  try {
+    const { latestSnapshot } = await chrome.storage.local.get("latestSnapshot");
+    // Claude Code draws on the same 5-hour allowance, so claude.ai's window is its window too.
+    const request = { type: "get", sessionResetsAt: latestSnapshot?.session?.resetsAt ?? null };
+    const reply = await chrome.runtime.sendNativeMessage(COMPANION_HOST, request);
+    if (reply?.type !== "usage") throw new Error(reply?.message ?? "The companion sent an unexpected reply.");
+    await setClaudeCode(reply.data, { ok: true, version: reply.version });
+    return { ok: true };
+  } catch (err) {
+    const problem = companionProblem(err?.message);
+    console.warn(LOG_PREFIX, "claude code:", problem.code, err?.message);
+    await setClaudeCode(null, { ok: false, problem });
+    return { ok: false, problem };
+  }
 }
 
 // ------------------------------------------------------------- model hint --
@@ -825,6 +866,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
     if (changes.settings.oldValue?.modelHintPercent !== changes.settings.newValue?.modelHintPercent) {
       updateModelHint();
+    }
+    if (!changes.settings.oldValue?.claudeCode && changes.settings.newValue?.claudeCode) {
+      refreshClaudeCode({ force: true });
     }
     const digestKeys = (settings) => `${Boolean(settings?.dailyDigest)}@${settings?.digestTime}`;
     if (digestKeys(changes.settings.oldValue) !== digestKeys(changes.settings.newValue)) scheduleDigest();
