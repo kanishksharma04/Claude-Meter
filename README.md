@@ -238,6 +238,11 @@ see [companion/README.md](companion/README.md)), ClaudeMeter reads those logs:
   the title Claude Code gave it, with its project, model, number of messages, how
   long it ran and what it cost. Sub-agent work counts towards the session that
   started it. In the dashboard.
+- **Cache efficiency** — how much of what Claude Code sent came from the prompt cache:
+  tokens read from the cache against tokens written to it and tokens sent plain, as
+  a bar and a percentage, plus how many times each written token was read back and
+  what caching saved (or cost) in dollars against sending everything fresh. In the
+  dashboard.
 - **One installer for macOS, Linux and Windows** — `node companion/install.mjs <id>`
   registers the companion with Chrome, Chromium, Edge, Brave and Vivaldi. On Windows
   that means writing the manifest, a `.cmd` launcher and the registry values under
@@ -695,6 +700,13 @@ written when Developer mode is on, from Options.
   hourly profile (the tooltip says which method produced the figure), and "today is
   running at N× your usual" is capped between 0.5× and 2×. A straight-line forecast
   isn't offered in the first 2% of a window, where one message would swing it wildly.
+- The cache saving compares what the cached tokens were billed at — reads at the
+  model's cache-read price, writes at 1.25× the input price for five-minute entries
+  and 2× for hour-long ones — with the plain input price for the same tokens. That
+  is the saving against not caching at all, which no real client would do for a long
+  conversation, so read it as "what the cache is worth", not as money you could have
+  kept. Older log lines don't say how long a cache entry was kept and are priced as
+  five-minute writes.
 - A session's title is the one Claude Code wrote into its own log; sessions it never
   titled are listed as untitled, and no prompt or reply text is read to make one up.
   A session that started more than a week ago is ranked on what it used this week.

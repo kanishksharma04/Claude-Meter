@@ -303,6 +303,43 @@
   font-size: 11px;
 }
 
+/* --------------------------------------------------- claude code: cache -- */
+
+.cache-read {
+  background: var(--ok, #4f9358);
+}
+
+.cache-write {
+  background: var(--warn);
+}
+
+.cache-input {
+  background: color-mix(in srgb, var(--muted) 55%, var(--track));
+}
+
+/* A sliver that would round to nothing still gets a pixel, so the colour is there to find. */
+#cacheBar span {
+  min-width: 1px;
+}
+
+.cache-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 6px 0 9px;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cache-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border-radius: 2px;
+}
+
 /* ------------------------------------------------------------- lockouts -- */
 
 .lockout-table {

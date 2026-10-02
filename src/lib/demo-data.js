@@ -9,6 +9,7 @@
 import { formatDuration } from "./time-format.js";
 import { foldSnapshot, hourStart } from "./usage-log.js";
 import { foldWindow } from "./session-windows.js";
+import { cacheEfficiency } from "./claude-code.js";
 
 const MIN = 60 * 1000;
 const HOUR = 60 * MIN;
@@ -287,14 +288,17 @@ export function buildDemoAnalytics(demo) {
       [0, 1, 2, 3].map((quarter) => {
         const share = 0.15 + 0.2 * noise(record.t / HOUR + quarter); // the hour's four quarters, unevenly
         const cost = Math.round(record.burn * share * 480) / 10_000;
-        return [record.t + quarter * 15 * MIN, Math.round(cost * 1_800_000), cost];
+        return [record.t + quarter * 15 * MIN, Math.round(cost * 2_351_520), cost];
       })
     )
     .filter(([t]) => t <= now);
-  /** Totals for the buckets from `since` on, with a token mix typical of a long cached session. */
+  /**
+   * Totals for the buckets from `since` on, with the token mix of a long cached session — chosen so
+   * that, at Opus 5.5 prices with hour-long cache entries, each dollar's tokens do add up to a dollar.
+   */
   const totals = (since) => {
     const cost = buckets.filter(([t]) => t >= since).reduce((sum, bucket) => sum + bucket[2], 0);
-    const [input, output, cacheRead, cacheWrite] = [620, 10_900, 1_694_000, 94_480].map((perDollar) => Math.round(cost * perDollar));
+    const [input, output, cacheRead, cacheWrite] = [620, 10_900, 2_300_000, 40_000].map((perDollar) => Math.round(cost * perDollar));
     return { tokens: input + output + cacheRead + cacheWrite, input, output, cacheRead, cacheWrite, cost, messages: Math.round(cost * 23) };
   };
   const sessionResetsAt = demo.latestSnapshot.session.resetsAt;
@@ -327,6 +331,11 @@ export function buildDemoAnalytics(demo) {
       lastAt: now - ago,
     })),
   };
+
+  // Mostly Opus 5.5 with hour-long cache entries: $4 a million to send, $0.20 to read back, $8 to write.
+  const cacheOf = ({ cacheRead: read, cacheWrite: write, input }) =>
+    cacheEfficiency({ read, write, input, paid: (read * 0.2 + write * 8) / 1e6, uncached: ((read + write) * 4) / 1e6 });
+  claudeCode.cache = { today: cacheOf(claudeCode.today), week: cacheOf(week) };
 
   claudeCode.sessions = [
     ["Refactor the billing module", "code/billing-api", "claude-opus-5-5", 0.21, 3 * HOUR + 10 * MIN, 6 * MIN, 212],

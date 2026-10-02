@@ -266,6 +266,47 @@ function renderSessions({ settings, claudeCode }) {
   );
 }
 
+// ---------------------------------------------------- claude code: cache --
+
+function renderCache({ settings, claudeCode }) {
+  const cache = settings.claudeCode ? claudeCode?.cache?.week : null;
+  const section = $("cacheSection");
+  section.hidden = !cache || cache.hitRate == null;
+  if (section.hidden) return;
+
+  const prompt = cache.read + cache.write + cache.input;
+  const hit = Math.round(cache.hitRate * 100);
+  $("cacheNote").textContent = `${hit}% from cache · last 7 days`;
+
+  // Three kinds of prompt token, as shares of all of them: served from the cache, written to it, sent plain.
+  for (const [id, tokens] of [["cacheReadBar", cache.read], ["cacheWriteBar", cache.write], ["cacheInputBar", cache.input]]) {
+    $(id).style.flexGrow = String(tokens / prompt);
+  }
+  $("cacheBar").setAttribute(
+    "aria-label",
+    `Prompt tokens: ${formatTokens(cache.read)} read from the cache, ${formatTokens(cache.write)} written to it, ${formatTokens(cache.input)} sent uncached`
+  );
+  $("cacheLegend").replaceChildren(
+    el("span", {}, el("i", { className: "cache-read" }), `Read ${formatTokens(cache.read)}`),
+    el("span", {}, el("i", { className: "cache-write" }), `Written ${formatTokens(cache.write)}`),
+    el("span", {}, el("i", { className: "cache-input" }), `Uncached ${formatTokens(cache.input)}`)
+  );
+
+  $("cacheLead").textContent =
+    cache.saved >= 0
+      ? `Caching saved about ${formatDollars(cache.saved)} this week: the cached tokens cost ${formatDollars(cache.paid)} ` +
+        `where sending them fresh every time would have cost ${formatDollars(cache.uncached)}.`
+      : `Caching cost about ${formatDollars(-cache.saved)} more than it saved this week: ${formatDollars(cache.paid)} was spent ` +
+        `writing to and reading from the cache, against ${formatDollars(cache.uncached)} to send the same tokens plainly.`;
+
+  const today = claudeCode.cache.today;
+  $("cacheDetail").textContent =
+    (cache.readsPerWrite != null
+      ? `Every token written to the cache was read back ${Math.round(cache.readsPerWrite * 10) / 10} times. `
+      : "Nothing was written to the cache. ") +
+    (today.hitRate != null ? `Today: ${Math.round(today.hitRate * 100)}% from cache, ${formatDollars(Math.abs(today.saved))} ${today.saved >= 0 ? "saved" : "lost"}.` : "");
+}
+
 // --------------------------------------------------------------- lockouts --
 
 function renderLockouts({ limitHits }) {
@@ -323,6 +364,7 @@ export function renderInsights(state) {
   renderAttribution(state);
   renderProjects(state);
   renderSessions(state);
+  renderCache(state);
   renderLockouts(state);
   renderPlanFit(state);
   renderValue(state);

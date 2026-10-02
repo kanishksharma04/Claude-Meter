@@ -117,6 +117,50 @@ export function costOf(record) {
 }
 
 /**
+ * What the prompt cache did for one record, in US$: what its cached tokens cost
+ * as they were billed (reads cheap, writes at a premium), and what the same
+ * tokens would have cost as ordinary input.
+ */
+export function cacheCostOf(record) {
+  const price = priceFor(record.model);
+  const paid =
+    (record.cacheRead * price.cacheRead +
+      record.cacheWrite5m * price.input * CACHE_WRITE_MULTIPLIER.fiveMinutes +
+      record.cacheWrite1h * price.input * CACHE_WRITE_MULTIPLIER.oneHour) /
+    1_000_000;
+  const uncached = ((record.cacheRead + record.cacheWrite5m + record.cacheWrite1h) * price.input) / 1_000_000;
+  return { paid, uncached };
+}
+
+const emptyCache = () => ({ read: 0, write: 0, input: 0, paid: 0, uncached: 0 });
+
+function addToCache(cache, record) {
+  const { paid, uncached } = cacheCostOf(record);
+  cache.read += record.cacheRead;
+  cache.write += record.cacheWrite5m + record.cacheWrite1h;
+  cache.input += record.input;
+  cache.paid += paid;
+  cache.uncached += uncached;
+}
+
+/**
+ * The figures people ask of a cache, from the running sums.
+ * @returns {{ read: number, write: number, input: number, hitRate: number | null, readsPerWrite: number | null,
+ *   paid: number, uncached: number, saved: number }}
+ *   `hitRate` is the share of all prompt tokens that were served from the cache;
+ *   `saved` is what caching took off the bill, and is negative when writes went unread
+ */
+export function cacheEfficiency(cache) {
+  const prompt = cache.read + cache.write + cache.input;
+  return {
+    ...cache,
+    hitRate: prompt > 0 ? cache.read / prompt : null,
+    readsPerWrite: cache.write > 0 ? cache.read / cache.write : null,
+    saved: cache.uncached - cache.paid,
+  };
+}
+
+/**
  * Claude Code writes one line per content block, so a single API response —
  * and its one usage figure — turns up on several lines. Keep the last line
  * for each response: it is the one written when the reply was complete.
@@ -198,6 +242,7 @@ export function currentWindow(records, now) {
  * @param {Record<string, string>} [options.titles] - session id -> the title Claude Code gave it
  * @returns {{ generatedAt: number, session: object, today: object, week: object,
  *   models: Array<{ model: string, tokens: number, cost: number }>, buckets: Array<[number, number, number]>,
+ *   cache: { today: object, week: object },
  *   projects: Array<{ cwd: string, name: string, tokens: number, cost: number, costToday: number, messages: number, sessions: number, lastAt: number }>,
  *   sessions: Array<{ sessionId: string, title: string | null, project: string, model: string, startedAt: number, lastAt: number, tokens: number, cost: number, messages: number }> }}
  *   `session`, `today` and `week` are totals ({ tokens, input, output, cacheRead, cacheWrite, cost, messages });
@@ -219,9 +264,13 @@ export function summarizeClaudeCode(records, { now = Date.now(), sessionResetsAt
   const buckets = new Map(); // start of a 15-minute slot -> [tokens, cost]
   const projects = new Map(); // working directory -> its totals
   const sessions = new Map(); // session id -> its totals
+  const cacheWeek = emptyCache();
+  const cacheToday = emptyCache();
 
   for (const record of all) {
     addTo(week, record);
+    addToCache(cacheWeek, record);
+    if (record.ts >= dayStart) addToCache(cacheToday, record);
     const slot = Math.floor(record.ts / BUCKET_MS) * BUCKET_MS;
     const bucket = buckets.get(slot) ?? [0, 0];
     bucket[0] += tokensOf(record);
@@ -276,6 +325,8 @@ export function summarizeClaudeCode(records, { now = Date.now(), sessionResetsAt
     today,
     week,
     models: [...models.values()].sort((a, b) => b.cost - a.cost),
+    // How much of the prompt came from the cache, and what that was worth.
+    cache: { today: cacheEfficiency(cacheToday), week: cacheEfficiency(cacheWeek) },
     // The week by working directory, costliest first. `cwd` is "" for lines that didn't record one.
     projects: named.sort((a, b) => b.cost - a.cost).slice(0, MAX_PROJECTS),
     // The week's costliest sessions. A session that began before the week only counts what it used inside it.
