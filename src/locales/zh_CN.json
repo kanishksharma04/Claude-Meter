@@ -294,7 +294,12 @@
   "The language of ClaudeMeter's own pages. Figures, alerts and the sentences built from your data stay in English for now.": "ClaudeMeter 自身页面的语言。数字、提醒以及根据你的数据生成的句子目前仍为英文。",
   "Demo mode is on, so the figures are made up and Anthropic isn't being asked.": "演示模式已开启，因此这些数字是虚构的，不会向 Anthropic 查询。",
   "Demo mode is on, so these are made-up figures and the companion isn't being asked.": "演示模式已开启，因此这些是虚构的数字，不会向伴随程序查询。",
-  "Demo mode is on: these are made-up organisations.": "演示模式已开启：这些组织是虚构的。"
+  "Demo mode is on: these are made-up organisations.": "演示模式已开启：这些组织是虚构的。",
+  "30 days": "30 天",
+  "1 year": "1 年",
+  "All time": "全部",
+  "Long-term archive": "长期存档",
+  "Every reading is also filed in a database in this browser, so the dashboard chart can go back months and years instead of a day. It is never trimmed, and it stays on this computer.": "每次读数也会存入此浏览器中的数据库，因此仪表板图表可以回溯数月乃至数年，而不只是一天。它不会被裁剪，并且只保存在这台电脑上。"
  },
  "patterns": [
   [

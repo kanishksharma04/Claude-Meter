@@ -294,7 +294,12 @@
   "The language of ClaudeMeter's own pages. Figures, alerts and the sentences built from your data stay in English for now.": "ClaudeMeter 自身のページの言語です。数値、アラート、データから作られる文章は、今のところ英語のままです。",
   "Demo mode is on, so the figures are made up and Anthropic isn't being asked.": "デモモードがオンのため、数値は架空のもので、Anthropic への問い合わせは行われません。",
   "Demo mode is on, so these are made-up figures and the companion isn't being asked.": "デモモードがオンのため、これらは架空の数値で、コンパニオンへの問い合わせは行われません。",
-  "Demo mode is on: these are made-up organisations.": "デモモードがオンです。これらは架空の組織です。"
+  "Demo mode is on: these are made-up organisations.": "デモモードがオンです。これらは架空の組織です。",
+  "30 days": "30日間",
+  "1 year": "1年",
+  "All time": "全期間",
+  "Long-term archive": "長期アーカイブ",
+  "Every reading is also filed in a database in this browser, so the dashboard chart can go back months and years instead of a day. It is never trimmed, and it stays on this computer.": "すべての計測値はこのブラウザー内のデータベースにも保存されるため、ダッシュボードのグラフは1日分ではなく数か月、数年さかのぼれます。削られることはなく、このコンピューターの外には出ません。"
  },
  "patterns": [
   [

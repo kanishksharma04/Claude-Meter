@@ -294,7 +294,12 @@
   "The language of ClaudeMeter's own pages. Figures, alerts and the sentences built from your data stay in English for now.": "ClaudeMeter के अपने पेजों की भाषा। आँकड़े, चेतावनियाँ और आपके डेटा से बने वाक्य फ़िलहाल अंग्रेज़ी में रहते हैं।",
   "Demo mode is on, so the figures are made up and Anthropic isn't being asked.": "डेमो मोड चालू है, इसलिए आँकड़े बनावटी हैं और Anthropic से कुछ नहीं पूछा जा रहा।",
   "Demo mode is on, so these are made-up figures and the companion isn't being asked.": "डेमो मोड चालू है, इसलिए ये बनावटी आँकड़े हैं और साथी प्रोग्राम से कुछ नहीं पूछा जा रहा।",
-  "Demo mode is on: these are made-up organisations.": "डेमो मोड चालू है: ये संगठन बनावटी हैं।"
+  "Demo mode is on: these are made-up organisations.": "डेमो मोड चालू है: ये संगठन बनावटी हैं।",
+  "30 days": "30 दिन",
+  "1 year": "1 वर्ष",
+  "All time": "पूरा समय",
+  "Long-term archive": "दीर्घकालिक संग्रह",
+  "Every reading is also filed in a database in this browser, so the dashboard chart can go back months and years instead of a day. It is never trimmed, and it stays on this computer.": "हर रीडिंग इस ब्राउज़र के एक डेटाबेस में भी सहेजी जाती है, ताकि डैशबोर्ड का चार्ट एक दिन के बजाय महीनों और वर्षों पीछे तक जा सके। इसे कभी छोटा नहीं किया जाता और यह इसी कंप्यूटर पर रहता है।"
  },
  "patterns": [
   [

@@ -27,6 +27,10 @@ const PERMISSION_REASONS = {
     name: "Storage",
     why: "Keep your settings and recent usage readings in this browser.",
   },
+  unlimitedStorage: {
+    name: "Unlimited storage",
+    why: "Keep every reading in a database in this browser, so the chart can go back years instead of a day. Nothing is uploaded.",
+  },
   alarms: {
     name: "Alarms",
     why: "Wake up every few minutes to refresh your usage, even with no claude.ai tab open.",

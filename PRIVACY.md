@@ -23,7 +23,9 @@ account, no analytics and no crash reporting.
 ## Where it is kept
 
 In your browser's extension storage on your computer, unencrypted, like any
-extension's data. "Clear stored data" in Options removes it; uninstalling the
+extension's data — settings and recent readings in the extension's storage area, and
+the long-term archive of readings in a local database (IndexedDB) beside it. "Clear
+stored data" in Options removes both; uninstalling the
 extension removes all of it. If you use the companion, it also writes a small status
 file to its own folder in your home directory, which you can switch off.
 

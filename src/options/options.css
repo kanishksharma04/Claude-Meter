@@ -698,3 +698,13 @@ button.danger {
   height: 16px;
   accent-color: var(--accent);
 }
+
+/* A fact under a row's description, e.g. how much the archive holds. */
+.row small.row-fact {
+  margin-top: 4px;
+  color: var(--text);
+}
+
+.row + button {
+  margin-top: 10px;
+}

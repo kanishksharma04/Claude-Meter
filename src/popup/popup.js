@@ -25,6 +25,7 @@ import {
   CLAUDE_CODE_HEIGHT,
 } from "../lib/history-chart.js";
 import { BUCKET_MS } from "../lib/claude-code.js";
+import { ARCHIVE_RANGES, archiveSeries, readArchive, toRecord } from "../lib/archive.js";
 import { severityOf, isHexColor } from "../lib/severity.js";
 import { arrangeBuckets, moveBucket, togglePinned, toggleHidden } from "../lib/bucket-prefs.js";
 import { applyTheme, onSystemThemeChange } from "../lib/theme.js";
@@ -459,22 +460,65 @@ function svgEl(tag, attrs) {
   return node;
 }
 
-function renderHistory({ history, usageLog, settings, annotations, spikes, claudeCode }) {
+// The chart's longer ranges are drawn from the archive (lib/archive.js), which
+// has to be asked for. Until it answers — and wherever there is no IndexedDB —
+// the hourly log stands in; the answer is kept until a newer reading or another
+// range needs a fresh one.
+let archived = { key: "", chart: null };
+let archiveAsked = "";
+let shownState = null;
+
+function archiveChart({ settings, orgCache, latestSnapshot }) {
+  if (settings.demoMode) return null; // made-up numbers were never archived
+  const orgId = orgCache?.orgId ?? "";
+  const key = `${settings.chartRange}|${orgId}`;
+  const asked = `${key}|${latestSnapshot?.fetchedAt ?? 0}`;
+  if (archiveAsked !== asked) {
+    archiveAsked = asked;
+    const to = Date.now();
+    const from = ARCHIVE_RANGES[settings.chartRange] ? to - ARCHIVE_RANGES[settings.chartRange] : 0;
+    readArchive(orgId, from, to)
+      .then((records) => {
+        if (archiveAsked !== asked) return;
+        // The reading that prompted this may not have been filed yet.
+        if (latestSnapshot && !(records.at(-1)?.t >= latestSnapshot.fetchedAt)) records.push(toRecord(latestSnapshot, orgId));
+        archived = { key, chart: archiveSeries(records, { from, to }) };
+        if (shownState) renderHistory(shownState);
+      })
+      .catch((error) => console.warn("[ClaudeMeter] could not read the archive", error));
+  }
+  return archived.key === key ? archived.chart : null;
+}
+
+function renderHistory(state) {
+  const { history, usageLog, settings, annotations, spikes, claudeCode } = state;
   historySection.hidden = VIEW !== "panel";
   if (historySection.hidden) return;
+  shownState = state;
 
-  const week = settings.chartRange === "week";
-  const chart = week ? weekSeries(usageLog) : chartSeries(history);
+  const range = historyRangeButtons.some((button) => button.dataset.range === settings.chartRange) ? settings.chartRange : "day";
+  const week = range === "week";
+  const long = range in ARCHIVE_RANGES;
+  let chart = week ? weekSeries(usageLog) : chartSeries(history);
+  if (long) {
+    const fromArchive = archiveChart(state);
+    chart = fromArchive?.series.some((s) => s.points.length >= 2)
+      ? fromArchive
+      : weekSeries(usageLog, { windowMs: ARCHIVE_RANGES[range] ?? Date.now() - (usageLog[0]?.t ?? Date.now()) });
+  }
   const drawable = chart.series.filter((s) => s.points.length >= 2);
   const box = { from: chart.from, to: chart.to, width: CHART_WIDTH, height: CHART_HEIGHT };
-  // The same stretch one week earlier, moved forward onto this axis.
-  const earlier = settings.chartCompare ? logSeries(usageLog, { ...box, shiftMs: WEEK_WINDOW_MS }) : null;
+  // Raw readings are joined up; hourly and thinned points only where nothing is missing between them.
+  const gapMs = range === "day" ? Infinity : Math.max(LOG_GAP_MS, 3 * (chart.stepMs ?? 0));
+  // The same stretch one week earlier, moved forward onto this axis. Not for the longer ranges: the log is eight weeks deep.
+  const earlier = settings.chartCompare && !long ? logSeries(usageLog, { ...box, shiftMs: WEEK_WINDOW_MS }) : null;
   const earlierOf = (series) => earlier?.series.find((s) => s.id === series.id && s.points.length >= 2);
 
   for (const button of historyRangeButtons) {
-    button.setAttribute("aria-pressed", String(button.dataset.range === (week ? "week" : "day")));
+    button.setAttribute("aria-pressed", String(button.dataset.range === range));
   }
   historyCompare.checked = settings.chartCompare;
+  historyCompare.closest("label").hidden = long;
 
   historyEmpty.hidden = drawable.length > 0;
   historyBody.hidden = drawable.length === 0;
@@ -495,13 +539,14 @@ function renderHistory({ history, usageLog, settings, annotations, spikes, claud
   const jumps = drawable.length > 0 ? placeAnnotations(spikes, chart) : [];
 
   // Stretches in which usage rose with nothing sent from this browser.
-  const away = drawable.length > 0 ? elsewhereSpans(chart, week ? { usageLog } : { history }) : [];
+  // Over a year an hour is thinner than a hairline, so the longest ranges go without.
+  const away = drawable.length > 0 && !["year", "all"].includes(range) ? elsewhereSpans(chart, range === "day" ? { history } : { usageLog }) : [];
   const xOf = (t) => ((t - chart.from) / Math.max(1, chart.to - chart.from)) * CHART_WIDTH;
 
-  // Claude Code's activity as bars along the foot of the chart: quarter-hours over a day, hours over a week.
+  // Claude Code's activity as bars along the foot of the chart: quarter-hours over a day, hours over a week, days beyond.
   const code =
     drawable.length > 0 && settings.claudeCode && claudeCode?.buckets
-      ? claudeCodeBars(claudeCode.buckets, chart, week ? 60 * 60 * 1000 : BUCKET_MS)
+      ? claudeCodeBars(claudeCode.buckets, chart, long ? 24 * 60 * 60 * 1000 : week ? 60 * 60 * 1000 : BUCKET_MS)
       : null;
   const codeBars = (code?.bars ?? []).map((bar) => {
     const left = Math.max(0, xOf(bar.t));
@@ -544,7 +589,7 @@ function renderHistory({ history, usageLog, settings, annotations, spikes, claud
     ...drawable.map((series, index) =>
       svgEl("path", {
         class: `series series-${index % 5}`,
-        d: linePath(series.points, { ...box, gapMs: week ? LOG_GAP_MS : Infinity }),
+        d: linePath(series.points, { ...box, gapMs }),
       })
     )
   );
@@ -555,7 +600,7 @@ function renderHistory({ history, usageLog, settings, annotations, spikes, claud
       swatch.className = `swatch series-${index % 5}`;
       const before = earlierOf(series)?.points.at(-1);
       const item = document.createElement("li");
-      item.append(swatch, `${series.label} · ${series.points.at(-1).pct}%` + (before ? ` (was ${before.pct}%)` : ""));
+      item.append(swatch, `${series.label} · ${series.latest ?? series.points.at(-1).pct}%` + (before ? ` (was ${before.pct}%)` : ""));
       return item;
     })
   );
@@ -579,7 +624,7 @@ function renderHistory({ history, usageLog, settings, annotations, spikes, claud
   renderNotes(annotations, marks, jumps);
 
   const compared = drawable.some(earlierOf);
-  historyCompareNote.hidden = !settings.chartCompare;
+  historyCompareNote.hidden = !settings.chartCompare || long;
   historyCompareNote.textContent = compared
     ? "Dashed: the same stretch a week earlier. \"Was\" is where each limit stood at this point last week."
     : "Nothing on record from a week earlier yet.";

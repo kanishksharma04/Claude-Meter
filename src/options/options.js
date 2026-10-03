@@ -6,8 +6,10 @@ import {
   getAdminKey,
   setAdminKey,
   clearAllData,
+  getOrgCache,
   onStorageChanged,
 } from "../lib/storage.js";
+import { archiveInfo, clearArchive, describeArchive } from "../lib/archive.js";
 import { isAdminKey, maskKey } from "../lib/api-spend.js";
 import { MAX_EXTRA_ORGS } from "../lib/orgs.js";
 import { detectBrowser, companionInstallCommand } from "../lib/platform.js";
@@ -974,9 +976,23 @@ developerModeToggle.addEventListener("change", async () => {
   await setSettings({ developerMode: developerModeToggle.checked });
 });
 
+/** How much the archive holds for the main organisation, and since when. */
+async function renderArchiveInfo() {
+  const archiveInfoEl = document.getElementById("archiveInfo");
+  try {
+    // Asked of storage directly: demo mode never touches the archive, so this is the real one either way.
+    archiveInfoEl.textContent = describeArchive(await archiveInfo((await getOrgCache())?.orgId ?? ""));
+  } catch {
+    archiveInfoEl.textContent = "Not available in this window.";
+  }
+}
+renderArchiveInfo();
+
 clearDataBtn.addEventListener("click", async () => {
-  if (!confirm("Clear all stored ClaudeMeter data (captures + usage snapshot + history + hourly usage log + session windows + chart notes + spikes + extra-usage record + message costs + limit-hit log)?")) return;
+  if (!confirm("Clear all stored ClaudeMeter data (captures + usage snapshot + history + the long-term archive + hourly usage log + session windows + chart notes + spikes + extra-usage record + message costs + limit-hit log)?")) return;
   await clearAllData();
+  await clearArchive().catch(() => {});
+  renderArchiveInfo();
   clearDataBtn.textContent = "Cleared!";
   document.getElementById("clearStatus").textContent = "Stored data cleared.";
   setTimeout(() => (clearDataBtn.textContent = "Clear stored data"), 1200);

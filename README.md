@@ -298,8 +298,19 @@ see [companion/README.md](companion/README.md)), ClaudeMeter reads those logs:
 - **Six languages** — English, Español, Deutsch, 日本語, हिन्दी and 简体中文. Options
   and the popup, side panel and mini window follow the browser's language, or the one
   you pick under Appearance; the store description and shortcut names are translated
-  too. Each translation covers the same 294 strings, which `scripts/check-locales.mjs`
+  too. Each translation covers the same 299 strings, which `scripts/check-locales.mjs`
   verifies.
+
+### Data and reliability
+
+- **Unlimited history** — every reading is also filed in an **IndexedDB** archive in
+  the browser, which is never trimmed: years of data instead of the last 500
+  readings. The usage-over-time chart gains **30 days**, **1 year** and **All time**
+  ranges drawn from it, thinned to what a chart can show (each point is the session's
+  peak over its stretch, so a spike survives). Each organisation has its own archive.
+  The first time, it is started off with what was already stored — the recent
+  readings, and the hourly log before them — so the longer ranges aren't empty on
+  day one. Options → Data says how much it holds and since when.
 
 ### Alerts
 
@@ -495,6 +506,7 @@ claudemeter/
 │   │   ├── spikes.js                  # a sudden jump between nearby readings -> spike log
 │   │   ├── attribution.js             # which rises this browser can't account for -> "used elsewhere"
 │   │   ├── usage-log.js               # hourly rollup of every reading, kept for eight weeks
+│   │   ├── archive.js                 # every reading, for good, in IndexedDB -> the chart's long ranges
 │   │   ├── session-windows.js         # log of past 5-hour windows + the timeline rows drawn from it
 │   │   ├── heatmap.js                 # usage log -> weekday × hour averages
 │   │   ├── budget.js                  # weekly limit -> % a day until reset, and today's share used
@@ -590,7 +602,12 @@ a second endpoint, below), with the month's running total at the end of each day
 `extraUsageLog` (last 62 days) so "today" can be worked out.
 
 Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `history`
-(last 500 snapshots) that feeds the dashboard chart and the burn-rate maths. Settings
+(last 500 snapshots) that feeds the 24-hour chart and the burn-rate maths. Every
+reading is also appended to the **archive**, an IndexedDB database (`claudemeter`,
+store `readings`, keyed by organisation and time) that is never trimmed and holds one
+compact record each — `{ o, t, s, sr, w: [[label, %, resetsAt]], e? }`, about 100
+bytes, so a reading every five minutes is roughly 10 MB a year
+([`src/lib/archive.js`](src/lib/archive.js)). Settings
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
 `notifyThresholds`, `language`, `paceAlertFactor`, `resetAlertPercent`, `dailyDigest`, `digestTime`, `calendarReminder`, `quietHours`, `soundAlerts`, `soundName`, `soundVolume`, `webhooks`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
@@ -790,7 +807,14 @@ written when Developer mode is on, from Options.
   two readings per message. The 7-day view and the week-earlier overlay are drawn from
   the hourly log instead, so they are coarser — one point per hour, the session line
   showing each hour's peak — and the line breaks wherever the browser wasn't running.
-  There is no export.
+- The archive starts the day this version is installed. What it is seeded with reaches
+  back at most eight weeks, and that part is hourly, not every reading. Only the chart
+  reads it: the heatmap, forecast and the other analytics still work from the
+  eight-week hourly log. Over the longer ranges a point stands for a stretch of time
+  (about 72 minutes over 30 days, 15 hours over a year), the week-earlier overlay is
+  not offered, and "used elsewhere" bands are not drawn past 30 days. It lives in this
+  browser profile only — nothing syncs it — and removing the extension deletes it.
+  Demo mode draws those ranges from its made-up hourly log.
 - The analytics only know what this browser saw. Hours when it wasn't running leave no
   record, and usage that built up across a gap of more than 90 minutes between two
   readings isn't assigned to any hour, because there is no telling when it happened.
@@ -1040,7 +1064,8 @@ written when Developer mode is on, from Options.
 - **Demo mode** — show the demo dataset everywhere, with or without the "Demo" badge.
 - **Developer mode** — keeps raw request/response captures for the debug page
   (`src/debug/debug.html`), off by default.
-- **Clear stored data** — wipes snapshot, history, the hourly usage log, the session
+- **Long-term archive** — how many readings the archive holds and since when.
+- **Clear stored data** — wipes snapshot, history, the archive, the hourly usage log, the session
   window log, your chart notes, the spike log, the extra-usage record, message costs,
   the limit-hit log, org cache, and debug captures.
 

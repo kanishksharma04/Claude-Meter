@@ -15,7 +15,9 @@ import { DEFAULT_WEBHOOKS } from "./webhooks.js";
 import { DEFAULT_QUIET_HOURS, normalizeQuietHours } from "./quiet-hours.js";
 
 export const MAX_DEBUG_CAPTURES = 20;
-// Enough for the dashboard chart to cover about a day at the default refresh interval.
+// Enough for the dashboard chart to cover about a day at the default refresh interval,
+// and for the sums that compare one reading with the last. Every reading is also
+// filed in the archive (lib/archive.js), which is not capped.
 export const MAX_HISTORY = 500;
 
 export const DEFAULT_SETTINGS = {
@@ -66,7 +68,7 @@ export const DEFAULT_SETTINGS = {
   plan: "auto", // for the plan-fit adviser: "auto" (detect) | "pro" | "max5" | "max20" (lib/plan-fit.js)
   planPrice: 0, // what the subscription costs a month in US$, for the value readout; 0 = the plan's list price
   spikePercent: 15, // flag a limit that jumps this many points within five minutes; 0 = off (lib/spikes.js)
-  chartRange: "day", // the dashboard chart's span: "day" (raw readings) | "week" (hourly log)
+  chartRange: "day", // the dashboard chart's span: "day" (raw readings) | "week" (hourly log) | "month" | "year" | "all" (the archive)
   chartCompare: false, // overlay the same stretch one week earlier on the chart
 };
 

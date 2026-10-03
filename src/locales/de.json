@@ -294,7 +294,12 @@
   "The language of ClaudeMeter's own pages. Figures, alerts and the sentences built from your data stay in English for now.": "Die Sprache der ClaudeMeter-eigenen Seiten. Zahlen, Warnungen und die aus deinen Daten gebildeten Sätze bleiben vorerst englisch.",
   "Demo mode is on, so the figures are made up and Anthropic isn't being asked.": "Der Demomodus ist an – die Zahlen sind erfunden, und Anthropic wird nicht gefragt.",
   "Demo mode is on, so these are made-up figures and the companion isn't being asked.": "Der Demomodus ist an – diese Zahlen sind erfunden, und das Begleitprogramm wird nicht gefragt.",
-  "Demo mode is on: these are made-up organisations.": "Der Demomodus ist an: Diese Organisationen sind erfunden."
+  "Demo mode is on: these are made-up organisations.": "Der Demomodus ist an: Diese Organisationen sind erfunden.",
+  "30 days": "30 Tage",
+  "1 year": "1 Jahr",
+  "All time": "Gesamt",
+  "Long-term archive": "Langzeitarchiv",
+  "Every reading is also filed in a database in this browser, so the dashboard chart can go back months and years instead of a day. It is never trimmed, and it stays on this computer.": "Jede Messung wird zusätzlich in einer Datenbank in diesem Browser abgelegt, damit das Diagramm im Dashboard Monate und Jahre statt nur einen Tag zurückreicht. Sie wird nie gekürzt und bleibt auf diesem Computer."
  },
  "patterns": [
   [

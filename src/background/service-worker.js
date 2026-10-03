@@ -27,6 +27,7 @@ import {
 } from "../lib/storage.js";
 import { fetchUsageSnapshot, fetchOrgs, fetchOtherOrgs, UsageApiError } from "../lib/usage-api.js";
 import { extraOrgs, orgIdFromUsageUrl } from "../lib/orgs.js";
+import { archiveReadings, restoreRecords, seedRecords } from "../lib/archive.js";
 import { normalizeUsageResponse, normalizeExtraUsage } from "../lib/normalize-usage.js";
 import { formatMoney } from "../lib/extra-usage.js";
 import { computeMessageCost } from "../lib/message-cost.js";
@@ -345,7 +346,7 @@ async function applyDemoMode(on) {
 /** Everything that has to happen whenever a new reading lands, whichever way it arrived. */
 async function applySnapshot(snapshot) {
   const { latestSnapshot: previous = null } = await chrome.storage.local.get("latestSnapshot");
-  await setLatestSnapshot(snapshot);
+  await archiveSnapshot(await setLatestSnapshot(snapshot));
   if (snapshot.extraUsage) await setExtraUsage(snapshot.extraUsage, snapshot.fetchedAt);
   await noteFullBuckets(snapshot);
   await updateToolbar(snapshot);
@@ -360,6 +361,30 @@ async function applySnapshot(snapshot) {
   // This reading may have brought a new session window; Claude Code's figures are counted in the same one.
   await tellCompanionWindow();
   await tellCompanionPlan();
+}
+
+// ---------------------------------------------------------------- archive --
+// Every reading also goes into the archive (lib/archive.js): storage keeps the
+// last few hundred to work from, the archive keeps all of them for the chart's
+// longer ranges. The first time, it is started off with what storage already
+// holds, for the main organisation and any set aside by a switch.
+
+async function archiveSnapshot(snapshot) {
+  try {
+    const orgId = (await getOrgCache())?.orgId ?? "";
+    const { archiveSeeded, history, usageLog, orgState = {} } = await chrome.storage.local.get(["archiveSeeded", "history", "usageLog", "orgState"]);
+    if (!archiveSeeded) {
+      await restoreRecords([
+        ...Object.entries(orgState).flatMap(([id, state]) => seedRecords(state, id)),
+        ...seedRecords({ history, usageLog }, orgId),
+      ]);
+      await chrome.storage.local.set({ archiveSeeded: true });
+    }
+    await archiveReadings([snapshot], orgId);
+  } catch (error) {
+    // The archive is extra: a reading that couldn't be filed is still the latest reading.
+    console.warn("[ClaudeMeter] could not archive the reading", error);
+  }
 }
 
 // ------------------------------------------------------------ other orgs --

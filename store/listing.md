@@ -67,7 +67,7 @@ documented one and may change.
 | `sidePanel` *(Chrome, Edge)* | Offer the dashboard in the side panel. |
 | `offscreen` *(Chrome, Edge)* | Play a short sound with an alert; a service worker cannot play audio itself. |
 | `nativeMessaging` | Talk to the optional companion that reads Claude Code's local logs. Unused unless the user installs it. |
-| `unlimitedStorage`, `downloads` *(if present)* | Keep long usage history; save backups the user asked for. |
+| `unlimitedStorage` | Keep every usage reading in a local database (IndexedDB) so the chart can go back years. Nothing is uploaded. |
 | Optional hosts: Slack, Discord, ntfy | Deliver alerts to a webhook the user entered. Requested only then, for that host. |
 | Optional host: `api.anthropic.com` | Read the Anthropic Console cost report with an Admin API key the user entered. Requested only then. |
 

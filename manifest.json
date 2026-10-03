@@ -69,7 +69,7 @@
       "all_frames": false
     }
   ],
-  "permissions": ["storage", "alarms", "notifications", "sidePanel", "contextMenus", "offscreen", "nativeMessaging"],
+  "permissions": ["storage", "unlimitedStorage", "alarms", "notifications", "sidePanel", "contextMenus", "offscreen", "nativeMessaging"],
   "host_permissions": ["https://claude.ai/*"],
   "optional_host_permissions": [
     "https://hooks.slack.com/*",
