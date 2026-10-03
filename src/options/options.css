@@ -713,3 +713,10 @@ button.danger {
 .card input[type="range"] + .row {
   margin-top: 12px;
 }
+
+.header-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 18px;
+}

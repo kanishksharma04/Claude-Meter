@@ -52,9 +52,9 @@ icon and you immediately see:
   and fire a test notification. Reopen it any time from Options
 - **`cm` in the address bar** — type `cm`, then a space: the dropdown shows every
   limit and its reset time without opening anything. Enter opens the dashboard;
-  `cm refresh`, `cm report`, `cm open` (claude.ai) and `cm options` do what they say
+  `cm refresh`, `cm report`, `cm health`, `cm open` (claude.ai) and `cm options` do what they say
 - **Right-click the icon** — Refresh now, **Snooze alerts** (1 hour, 4 hours, until
-  tomorrow morning, or resume), Open history, Open side panel, Open mini window.
+  tomorrow morning, or resume), Open history, Open side panel, Open mini window, Health check.
   A snooze pauses desktop notifications *and* the nudge banners on claude.ai, shows
   in the popup and Options with a Resume button, and ends by itself
 - **Keyboard shortcuts** — `Alt+Shift+U` opens ClaudeMeter, `Alt+Shift+R` refreshes,
@@ -298,7 +298,7 @@ see [companion/README.md](companion/README.md)), ClaudeMeter reads those logs:
 - **Six languages** — English, Español, Deutsch, 日本語, हिन्दी and 简体中文. Options
   and the popup, side panel and mini window follow the browser's language, or the one
   you pick under Appearance; the store description and shortcut names are translated
-  too. Each translation covers the same 301 strings, which `scripts/check-locales.mjs`
+  too. Each translation covers the same 313 strings, which `scripts/check-locales.mjs`
   verifies.
 
 ### Data and reliability
@@ -322,6 +322,23 @@ see [companion/README.md](companion/README.md)), ClaudeMeter reads those logs:
   A reply finishing in this browser brings a slowed-down pace straight back. Options
   shows what it is doing and why ("Now: refreshing every 10 min: nothing has changed
   for a while. Next at 4:32 PM"), and one switch turns it off for a fixed interval.
+
+- **Health check** — one page that says whether each thing ClaudeMeter depends on is
+  working, and what to do when it isn't: the claude.ai usage endpoint (with what the
+  last failure means — signed out, offline, rate-limited, a changed API), the
+  background refresh and its current pace, the browser permissions, the optional
+  sites a switched-on feature needs, notifications, the Claude Code companion, the
+  Console API, and storage. **Check again** tries all of them afresh. Open it from
+  Options, the icon's menu, `cm health`, or the "Why?" on the popup's "Couldn't
+  refresh" banner.
+
+- **One-click bug report** — the same page builds a GitHub issue with the health
+  check and a block of diagnostics already filled in; one click opens it. The text
+  travels to GitHub in that link, but nothing is posted until you press Submit there,
+  and you can edit it first. The diagnostics are shown on the page
+  first, exactly as they will be sent, and are redacted by construction: settings are
+  reduced to switches, numbers and fixed choices, and there are no organisation names
+  or ids, keys, webhook addresses, chat titles, notes or usage figures in them.
 
 ### Alerts
 
@@ -496,6 +513,7 @@ claudemeter/
 │   ├── popup/                         # toolbar popup, ?view=panel side panel dashboard, ?view=mini window
 │   │   └── insights.js                # the dashboard's analytics sections
 │   ├── report/                        # the weekly report page (printable)
+│   ├── health/                        # the health check and bug report page
 │   ├── offscreen/                     # windowless page the worker opens to play an alert sound
 │   ├── options/                       # refresh interval, notifications, theme, developer mode
 │   ├── onboarding/                    # first-run welcome page: sign-in check, permissions, alerts
@@ -517,6 +535,7 @@ claudemeter/
 │   │   ├── spikes.js                  # a sudden jump between nearby readings -> spike log
 │   │   ├── attribution.js             # which rises this browser can't account for -> "used elsewhere"
 │   │   ├── usage-log.js               # hourly rollup of every reading, kept for eight weeks
+│   │   ├── health.js                  # health checks, redacted diagnostics, the prefilled GitHub issue
 │   │   ├── refresh-plan.js            # adaptive refresh: the wait before the next reading, and why
 │   │   ├── archive.js                 # every reading, for good, in IndexedDB -> the chart's long ranges
 │   │   ├── session-windows.js         # log of past 5-hour windows + the timeline rows drawn from it
@@ -849,6 +868,17 @@ written when Developer mode is on, from Options.
   so are the alerts that depend on it. "Close to a limit" only speeds things up while
   usage is moving, so the first reading after a quiet spell is at the slower pace.
   The rules are fixed, not learned from your habits, and the switch is all or nothing.
+- The health check reports what the extension can see of itself. It can't tell whether
+  the page script on claude.ai is running in a given tab, whether a notification the
+  browser accepted was actually shown by the system (Chrome only says if they are
+  blocked outright; Firefox and Safari don't say), or why a webhook's far end dropped
+  a message. "Answering" for the usage endpoint means the last reading succeeded, not
+  that its figures are right.
+- The bug report is a link, and a link has a length limit: past about 7,000
+  characters the diagnostics are cut from the end and the page says so. Redaction
+  works on what ClaudeMeter stores; anything you type into the issue yourself is
+  yours to check. The health page's own text is translated; the checks' findings and
+  the diagnostics are in English, so an issue reads the same whoever files it.
 - The archive starts the day this version is installed. What it is seeded with reaches
   back at most eight weeks, and that part is hourly, not every reading. Only the chart
   reads it: the heatmap, forecast and the other analytics still work from the

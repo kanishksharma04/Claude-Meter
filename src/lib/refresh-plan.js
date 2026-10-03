@@ -21,6 +21,9 @@
 
 const MINUTE_MS = 60 * 1000;
 
+/** The alarm the service worker sets from the plan; the health page looks it up by this name. */
+export const REFRESH_ALARM_NAME = "claudemeter-refresh-check";
+
 /** Never more often than this, however small the interval and however close the limit. */
 export const MIN_MINUTES = 1;
 /** Never less often than this, however long nothing has changed or failed. */

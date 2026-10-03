@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ClaudeMeter — Health check</title>
+    <link rel="stylesheet" href="../shared/theme.css" />
+    <link rel="stylesheet" href="health.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">ClaudeMeter <span class="badge" id="demoBadge" hidden>Demo</span></p>
+          <h1>Health check</h1>
+          <p class="summary" id="summary" data-no-i18n role="status"></p>
+        </div>
+        <div class="controls">
+          <a class="link" href="../options/options.html">Options &rarr;</a>
+          <button type="button" id="checkBtn">Check again</button>
+        </div>
+      </header>
+
+      <!-- Built from buildChecks() in lib/health.js: one row per thing ClaudeMeter depends on -->
+      <ul class="checks" id="checks" data-no-i18n aria-label="Checks"></ul>
+
+      <section aria-labelledby="reportTitle">
+        <h2 id="reportTitle">Report a bug</h2>
+        <p class="hint">Opens a new issue on GitHub with the health check and the diagnostics below already filled in. The text travels to GitHub in the link when you click; nothing is posted until you press Submit there, and you can edit it first.</p>
+        <p class="hint">The diagnostics leave out organisation names and ids, keys, webhook addresses, chat titles, notes and your usage figures.</p>
+        <div class="actions">
+          <a class="button primary" id="issueLink" target="_blank" rel="noopener">Open a GitHub issue</a>
+          <button type="button" id="copyBtn">Copy diagnostics</button>
+          <span class="status" id="copyStatus" role="status" data-no-i18n></span>
+        </div>
+        <p class="hint" id="truncatedNote" hidden>The diagnostics were too long for a link, so the issue has the first part. Copy them and paste the rest.</p>
+        <pre id="diagnostics" data-no-i18n tabindex="0" aria-label="Diagnostics"></pre>
+      </section>
+    </main>
+    <script type="module" src="health.js"></script>
+  </body>
+</html>

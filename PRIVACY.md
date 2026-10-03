@@ -31,15 +31,25 @@ file to its own folder in your home directory, which you can switch off.
 
 ## What leaves your computer
 
-Nothing, unless you turn one of these on:
+Nothing, unless you turn one of these on or press the button in the last row:
 
 | You switch on | What is sent | To whom |
 |---|---|---|
 | Nothing (the default) | Requests for your own usage figures | claude.ai, as your browser would send them |
 | A webhook | The text of each usage alert, such as "Current session usage just crossed 80%" | The Slack, Discord or ntfy address you entered |
 | Console API spend | Your Admin API key, to read the cost report | api.anthropic.com |
+| "Open a GitHub issue" on the health page | The redacted diagnostics described below, inside the link | github.com |
 
 In privacy mode, alert text carries no figures.
+
+**Bug reports.** The health page can open a new GitHub issue with diagnostics filled
+in. That is a link your browser opens, with the text in it: GitHub receives it when
+you click, nothing is posted until you press Submit there, and the text is shown to
+you on the health page first. It contains the extension version, your
+browser and operating system, which checks passed, error codes, counts of what is
+stored and your settings reduced to switches and numbers. It does not contain
+organisation names or ids, keys, webhook addresses, chat titles, notes or usage
+figures.
 
 ## Permissions
 

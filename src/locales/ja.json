@@ -111,7 +111,7 @@
   "The companion stays running while the browser is open and watches the logs, so new usage shows up within a second or two. Off, it is started and asked once at each refresh instead.": "ブラウザーを開いている間コンパニオンが動き続けてログを監視するため、新しい使用量が 1〜2 秒で反映されます。オフの場合は、更新のたびに起動して 1 回だけ問い合わせます。",
   "To install the companion, run this in a terminal, from the folder you loaded ClaudeMeter from. It needs Node.js 18 or newer, and works on macOS, Linux and Windows.": "コンパニオンをインストールするには、ClaudeMeter を読み込んだフォルダーでターミナルから次を実行します。Node.js 18 以降が必要で、macOS・Linux・Windows で動作します。",
   "Copy": "コピー",
-  "Check again": "再確認",
+  "Check again": "再チェック",
   "Share usage with local tools": "使用量をローカルのツールと共有",
   "The companion keeps a small file up to date with your plan usage and Claude Code totals, for the": "コンパニオンが、プランの使用量と Claude Code の合計を記した小さなファイルを最新に保ちます。対象は次のターミナルコマンド",
   "terminal command, Raycast, Stream Deck and menu-bar tools to read. It stays on this computer. Off, the file is removed.": "のほか、Raycast、Stream Deck、メニューバーのツールです。ファイルはこのコンピューターの外には出ません。オフにするとファイルは削除されます。",
@@ -301,7 +301,19 @@
   "Long-term archive": "長期アーカイブ",
   "Every reading is also filed in a database in this browser, so the dashboard chart can go back months and years instead of a day. It is never trimmed, and it stays on this computer.": "すべての計測値はこのブラウザー内のデータベースにも保存されるため、ダッシュボードのグラフは1日分ではなく数か月、数年さかのぼれます。削られることはなく、このコンピューターの外には出ません。",
   "Adaptive refresh": "適応型更新",
-  "Treats the interval above as the normal pace: up to four times as often while a limit is past 75% and still climbing, down to a quarter as often once nothing has changed for half an hour, and a wait that doubles after each failed attempt. Never more than once a minute or less than once an hour. Off: exactly the interval above.": "上の間隔を通常のペースとして扱います。上限が75%を超えてなお増えている間は最大4倍の頻度で、30分間変化がなければ最小4分の1の頻度で更新し、失敗するたびに待ち時間を2倍にします。1分に1回より多くも、1時間に1回より少なくもなりません。オフの場合は上の間隔どおりです。"
+  "Treats the interval above as the normal pace: up to four times as often while a limit is past 75% and still climbing, down to a quarter as often once nothing has changed for half an hour, and a wait that doubles after each failed attempt. Never more than once a minute or less than once an hour. Off: exactly the interval above.": "上の間隔を通常のペースとして扱います。上限が75%を超えてなお増えている間は最大4倍の頻度で、30分間変化がなければ最小4分の1の頻度で更新し、失敗するたびに待ち時間を2倍にします。1分に1回より多くも、1時間に1回より少なくもなりません。オフの場合は上の間隔どおりです。",
+  "Health check": "動作チェック",
+  "Health check →": "動作チェック →",
+  "Options →": "オプション →",
+  "Checking…": "チェック中…",
+  "Report a bug": "バグを報告",
+  "Opens a new issue on GitHub with the health check and the diagnostics below already filled in. The text travels to GitHub in the link when you click; nothing is posted until you press Submit there, and you can edit it first.": "動作チェックの結果と下の診断情報を記入済みの新しい Issue を GitHub で開きます。クリックすると、この文面はリンクに含まれて GitHub に送られますが、GitHub 側で送信ボタンを押すまで何も投稿されず、投稿前に編集できます。",
+  "The diagnostics leave out organisation names and ids, keys, webhook addresses, chat titles, notes and your usage figures.": "診断情報には、組織の名前や ID、キー、Webhook のアドレス、チャットのタイトル、メモ、使用量の数値は含まれません。",
+  "Open a GitHub issue": "GitHub の Issue を開く",
+  "Copy diagnostics": "診断情報をコピー",
+  "The diagnostics were too long for a link, so the issue has the first part. Copy them and paste the rest.": "診断情報がリンクに収まらなかったため、Issue には最初の部分だけが入っています。コピーして残りを貼り付けてください。",
+  "Why?": "原因は？",
+  "Diagnostics": "診断情報"
  },
  "patterns": [
   [

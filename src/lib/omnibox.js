@@ -25,6 +25,12 @@ export const COMMANDS = [
     description: "Open this week's usage report",
     enter: "opens the weekly report",
   },
+  {
+    id: "health",
+    keywords: ["health", "diagnose", "bug"],
+    description: "Check that ClaudeMeter is working, or report a bug",
+    enter: "opens the health check",
+  },
   { id: "claude", keywords: ["open", "claude", "chat"], description: "Open claude.ai", enter: "opens claude.ai" },
   { id: "options", keywords: ["options", "settings"], description: "Open ClaudeMeter options", enter: "opens options" },
   {

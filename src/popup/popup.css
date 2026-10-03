@@ -929,3 +929,8 @@ footer span {
   color: var(--muted);
   font-size: 11px;
 }
+
+.error-banner a {
+  color: inherit;
+  font-weight: 600;
+}

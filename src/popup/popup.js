@@ -748,7 +748,11 @@ function render(state) {
   const errorIsNewer = lastError && lastError.timestamp > latestSnapshot.fetchedAt;
   if (errorIsNewer) {
     errorBanner.hidden = false;
-    errorBanner.textContent = `Couldn't refresh — showing data from ${timeAgo(latestSnapshot.fetchedAt)}`;
+    const why = document.createElement("a");
+    why.href = chrome.runtime.getURL("src/health/health.html");
+    why.target = "_blank";
+    why.textContent = "Why?";
+    errorBanner.replaceChildren(`Couldn't refresh — showing data from ${timeAgo(latestSnapshot.fetchedAt)}. `, why);
   } else {
     errorBanner.hidden = true;
   }

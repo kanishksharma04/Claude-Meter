@@ -28,7 +28,7 @@ import {
 import { fetchUsageSnapshot, fetchOrgs, fetchOtherOrgs, UsageApiError } from "../lib/usage-api.js";
 import { extraOrgs, orgIdFromUsageUrl } from "../lib/orgs.js";
 import { archiveReadings, restoreRecords, seedRecords } from "../lib/archive.js";
-import { planRefresh, foldOutcome, usageChanged } from "../lib/refresh-plan.js";
+import { planRefresh, foldOutcome, usageChanged, REFRESH_ALARM_NAME } from "../lib/refresh-plan.js";
 import { normalizeUsageResponse, normalizeExtraUsage } from "../lib/normalize-usage.js";
 import { formatMoney } from "../lib/extra-usage.js";
 import { computeMessageCost } from "../lib/message-cost.js";
@@ -53,7 +53,7 @@ import { scheduleSound } from "../lib/sounds.js";
 import { COMPANION_HOST, companionProblem, planForCompanion } from "../lib/claude-code.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
-const ALARM_NAME = "claudemeter-refresh-check";
+const ALARM_NAME = REFRESH_ALARM_NAME;
 const SNOOZE_ALARM_NAME = "claudemeter-snooze-end";
 const RESET_ALARM_NAME = "claudemeter-reset-check";
 const DIGEST_ALARM_NAME = "claudemeter-digest";
@@ -100,12 +100,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message?.type === "CLAUDEMETER_REFRESH_API_SPEND") {
-    refreshApiSpend({ force: true }).then(sendResponse);
+    refreshApiSpend({ force: true })
+      .catch(() => ({ ok: false }))
+      .then(sendResponse);
     return true;
   }
 
   if (message?.type === "CLAUDEMETER_REFRESH_CLAUDE_CODE") {
-    refreshClaudeCode({ force: true }).then(sendResponse);
+    refreshClaudeCode({ force: true })
+      .catch(() => ({ ok: false })) // whoever asked is waiting for an answer, whatever it is
+      .then(sendResponse);
     return true;
   }
 
@@ -573,7 +577,7 @@ async function tellCompanionWindow({ force = false } = {}) {
   const window = await sessionResetsAt();
   if (!force && window === companionWindow) return;
   companionWindow = window;
-  companionPort.postMessage({ type: "watch", sessionResetsAt: window });
+  companionPort?.postMessage({ type: "watch", sessionResetsAt: window }); // it may have closed while the window was looked up
 }
 
 /** @returns {Promise<{ ok: boolean, problem?: object } | null>} null when switched off or skipped */
@@ -582,9 +586,13 @@ async function refreshClaudeCode({ force = false } = {}) {
   if (!settings.claudeCode || settings.demoMode) return null;
 
   if (settings.claudeCodeLive) {
-    await connectCompanion(); // a no-op while connected; otherwise this is the retry
-    // Nothing to ask for: changes arrive unasked. Only a moved session window, or a forced check, needs saying.
-    await tellCompanionWindow({ force });
+    try {
+      await connectCompanion(); // a no-op while connected; otherwise this is the retry
+      // Nothing to ask for: changes arrive unasked. Only a moved session window, or a forced check, needs saying.
+      await tellCompanionWindow({ force });
+    } catch {
+      // The connection closed while it was being used — no companion to connect to. The one-off request below says why.
+    }
     if (companionPort) return { ok: true };
   }
 
@@ -914,6 +922,7 @@ async function createContextMenu() {
   if (chrome.sidePanel?.open) add({ id: "sidepanel", title: "Open side panel" });
   else if (chrome.sidebarAction?.open) add({ id: "sidepanel", title: "Open sidebar" }); // Firefox's equivalent
   add({ id: "mini", title: "Open mini window" });
+  add({ id: "health", title: "Health check" });
   const { privacyMode } = await getSettings();
   add({ id: "privacy", type: "checkbox", title: "Privacy mode (hide numbers)", checked: privacyMode });
 
@@ -931,6 +940,8 @@ chrome.contextMenus?.onClicked.addListener((info, tab) => {
     refreshUsage();
   } else if (id === "history") {
     openUrl(`${DASHBOARD_URL}#history`);
+  } else if (id === "health") {
+    openUrl(HEALTH_URL);
   } else if (id === "mini") {
     openMiniWindow();
   } else if (id === "privacy") {
@@ -1007,6 +1018,7 @@ chrome.commands?.onCommand.addListener(async (command) => {
 
 const DASHBOARD_URL = chrome.runtime.getURL("src/popup/popup.html?view=panel");
 const REPORT_URL = chrome.runtime.getURL("src/report/report.html");
+const HEALTH_URL = chrome.runtime.getURL("src/health/health.html");
 
 function openUrl(url, disposition = "newForegroundTab") {
   if (disposition === "currentTab") return chrome.tabs.update({ url });
@@ -1034,6 +1046,7 @@ chrome.omnibox?.onInputEntered.addListener(async (text, disposition) => {
 
   if (command === "refresh") await refreshUsage();
   else if (command === "report") await openUrl(REPORT_URL, disposition);
+  else if (command === "health") await openUrl(HEALTH_URL, disposition);
   else if (command === "privacy") await togglePrivacyMode();
   else if (command === "options") await chrome.runtime.openOptionsPage();
   else if (command === "claude") await openUrl("https://claude.ai/", disposition);

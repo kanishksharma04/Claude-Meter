@@ -111,7 +111,7 @@
   "The companion stays running while the browser is open and watches the logs, so new usage shows up within a second or two. Off, it is started and asked once at each refresh instead.": "ब्राउज़र खुला रहने तक साथी प्रोग्राम चलता रहता है और लॉग पर नज़र रखता है, इसलिए नया उपयोग एक-दो सेकंड में दिख जाता है। बंद होने पर, उसे हर रीफ़्रेश पर चालू करके एक बार पूछा जाता है।",
   "To install the companion, run this in a terminal, from the folder you loaded ClaudeMeter from. It needs Node.js 18 or newer, and works on macOS, Linux and Windows.": "साथी प्रोग्राम इंस्टॉल करने के लिए, जिस फ़ोल्डर से आपने ClaudeMeter लोड किया है वहाँ टर्मिनल में यह चलाएँ। इसके लिए Node.js 18 या नया चाहिए, और यह macOS, Linux और Windows पर चलता है।",
   "Copy": "कॉपी करें",
-  "Check again": "फिर जाँचें",
+  "Check again": "फिर से जाँचें",
   "Share usage with local tools": "स्थानीय टूल के साथ उपयोग साझा करें",
   "The companion keeps a small file up to date with your plan usage and Claude Code totals, for the": "साथी प्रोग्राम एक छोटी फ़ाइल को आपके प्लान के उपयोग और Claude Code के योग के साथ ताज़ा रखता है — इस टर्मिनल कमांड के लिए:",
   "terminal command, Raycast, Stream Deck and menu-bar tools to read. It stays on this computer. Off, the file is removed.": "और Raycast, Stream Deck तथा मेन्यू-बार टूल के लिए। यह इसी कंप्यूटर पर रहती है। बंद करने पर फ़ाइल हटा दी जाती है।",
@@ -301,7 +301,19 @@
   "Long-term archive": "दीर्घकालिक संग्रह",
   "Every reading is also filed in a database in this browser, so the dashboard chart can go back months and years instead of a day. It is never trimmed, and it stays on this computer.": "हर रीडिंग इस ब्राउज़र के एक डेटाबेस में भी सहेजी जाती है, ताकि डैशबोर्ड का चार्ट एक दिन के बजाय महीनों और वर्षों पीछे तक जा सके। इसे कभी छोटा नहीं किया जाता और यह इसी कंप्यूटर पर रहता है।",
   "Adaptive refresh": "अनुकूली रीफ़्रेश",
-  "Treats the interval above as the normal pace: up to four times as often while a limit is past 75% and still climbing, down to a quarter as often once nothing has changed for half an hour, and a wait that doubles after each failed attempt. Never more than once a minute or less than once an hour. Off: exactly the interval above.": "ऊपर के अंतराल को सामान्य गति मानता है: जब कोई सीमा 75% से ऊपर हो और बढ़ रही हो तो चार गुना तक अधिक बार, आधे घंटे तक कुछ न बदलने पर एक-चौथाई तक कम बार, और हर विफल प्रयास के बाद दोगुना होता इंतज़ार। कभी भी मिनट में एक बार से अधिक या घंटे में एक बार से कम नहीं। बंद: ठीक ऊपर वाला अंतराल।"
+  "Treats the interval above as the normal pace: up to four times as often while a limit is past 75% and still climbing, down to a quarter as often once nothing has changed for half an hour, and a wait that doubles after each failed attempt. Never more than once a minute or less than once an hour. Off: exactly the interval above.": "ऊपर के अंतराल को सामान्य गति मानता है: जब कोई सीमा 75% से ऊपर हो और बढ़ रही हो तो चार गुना तक अधिक बार, आधे घंटे तक कुछ न बदलने पर एक-चौथाई तक कम बार, और हर विफल प्रयास के बाद दोगुना होता इंतज़ार। कभी भी मिनट में एक बार से अधिक या घंटे में एक बार से कम नहीं। बंद: ठीक ऊपर वाला अंतराल।",
+  "Health check": "स्थिति जाँच",
+  "Health check →": "स्थिति जाँच →",
+  "Options →": "विकल्प →",
+  "Checking…": "जाँच हो रही है…",
+  "Report a bug": "बग की रिपोर्ट करें",
+  "Opens a new issue on GitHub with the health check and the diagnostics below already filled in. The text travels to GitHub in the link when you click; nothing is posted until you press Submit there, and you can edit it first.": "GitHub पर एक नया इश्यू खोलता है जिसमें स्थिति जाँच और नीचे दिया गया निदान पहले से भरा होता है। क्लिक करने पर यह पाठ लिंक के साथ GitHub तक जाता है; जब तक आप वहाँ सबमिट नहीं दबाते, कुछ भी पोस्ट नहीं होता, और आप पहले उसे संपादित कर सकते हैं।",
+  "The diagnostics leave out organisation names and ids, keys, webhook addresses, chat titles, notes and your usage figures.": "निदान में संगठनों के नाम और आईडी, कुंजियाँ, वेबहुक पते, चैट के शीर्षक, नोट और आपके उपयोग के आँकड़े शामिल नहीं होते।",
+  "Open a GitHub issue": "GitHub इश्यू खोलें",
+  "Copy diagnostics": "निदान कॉपी करें",
+  "The diagnostics were too long for a link, so the issue has the first part. Copy them and paste the rest.": "निदान एक लिंक के लिए बहुत लंबा था, इसलिए इश्यू में उसका पहला भाग है। इसे कॉपी करें और बाक़ी पेस्ट करें।",
+  "Why?": "क्यों?",
+  "Diagnostics": "निदान"
  },
  "patterns": [
   [

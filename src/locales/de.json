@@ -301,7 +301,19 @@
   "Long-term archive": "Langzeitarchiv",
   "Every reading is also filed in a database in this browser, so the dashboard chart can go back months and years instead of a day. It is never trimmed, and it stays on this computer.": "Jede Messung wird zusätzlich in einer Datenbank in diesem Browser abgelegt, damit das Diagramm im Dashboard Monate und Jahre statt nur einen Tag zurückreicht. Sie wird nie gekürzt und bleibt auf diesem Computer.",
   "Adaptive refresh": "Adaptive Aktualisierung",
-  "Treats the interval above as the normal pace: up to four times as often while a limit is past 75% and still climbing, down to a quarter as often once nothing has changed for half an hour, and a wait that doubles after each failed attempt. Never more than once a minute or less than once an hour. Off: exactly the interval above.": "Behandelt das Intervall oben als normales Tempo: bis zu viermal so oft, solange ein Limit über 75 % liegt und weiter steigt, bis zu einem Viertel so oft, wenn sich eine halbe Stunde lang nichts geändert hat, und eine Wartezeit, die sich nach jedem Fehlversuch verdoppelt. Nie öfter als einmal pro Minute und nie seltener als einmal pro Stunde. Aus: genau das Intervall oben."
+  "Treats the interval above as the normal pace: up to four times as often while a limit is past 75% and still climbing, down to a quarter as often once nothing has changed for half an hour, and a wait that doubles after each failed attempt. Never more than once a minute or less than once an hour. Off: exactly the interval above.": "Behandelt das Intervall oben als normales Tempo: bis zu viermal so oft, solange ein Limit über 75 % liegt und weiter steigt, bis zu einem Viertel so oft, wenn sich eine halbe Stunde lang nichts geändert hat, und eine Wartezeit, die sich nach jedem Fehlversuch verdoppelt. Nie öfter als einmal pro Minute und nie seltener als einmal pro Stunde. Aus: genau das Intervall oben.",
+  "Health check": "Systemprüfung",
+  "Health check →": "Systemprüfung →",
+  "Options →": "Optionen →",
+  "Checking…": "Wird geprüft…",
+  "Report a bug": "Fehler melden",
+  "Opens a new issue on GitHub with the health check and the diagnostics below already filled in. The text travels to GitHub in the link when you click; nothing is posted until you press Submit there, and you can edit it first.": "Öffnet ein neues Issue auf GitHub, in dem die Systemprüfung und die Diagnose unten bereits eingetragen sind. Der Text wird beim Klicken im Link an GitHub übertragen; veröffentlicht wird nichts, bis du dort auf „Absenden“ klickst, und du kannst ihn vorher bearbeiten.",
+  "The diagnostics leave out organisation names and ids, keys, webhook addresses, chat titles, notes and your usage figures.": "Die Diagnose enthält keine Namen oder IDs von Organisationen, keine Schlüssel, Webhook-Adressen, Chat-Titel, Notizen oder Nutzungszahlen.",
+  "Open a GitHub issue": "GitHub-Issue öffnen",
+  "Copy diagnostics": "Diagnose kopieren",
+  "The diagnostics were too long for a link, so the issue has the first part. Copy them and paste the rest.": "Die Diagnose war zu lang für einen Link, daher enthält das Issue nur den ersten Teil. Kopiere sie und füge den Rest ein.",
+  "Why?": "Warum?",
+  "Diagnostics": "Diagnose"
  },
  "patterns": [
   [
