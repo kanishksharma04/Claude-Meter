@@ -1,0 +1,17 @@
+{
+  "extDescription": {
+    "message": "在工具栏中查看 claude.ai Pro/Max 套餐的会话和每周用量限额，无需打开 claude.ai 的账户菜单。"
+  },
+  "cmdOpen": {
+    "message": "打开 ClaudeMeter"
+  },
+  "cmdRefresh": {
+    "message": "立即刷新用量"
+  },
+  "cmdSnooze": {
+    "message": "将提醒暂停一小时，或恢复提醒"
+  },
+  "cmdPrivacy": {
+    "message": "隐藏或显示数字（隐私模式）"
+  }
+}

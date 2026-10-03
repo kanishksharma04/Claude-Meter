@@ -2,7 +2,8 @@
   "manifest_version": 3,
   "name": "ClaudeMeter",
   "version": "0.1.0",
-  "description": "See your claude.ai Pro/Max session and weekly usage limits from your toolbar — no need to open claude.ai's account menu.",
+  "description": "__MSG_extDescription__",
+  "default_locale": "en",
   "icons": {
     "16": "src/icons/icon16.png",
     "32": "src/icons/icon32.png",
@@ -22,19 +23,19 @@
   "commands": {
     "_execute_action": {
       "suggested_key": { "default": "Alt+Shift+U" },
-      "description": "Open ClaudeMeter"
+      "description": "__MSG_cmdOpen__"
     },
     "refresh-usage": {
       "suggested_key": { "default": "Alt+Shift+R" },
-      "description": "Refresh usage now"
+      "description": "__MSG_cmdRefresh__"
     },
     "toggle-snooze": {
       "suggested_key": { "default": "Alt+Shift+S" },
-      "description": "Snooze alerts for an hour, or resume them"
+      "description": "__MSG_cmdSnooze__"
     },
     "toggle-privacy": {
       "suggested_key": { "default": "Alt+Shift+P" },
-      "description": "Hide or show the numbers (privacy mode)"
+      "description": "__MSG_cmdPrivacy__"
     }
   },
   "omnibox": {

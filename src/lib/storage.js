@@ -32,6 +32,7 @@ export const DEFAULT_SETTINGS = {
   soundName: "chime", // which one: a key of SOUNDS
   soundVolume: 60, // 0–100
   webhooks: DEFAULT_WEBHOOKS, // { slack | discord | ntfy: { enabled, url } } — alerts also sent there (lib/webhooks.js)
+  language: "auto", // "auto" (the browser's) or a locale code from lib/i18n.js
   theme: "auto", // "auto" | "light" | "dark" | "contrast"
   accent: "clay", // preset name from lib/theme.js
   warnAt: 80, // meters turn amber at this %…

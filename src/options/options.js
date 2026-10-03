@@ -11,6 +11,7 @@ import {
 import { isAdminKey, maskKey } from "../lib/api-spend.js";
 import { MAX_EXTRA_ORGS } from "../lib/orgs.js";
 import { detectBrowser, companionInstallCommand } from "../lib/platform.js";
+import { LANGUAGES, localizePage } from "../lib/i18n.js";
 import { formatClock, formatHour, timeAgo } from "../lib/time-format.js";
 import { SERVICES, checkWebhookUrl } from "../lib/webhooks.js";
 import { SOUNDS } from "../lib/sounds.js";
@@ -704,6 +705,7 @@ function describeInterval(minutes) {
 
 async function init() {
   const settings = await getSettings();
+  await localizePage(settings);
 
   refreshIntervalSlider.value = settings.refreshIntervalMinutes;
   refreshIntervalSlider.setAttribute("aria-valuetext", describeInterval(settings.refreshIntervalMinutes));
@@ -754,6 +756,18 @@ async function init() {
   actionOpensSelect.value = settings.actionOpens;
   // Older Chromium builds have no side panel; don't offer what can't work.
   actionOpensSelect.querySelector('[value="sidePanel"]').disabled = !chrome.sidePanel;
+
+  // Each language under its own name, so it can be found by someone who can't read the current one.
+  const languageSelect = document.getElementById("languageSelect");
+  languageSelect.replaceChildren(
+    new Option(`Auto (${LANGUAGES[document.documentElement.lang.replace("-", "_")] ?? "English"})`, "auto"),
+    ...Object.entries(LANGUAGES).map(([code, name]) => new Option(name, code))
+  );
+  languageSelect.value = settings.language;
+  languageSelect.addEventListener("change", async () => {
+    await setSettings({ language: languageSelect.value });
+    location.reload(); // the page was translated as it loaded; load it again in the new language
+  });
 
   themeSelect.value = settings.theme;
   buildAccentSwatches(settings.accent);

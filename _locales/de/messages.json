@@ -1,0 +1,17 @@
+{
+  "extDescription": {
+    "message": "Sieh deine Sitzungs- und Wochenlimits von claude.ai Pro/Max direkt in der Symbolleiste – ohne das Kontomenü zu öffnen."
+  },
+  "cmdOpen": {
+    "message": "ClaudeMeter öffnen"
+  },
+  "cmdRefresh": {
+    "message": "Nutzung jetzt aktualisieren"
+  },
+  "cmdSnooze": {
+    "message": "Warnungen für eine Stunde pausieren oder fortsetzen"
+  },
+  "cmdPrivacy": {
+    "message": "Zahlen aus- oder einblenden (Privatmodus)"
+  }
+}

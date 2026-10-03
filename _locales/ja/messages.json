@@ -1,0 +1,17 @@
+{
+  "extDescription": {
+    "message": "claude.ai の Pro/Max プランのセッションと週間の使用制限を、アカウントメニューを開かずにツールバーから確認できます。"
+  },
+  "cmdOpen": {
+    "message": "ClaudeMeter を開く"
+  },
+  "cmdRefresh": {
+    "message": "使用量を今すぐ更新"
+  },
+  "cmdSnooze": {
+    "message": "アラートを 1 時間スヌーズ、または再開"
+  },
+  "cmdPrivacy": {
+    "message": "数値の表示/非表示 (プライバシーモード)"
+  }
+}

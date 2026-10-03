@@ -13,6 +13,12 @@ ClaudeMeter
 See your claude.ai session and weekly usage limits from the toolbar, with forecasts,
 alerts and history. Nothing leaves your browser.
 
+## Languages
+
+English, Spanish, German, Japanese, Hindi and Simplified Chinese. The manifest's
+description is translated in `_locales/`; AMO and Edge take a translated listing per
+language if you want to add them — the summaries below would need translating too.
+
 ## Category
 
 Productivity. *(AMO also: Web Development or Other. Safari: Productivity.)*

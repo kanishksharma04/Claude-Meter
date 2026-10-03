@@ -6,6 +6,7 @@ import { elsewhereSpans } from "../lib/attribution.js";
 import { spentToday, describeExtraUsage } from "../lib/extra-usage.js";
 import { formatDollars, formatTokens } from "../lib/value.js";
 import { compareOrgs } from "../lib/orgs.js";
+import { localizePage } from "../lib/i18n.js";
 import { isSnoozed } from "../lib/snooze.js";
 import { isQuiet, quietUntil } from "../lib/quiet-hours.js";
 import { buildResetCalendar, CALENDAR_FILENAME } from "../lib/ics.js";
@@ -621,6 +622,7 @@ function renderNotes(annotations, marks, jumps) {
 
       const text = document.createElement("span");
       text.className = "note-text";
+      text.dataset.noI18n = ""; // the user's own words: never run through the translator
       text.textContent = note.text;
 
       const remove = document.createElement("button");
@@ -982,7 +984,17 @@ setInterval(() => {
   if (latestState?.latestSnapshot) render(latestState);
 }, 30_000);
 
-loadAndRender().then(() => {
+// Translate the page before it first draws, so it doesn't flash English; and again from scratch if the language changes.
+let pageLanguage = null;
+const translated = getAll().then(async ({ settings }) => {
+  pageLanguage = settings.language;
+  await localizePage(settings);
+});
+onStorageChanged((changes) => {
+  if (changes.settings && pageLanguage != null && changes.settings.newValue?.language !== pageLanguage) location.reload();
+});
+
+translated.then(loadAndRender).then(() => {
   // Quietly refresh in the background every time the popup opens, so
   // numbers stay current without the user clicking anything.
   refresh({ silent: true });

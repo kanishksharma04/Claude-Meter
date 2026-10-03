@@ -295,6 +295,12 @@ see [companion/README.md](companion/README.md)), ClaudeMeter reads those logs:
   step-by-step submission notes for addons.mozilla.org, Microsoft Edge Add-ons and
   the Mac App Store. See the limitations below for how far each has been tested.
 
+- **Six languages** — English, Español, Deutsch, 日本語, हिन्दी and 简体中文. Options
+  and the popup, side panel and mini window follow the browser's language, or the one
+  you pick under Appearance; the store description and shortcut names are translated
+  too. Each translation covers the same 294 strings, which `scripts/check-locales.mjs`
+  verifies.
+
 ### Alerts
 
 Alerts are off until you turn them on, and everything below respects a snooze and
@@ -441,7 +447,9 @@ address you gave, after the browser has asked you to allow that one site.
 ```
 claudemeter/
 ├── manifest.json                      # Chrome's manifest, and the one the others are derived from
+├── _locales/                          # the manifest's own strings (description, shortcut names), per language
 ├── scripts/
+│   ├── check-locales.mjs              # checks every translation covers the same strings
 │   ├── build.mjs                      # packages dist/<browser> and a zip for each store
 │   └── manifest-targets.mjs           # what changes in the manifest for Edge, Firefox and Safari
 ├── store/                             # listing text and submission steps for AMO, Edge Add-ons and the App Store
@@ -508,6 +516,7 @@ claudemeter/
 │   │   ├── sounds.js                  # the alert sounds as notes, and scheduling them on an AudioContext
 │   │   ├── share.js                   # usage summary as text, and as a card drawn on a canvas
 │   │   ├── demo-data.js               # the deterministic made-up dataset behind demo mode
+│   │   ├── i18n.js                    # translates a page in place from src/locales/<language>.json
 │   │   ├── platform.js                # which browser this is, and its add-on id in Firefox
 │   │   ├── orgs.js                    # the organisation list: which is main, which are shown alongside, the table
 │   │   ├── api-spend.js               # Console cost report: the request, days from the response, the summary
@@ -517,6 +526,7 @@ claudemeter/
 │   │   ├── extra-usage.js             # extra-usage spend: day-by-day record, "today", wording
 │   │   ├── usage-api.js               # org discovery + usage fetch + typed errors
 │   │   └── normalize-usage.js         # raw usage response -> UsageSnapshot (+ extra-usage block)
+│   ├── locales/                       # the translations: English text -> translated text, one file per language
 │   ├── shared/theme.css               # theme tokens for every extension page
 │   └── icons/                         # toolbar/store icon set (16/32/48/128)
 └── README.md
@@ -582,7 +592,7 @@ a second endpoint, below), with the month's running total at the end of each day
 Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `history`
 (last 500 snapshots) that feeds the dashboard chart and the burn-rate maths. Settings
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
-`notifyThresholds`, `paceAlertFactor`, `resetAlertPercent`, `dailyDigest`, `digestTime`, `calendarReminder`, `quietHours`, `soundAlerts`, `soundName`, `soundVolume`, `webhooks`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
+`notifyThresholds`, `language`, `paceAlertFactor`, `resetAlertPercent`, `dailyDigest`, `digestTime`, `calendarReminder`, `quietHours`, `soundAlerts`, `soundName`, `soundVolume`, `webhooks`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
 `longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `primaryOrg`, `trackedOrgs`, `apiSpend`, `claudeCode`, `claudeCodeLive`, `statusFile`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
@@ -828,6 +838,18 @@ written when Developer mode is on, from Options.
 - Claude Code's bars on the chart share its time axis but not its percentage scale:
   the tallest bar in view is always the same height, whatever it cost. They are there
   to show *when*, and the legend to say *how much*.
+- **What is and isn't translated.** The fixed text of Options and of the popup, side
+  panel and mini window is: headings, labels, hints, buttons, menus, tooltips. Text
+  that is assembled from your data is not yet — forecasts and budgets ("on course for
+  84%"), the advice and summaries in the dashboard, alert messages, durations ("2 hr
+  14 min") — nor are the welcome page, the weekly report, the UI drawn on claude.ai,
+  or status messages in Options. Those show in English in every language. The
+  translations were written for this project and have not been reviewed by native
+  speakers; corrections are a one-line change in `src/locales/`.
+- Translations are keyed by the English text, so rewording an English string orphans
+  its translations until they are updated — it then shows in English rather than
+  breaking, and `node scripts/check-locales.mjs` only checks the languages against
+  each other, not against the pages.
 - **How far each browser has been tested.** Chrome and Edge share an engine and a
   manifest, and the built package is run in Chromium. The Firefox package passes
   Mozilla's `web-ext lint` with no errors but has **not been run in Firefox**. The
@@ -1008,6 +1030,8 @@ written when Developer mode is on, from Options.
   colours for normal / amber / red. These are separate from the notification
   thresholds above.
 - **Clicking the icon opens** — the popup (default) or the side panel.
+- **Language** — Auto (the browser's language, where there is a translation) or one of
+  the six. The page reloads in the new language.
 - **Theme** — Auto (follows the system's `prefers-color-scheme` and
   `prefers-contrast`), Light, Dark, or High contrast.
 - **Privacy mode** — hide every number while you share your screen.
