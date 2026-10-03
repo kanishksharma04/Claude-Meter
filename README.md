@@ -298,7 +298,7 @@ see [companion/README.md](companion/README.md)), ClaudeMeter reads those logs:
 - **Six languages** — English, Español, Deutsch, 日本語, हिन्दी and 简体中文. Options
   and the popup, side panel and mini window follow the browser's language, or the one
   you pick under Appearance; the store description and shortcut names are translated
-  too. Each translation covers the same 299 strings, which `scripts/check-locales.mjs`
+  too. Each translation covers the same 301 strings, which `scripts/check-locales.mjs`
   verifies.
 
 ### Data and reliability
@@ -311,6 +311,17 @@ see [companion/README.md](companion/README.md)), ClaudeMeter reads those logs:
   The first time, it is started off with what was already stored — the recent
   readings, and the hourly log before them — so the longer ranges aren't empty on
   day one. Options → Data says how much it holds and since when.
+
+- **Adaptive refresh** — the interval in Options is the normal pace, and readings move
+  around it. While a limit is past 75% and still climbing they come twice as often,
+  past 90% four times as often, because that is when a stale number costs you. Once
+  nothing has changed for half an hour they come half as often, after two hours a
+  quarter as often. And after a failed attempt — signed out, offline, claude.ai
+  having a bad hour — the wait doubles each time, up to an hour, instead of asking
+  again at the same rate. Never more than once a minute or less than once an hour.
+  A reply finishing in this browser brings a slowed-down pace straight back. Options
+  shows what it is doing and why ("Now: refreshing every 10 min: nothing has changed
+  for a while. Next at 4:32 PM"), and one switch turns it off for a fixed interval.
 
 ### Alerts
 
@@ -506,6 +517,7 @@ claudemeter/
 │   │   ├── spikes.js                  # a sudden jump between nearby readings -> spike log
 │   │   ├── attribution.js             # which rises this browser can't account for -> "used elsewhere"
 │   │   ├── usage-log.js               # hourly rollup of every reading, kept for eight weeks
+│   │   ├── refresh-plan.js            # adaptive refresh: the wait before the next reading, and why
 │   │   ├── archive.js                 # every reading, for good, in IndexedDB -> the chart's long ranges
 │   │   ├── session-windows.js         # log of past 5-hour windows + the timeline rows drawn from it
 │   │   ├── heatmap.js                 # usage log -> weekday × hour averages
@@ -608,7 +620,7 @@ store `readings`, keyed by organisation and time) that is never trimmed and hold
 compact record each — `{ o, t, s, sr, w: [[label, %, resetsAt]], e? }`, about 100
 bytes, so a reading every five minutes is roughly 10 MB a year
 ([`src/lib/archive.js`](src/lib/archive.js)). Settings
-live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
+live under `settings` (`refreshIntervalMinutes`, `adaptiveRefresh`, `notificationsEnabled`,
 `notifyThresholds`, `language`, `paceAlertFactor`, `resetAlertPercent`, `dailyDigest`, `digestTime`, `calendarReminder`, `quietHours`, `soundAlerts`, `soundName`, `soundVolume`, `webhooks`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
 `longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `primaryOrg`, `trackedOrgs`, `apiSpend`, `claudeCode`, `claudeCodeLive`, `statusFile`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
@@ -726,7 +738,31 @@ written when Developer mode is on, from Options.
 ## Refresh behavior
 
 - **Background alarm**: fetches on the interval set in Options (default 5 min),
-  regardless of whether a claude.ai tab is open.
+  regardless of whether a claude.ai tab is open. With **adaptive refresh** on (the
+  default) that interval is the normal pace and `src/lib/refresh-plan.js` picks the
+  actual wait after every reading and every failure:
+
+  | When | Wait | With the default 5 min |
+  |---|---|---|
+  | The fullest limit with room left is ≥ 90%, and usage moved in the last 15 min | interval ÷ 4 | 1.5 min |
+  | … ≥ 75%, and usage moved in the last 15 min | interval ÷ 2 | 2.5 min |
+  | Nothing has changed for 30 min | interval × 2 | 10 min |
+  | Nothing has changed for 2 hours | interval × 4 | 20 min |
+  | The last *n* attempts failed | interval × 2ⁿ | 10, 20, 40, 60 min |
+  | Otherwise | the interval | 5 min |
+
+  Waits are rounded to half a minute and kept between 1 and 60 minutes. A limit that
+  is already full doesn't count as "close" — it can't get closer. The alarm repeats at
+  the pace last chosen, so readings carry on even if the worker is stopped before it
+  can choose again. What was chosen, and why, is stored as `refreshPace`.
+- **Waking up**: a reply finishing in this browser triggers a reading straight away
+  when the pace had slowed for lack of change, or when attempts were failing because
+  claude.ai was signed out (a message going through means that is over). Opening the
+  popup always tries once.
+- **Per-message cost and failures**: after two failed attempts in a row, the readings
+  per-message cost takes around a message are skipped until the next scheduled try,
+  so a struggling claude.ai isn't asked more often by someone who is typing. Those
+  messages go unmeasured.
 - **Other organisations**: one extra request each, with a normal refresh but at most
   once a minute.
 - **API spend**: the Console's cost report is daily, so it is read at most every 30
@@ -807,6 +843,12 @@ written when Developer mode is on, from Options.
   two readings per message. The 7-day view and the week-earlier overlay are drawn from
   the hourly log instead, so they are coarser — one point per hour, the session line
   showing each hour's peak — and the line breaks wherever the browser wasn't running.
+- Adaptive refresh trades freshness for fewer requests when nothing is happening.
+  Once the pace has slowed, usage that starts on another device — or in Claude Code —
+  is noticed up to four intervals late (20 minutes by default, an hour at most), and
+  so are the alerts that depend on it. "Close to a limit" only speeds things up while
+  usage is moving, so the first reading after a quiet spell is at the slower pace.
+  The rules are fixed, not learned from your habits, and the switch is all or nothing.
 - The archive starts the day this version is installed. What it is seeded with reaches
   back at most eight weeks, and that part is hourly, not every reading. Only the chart
   reads it: the heatmap, forecast and the other analytics still work from the
@@ -1007,6 +1049,9 @@ written when Developer mode is on, from Options.
 ## Options
 
 - **Refresh interval** — 1–30 minutes, default 5.
+- **Adaptive refresh** — on by default: readings come more often near a limit, less
+  often when nothing is changing, and back off after failures. Off for exactly the
+  interval set.
 - **Notifications** — desktop notification when session or weekly usage crosses one of
   your thresholds (80% and 95% to begin with; add any others, up to eight). It only
   fires on the transition, not on every fetch above a threshold. While alerts are

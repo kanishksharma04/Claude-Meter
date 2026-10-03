@@ -708,3 +708,8 @@ button.danger {
 .row + button {
   margin-top: 10px;
 }
+
+/* A row that follows a slider needs the same air as one that follows a row. */
+.card input[type="range"] + .row {
+  margin-top: 12px;
+}

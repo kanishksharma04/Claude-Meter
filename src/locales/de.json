@@ -299,7 +299,9 @@
   "1 year": "1 Jahr",
   "All time": "Gesamt",
   "Long-term archive": "Langzeitarchiv",
-  "Every reading is also filed in a database in this browser, so the dashboard chart can go back months and years instead of a day. It is never trimmed, and it stays on this computer.": "Jede Messung wird zusätzlich in einer Datenbank in diesem Browser abgelegt, damit das Diagramm im Dashboard Monate und Jahre statt nur einen Tag zurückreicht. Sie wird nie gekürzt und bleibt auf diesem Computer."
+  "Every reading is also filed in a database in this browser, so the dashboard chart can go back months and years instead of a day. It is never trimmed, and it stays on this computer.": "Jede Messung wird zusätzlich in einer Datenbank in diesem Browser abgelegt, damit das Diagramm im Dashboard Monate und Jahre statt nur einen Tag zurückreicht. Sie wird nie gekürzt und bleibt auf diesem Computer.",
+  "Adaptive refresh": "Adaptive Aktualisierung",
+  "Treats the interval above as the normal pace: up to four times as often while a limit is past 75% and still climbing, down to a quarter as often once nothing has changed for half an hour, and a wait that doubles after each failed attempt. Never more than once a minute or less than once an hour. Off: exactly the interval above.": "Behandelt das Intervall oben als normales Tempo: bis zu viermal so oft, solange ein Limit über 75 % liegt und weiter steigt, bis zu einem Viertel so oft, wenn sich eine halbe Stunde lang nichts geändert hat, und eine Wartezeit, die sich nach jedem Fehlversuch verdoppelt. Nie öfter als einmal pro Minute und nie seltener als einmal pro Stunde. Aus: genau das Intervall oben."
  },
  "patterns": [
   [

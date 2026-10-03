@@ -10,6 +10,7 @@ import {
   onStorageChanged,
 } from "../lib/storage.js";
 import { archiveInfo, clearArchive, describeArchive } from "../lib/archive.js";
+import { describePlan } from "../lib/refresh-plan.js";
 import { isAdminKey, maskKey } from "../lib/api-spend.js";
 import { MAX_EXTRA_ORGS } from "../lib/orgs.js";
 import { detectBrowser, companionInstallCommand } from "../lib/platform.js";
@@ -701,6 +702,21 @@ const THRESHOLD_PROBLEMS = {
   full: `That's the most there can be (${MAX_THRESHOLDS}). Remove one first.`,
 };
 
+const adaptiveRefreshToggle = document.getElementById("adaptiveRefreshToggle");
+
+/** What the adaptive pace is doing just now, and when the next reading is due. */
+async function renderRefreshPace() {
+  const { settings, refreshPace } = await getAll();
+  const info = document.getElementById("refreshPaceInfo");
+  // Demo mode fetches nothing, and a fixed interval needs no explaining.
+  info.hidden = !settings.adaptiveRefresh || settings.demoMode || !refreshPace?.minutes || refreshPace.mode === "fixed";
+  if (info.hidden) return;
+  const next = refreshPace.nextAt > Date.now() ? ` Next at ${formatClock(refreshPace.nextAt)}.` : "";
+  info.textContent = `Now: ${describePlan(refreshPace).replace(/^./, (letter) => letter.toLowerCase())}${next}`;
+}
+
+adaptiveRefreshToggle.addEventListener("change", () => setSettings({ adaptiveRefresh: adaptiveRefreshToggle.checked }));
+
 function describeInterval(minutes) {
   return `${minutes} minute${Number(minutes) === 1 ? "" : "s"}`;
 }
@@ -712,6 +728,8 @@ async function init() {
   refreshIntervalSlider.value = settings.refreshIntervalMinutes;
   refreshIntervalSlider.setAttribute("aria-valuetext", describeInterval(settings.refreshIntervalMinutes));
   refreshIntervalValue.textContent = `${settings.refreshIntervalMinutes} min`;
+  adaptiveRefreshToggle.checked = settings.adaptiveRefresh;
+  renderRefreshPace();
 
   notificationsToggle.checked = settings.notificationsEnabled;
   updateThresholdsRowState(settings.notificationsEnabled);
@@ -1028,6 +1046,7 @@ onStorageChanged((changes) => {
   if (changes.apiSpendStatus) renderApiSpend();
   if (changes.claudeCodeStatus || changes.claudeCode) renderClaudeCode();
   if (changes.snoozeUntil) renderSnooze();
+  if (changes.refreshPace || changes.settings) renderRefreshPace();
   // Demo data changes what the gauge preview should show.
   if (changes.demoState || changes.settings) renderGaugePreview();
   // Privacy mode can also be flipped from the popup, the shortcut or the icon's menu.

@@ -28,6 +28,7 @@ import {
 import { fetchUsageSnapshot, fetchOrgs, fetchOtherOrgs, UsageApiError } from "../lib/usage-api.js";
 import { extraOrgs, orgIdFromUsageUrl } from "../lib/orgs.js";
 import { archiveReadings, restoreRecords, seedRecords } from "../lib/archive.js";
+import { planRefresh, foldOutcome, usageChanged } from "../lib/refresh-plan.js";
 import { normalizeUsageResponse, normalizeExtraUsage } from "../lib/normalize-usage.js";
 import { formatMoney } from "../lib/extra-usage.js";
 import { computeMessageCost } from "../lib/message-cost.js";
@@ -190,6 +191,8 @@ async function handleChatEvent(event) {
       activityWrites = activityWrites.then(() => noteLocalActivity(event)).catch(() => {});
       await activityWrites;
     }
+    // With per-message cost on, the readings around the message do this already.
+    if (event?.kind === "completion_end" && !settings.messageCost) wakeRefresh();
 
     if (!settings.messageCost) return;
     if (event?.kind === "conversation_loaded") return await setThreadChars(event.conversationId, event.chars ?? 0);
@@ -230,6 +233,7 @@ async function setThreadChars(conversationId, chars) {
 async function recordMessageStart(event) {
   let { latestSnapshot: before } = await getAll();
   if (!before || Date.now() - before.fetchedAt > BEFORE_MAX_AGE_MS) {
+    if (await backingOff()) return; // this message goes unmeasured rather than adding to the trouble
     const result = await refreshUsage();
     if (result.ok) before = result.snapshot;
   }
@@ -255,6 +259,7 @@ async function recordMessageEnd(event) {
   const exchanged = (pending.promptChars ?? 0) + (event.replyChars ?? 0);
   await setThreadChars(pending.conversationId, (await threadChars(pending.conversationId)) + exchanged);
 
+  if (await backingOff()) return;
   await new Promise((resolve) => setTimeout(resolve, AFTER_SETTLE_MS));
   const result = await refreshUsage();
   if (!result.ok) return;
@@ -317,6 +322,7 @@ async function refreshUsage() {
     const code = err instanceof UsageApiError ? err.code : "UNKNOWN_ERROR";
     const message = err?.message ?? String(err);
     await setLastError({ code, message, timestamp: Date.now() });
+    await scheduleRefresh({ ok: false, code });
     console.warn(LOG_PREFIX, "refresh failed:", code, message);
     return { ok: false, error: { code, message } };
   }
@@ -331,6 +337,7 @@ async function refreshDemo() {
   const demo = buildDemoState();
   await setDemoState(demo);
   await updateToolbar(demo.latestSnapshot);
+  await scheduleRefresh();
   return { ok: true, snapshot: demo.latestSnapshot, demo: true };
 }
 
@@ -361,6 +368,7 @@ async function applySnapshot(snapshot) {
   // This reading may have brought a new session window; Claude Code's figures are counted in the same one.
   await tellCompanionWindow();
   await tellCompanionPlan();
+  await scheduleRefresh({ ok: true, changed: usageChanged(previous, snapshot), at: snapshot.fetchedAt });
 }
 
 // ---------------------------------------------------------------- archive --
@@ -1079,10 +1087,59 @@ chrome.windows.onRemoved.addListener(async (windowId) => {
 
 // ------------------------------------------------------------------- alarm --
 
-async function ensureAlarm() {
-  const settings = await getSettings();
-  chrome.alarms.create(ALARM_NAME, { periodInMinutes: settings.refreshIntervalMinutes });
+// When the next background reading happens. The interval in Options is the
+// normal pace; with adaptive refresh on, lib/refresh-plan.js moves around it —
+// sooner while a limit is close and climbing, later when nothing is changing,
+// and later still after each failed attempt. The alarm is re-set after every
+// reading and every failure. It repeats at the pace last chosen, so if the
+// worker is stopped before it can choose again, readings carry on regardless.
+
+let paceWrites = Promise.resolve();
+
+/** @param {{ ok: boolean, changed?: boolean, code?: string, at?: number }} [outcome] - how the attempt just made went */
+function scheduleRefresh(outcome) {
+  // One at a time: a reading and a failure landing together must each be counted.
+  paceWrites = paceWrites
+    .then(async () => {
+      const settings = await getSettings();
+      const stored = await chrome.storage.local.get(["refreshPace", "latestSnapshot"]);
+      const pace = foldOutcome(stored.refreshPace, outcome);
+      const plan =
+        settings.adaptiveRefresh && !settings.demoMode
+          ? planRefresh({ baseMinutes: settings.refreshIntervalMinutes, snapshot: stored.latestSnapshot, ...pace })
+          : { minutes: settings.refreshIntervalMinutes, mode: "fixed" };
+      await chrome.alarms.create(ALARM_NAME, { delayInMinutes: plan.minutes, periodInMinutes: plan.minutes });
+      await chrome.storage.local.set({ refreshPace: { ...pace, ...plan, nextAt: Date.now() + plan.minutes * 60_000 } });
+    })
+    .catch((err) => console.warn(LOG_PREFIX, "could not schedule the next refresh", err));
+  return paceWrites;
 }
+
+/**
+ * A reply just finished in this browser. If readings had slowed down because
+ * nothing was happening, or stopped getting through because claude.ai was
+ * signed out, that is no longer so: read now instead of at the next alarm.
+ */
+async function wakeRefresh() {
+  const { refreshPace: pace } = await chrome.storage.local.get("refreshPace");
+  const signedOut = pace?.mode === "backoff" && pace.errorCode === "NOT_LOGGED_IN";
+  if (pace?.mode !== "slow" && !signedOut) return;
+  await new Promise((resolve) => setTimeout(resolve, AFTER_SETTLE_MS)); // the same wait a message's "after" reading gets
+  await refreshUsage();
+}
+
+/**
+ * Are readings being held back because they keep failing? Then the ones
+ * per-message cost would take around a message wait too. One failure can be a
+ * blip, so it takes two; and being signed out doesn't count, because a message
+ * going through is the sign that it is over.
+ */
+async function backingOff() {
+  const { refreshPace: pace } = await chrome.storage.local.get("refreshPace");
+  return pace?.mode === "backoff" && pace.failures >= 2 && pace.errorCode !== "NOT_LOGGED_IN" && Date.now() < pace.nextAt;
+}
+
+const ensureAlarm = () => scheduleRefresh();
 
 chrome.runtime.onInstalled.addListener((details) => {
   console.log(LOG_PREFIX, "extension installed");
@@ -1115,9 +1172,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === "local" && changes.snoozeUntil) syncSnooze();
 
   if (areaName === "local" && changes.settings) {
-    const before = changes.settings.oldValue?.refreshIntervalMinutes;
-    const after = changes.settings.newValue?.refreshIntervalMinutes;
-    if (before !== after) ensureAlarm();
+    const paceKeys = (settings) => `${settings?.refreshIntervalMinutes}:${settings?.adaptiveRefresh !== false}`;
+    if (paceKeys(changes.settings.oldValue) !== paceKeys(changes.settings.newValue)) scheduleRefresh();
 
     if (changes.settings.oldValue?.modelHintPercent !== changes.settings.newValue?.modelHintPercent) {
       updateModelHint();

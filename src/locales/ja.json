@@ -299,7 +299,9 @@
   "1 year": "1年",
   "All time": "全期間",
   "Long-term archive": "長期アーカイブ",
-  "Every reading is also filed in a database in this browser, so the dashboard chart can go back months and years instead of a day. It is never trimmed, and it stays on this computer.": "すべての計測値はこのブラウザー内のデータベースにも保存されるため、ダッシュボードのグラフは1日分ではなく数か月、数年さかのぼれます。削られることはなく、このコンピューターの外には出ません。"
+  "Every reading is also filed in a database in this browser, so the dashboard chart can go back months and years instead of a day. It is never trimmed, and it stays on this computer.": "すべての計測値はこのブラウザー内のデータベースにも保存されるため、ダッシュボードのグラフは1日分ではなく数か月、数年さかのぼれます。削られることはなく、このコンピューターの外には出ません。",
+  "Adaptive refresh": "適応型更新",
+  "Treats the interval above as the normal pace: up to four times as often while a limit is past 75% and still climbing, down to a quarter as often once nothing has changed for half an hour, and a wait that doubles after each failed attempt. Never more than once a minute or less than once an hour. Off: exactly the interval above.": "上の間隔を通常のペースとして扱います。上限が75%を超えてなお増えている間は最大4倍の頻度で、30分間変化がなければ最小4分の1の頻度で更新し、失敗するたびに待ち時間を2倍にします。1分に1回より多くも、1時間に1回より少なくもなりません。オフの場合は上の間隔どおりです。"
  },
  "patterns": [
   [

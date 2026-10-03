@@ -22,6 +22,7 @@ export const MAX_HISTORY = 500;
 
 export const DEFAULT_SETTINGS = {
   refreshIntervalMinutes: 5,
+  adaptiveRefresh: true, // move around that interval: faster near a limit, slower when idle, back off on errors (lib/refresh-plan.js)
   notificationsEnabled: false,
   notifyThresholds: [80, 95], // any whole percentages, up to eight (lib/thresholds.js)
   paceAlertFactor: 2, // alert when today runs at this many times the usual pace; 0 = off (lib/pace.js)
@@ -78,6 +79,7 @@ export const DEFAULT_STATE = {
   settings: DEFAULT_SETTINGS,
   __debug_captures: [],
   orgCache: null,
+  refreshPace: null, // how often readings are being taken just now, and why (lib/refresh-plan.js)
   lastError: null,
   modelHint: null, // see modelSwitchHint() in lib/burn-rate.js
   messageLog: [], // per-message cost entries, oldest first (see lib/message-cost.js)
@@ -110,6 +112,7 @@ export async function getAll() {
     settings,
     __debug_captures: stored.__debug_captures ?? DEFAULT_STATE.__debug_captures,
     orgCache: data.orgCache ?? DEFAULT_STATE.orgCache,
+    refreshPace: stored.refreshPace ?? DEFAULT_STATE.refreshPace,
     lastError: data.lastError ?? DEFAULT_STATE.lastError,
     modelHint: data.modelHint ?? DEFAULT_STATE.modelHint,
     messageLog: data.messageLog ?? DEFAULT_STATE.messageLog,

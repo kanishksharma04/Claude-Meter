@@ -25,6 +25,7 @@ import {
   CLAUDE_CODE_HEIGHT,
 } from "../lib/history-chart.js";
 import { BUCKET_MS } from "../lib/claude-code.js";
+import { describePlan } from "../lib/refresh-plan.js";
 import { ARCHIVE_RANGES, archiveSeries, readArchive, toRecord } from "../lib/archive.js";
 import { severityOf, isHexColor } from "../lib/severity.js";
 import { arrangeBuckets, moveBucket, togglePinned, toggleHidden } from "../lib/bucket-prefs.js";
@@ -734,6 +735,8 @@ function render(state) {
   if (!insights.hidden) renderInsights(state);
 
   lastUpdatedEl.textContent = `Last updated: ${timeAgo(latestSnapshot.fetchedAt)}`;
+  // Hovering says how often readings are being taken just now, and why.
+  lastUpdatedEl.title = settings.adaptiveRefresh && !settings.demoMode ? describePlan(state.refreshPace) : "";
 
   if (VIEW === "mini") {
     // The window title is what shows in the task switcher, so put the number there.

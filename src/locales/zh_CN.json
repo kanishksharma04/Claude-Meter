@@ -299,7 +299,9 @@
   "1 year": "1 年",
   "All time": "全部",
   "Long-term archive": "长期存档",
-  "Every reading is also filed in a database in this browser, so the dashboard chart can go back months and years instead of a day. It is never trimmed, and it stays on this computer.": "每次读数也会存入此浏览器中的数据库，因此仪表板图表可以回溯数月乃至数年，而不只是一天。它不会被裁剪，并且只保存在这台电脑上。"
+  "Every reading is also filed in a database in this browser, so the dashboard chart can go back months and years instead of a day. It is never trimmed, and it stays on this computer.": "每次读数也会存入此浏览器中的数据库，因此仪表板图表可以回溯数月乃至数年，而不只是一天。它不会被裁剪，并且只保存在这台电脑上。",
+  "Adaptive refresh": "自适应刷新",
+  "Treats the interval above as the normal pace: up to four times as often while a limit is past 75% and still climbing, down to a quarter as often once nothing has changed for half an hour, and a wait that doubles after each failed attempt. Never more than once a minute or less than once an hour. Off: exactly the interval above.": "把上面的间隔当作正常节奏：当某个限额超过 75% 且仍在上升时，频率最多提高到四倍；半小时内没有任何变化时，频率最低降到四分之一；每次失败后等待时间加倍。最快每分钟一次，最慢每小时一次。关闭时：严格按上面的间隔。"
  },
  "patterns": [
   [
