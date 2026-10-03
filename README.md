@@ -298,7 +298,7 @@ see [companion/README.md](companion/README.md)), ClaudeMeter reads those logs:
 - **Six languages** — English, Español, Deutsch, 日本語, हिन्दी and 简体中文. Options
   and the popup, side panel and mini window follow the browser's language, or the one
   you pick under Appearance; the store description and shortcut names are translated
-  too. Each translation covers the same 313 strings, which `scripts/check-locales.mjs`
+  too. Each translation covers the same 325 strings, which `scripts/check-locales.mjs`
   verifies.
 
 ### Data and reliability
@@ -322,6 +322,18 @@ see [companion/README.md](companion/README.md)), ClaudeMeter reads those logs:
   A reply finishing in this browser brings a slowed-down pace straight back. Options
   shows what it is doing and why ("Now: refreshing every 10 min: nothing has changed
   for a while. Next at 4:32 PM"), and one switch turns it off for a fixed interval.
+
+- **Automatic backup** — the whole history written to a file on a schedule: every
+  day or every week, as `claudemeter-backup-YYYY-MM-DD.json.gz` in a `ClaudeMeter`
+  folder inside Downloads. It holds every archived reading for every organisation,
+  plus the hourly log, session windows, lockouts, spikes, message costs and your
+  chart notes — and no settings, so no keys or webhook addresses. Two years of
+  readings come to about 400 KB. Older files are deleted past the number you choose
+  to keep (4, 8, 30 or all). **Back up now** makes one on the spot, and **Restore
+  from a backup** merges a file back in: readings into the archive (restoring twice
+  changes nothing), notes by id, and the other logs only where this browser has none
+  of its own — which is the case on a new profile. A failed backup is retried within
+  the hour, and the health check says so.
 
 - **Health check** — one page that says whether each thing ClaudeMeter depends on is
   working, and what to do when it isn't: the claude.ai usage endpoint (with what the
@@ -465,6 +477,13 @@ address you gave, after the browser has asked you to allow that one site.
   `optional_host_permissions`, requested one at a time from Options when a webhook is
   switched on or an Admin API key is saved, and given back when it is switched off or
   removed
+- **`chrome.downloads`** — an optional permission, asked for when automatic backups
+  are switched on and given back when they are switched off. The service worker gzips
+  the history with `CompressionStream` and hands it to `downloads.download()` as a
+  `data:` address (a service worker can't make a `blob:` one; Firefox's event page
+  can, and does), then uses `downloads.removeFile()` to delete its own older backups
+- **IndexedDB** — the long-term archive of readings (`src/lib/archive.js`), with
+  `unlimitedStorage` so the browser doesn't cap or evict it
 - **`chrome.action`** — toolbar popup, hover title, badge text, and the gauge icon,
   which the service worker draws on an `OffscreenCanvas` and hands to `setIcon()`
 - **`chrome.sidePanel`** — the dashboard; it is the popup page loaded as
@@ -535,6 +554,7 @@ claudemeter/
 │   │   ├── spikes.js                  # a sudden jump between nearby readings -> spike log
 │   │   ├── attribution.js             # which rises this browser can't account for -> "used elsewhere"
 │   │   ├── usage-log.js               # hourly rollup of every reading, kept for eight weeks
+│   │   ├── backup.js                  # the history as one gzipped file: contents, schedule, pruning, restore
 │   │   ├── health.js                  # health checks, redacted diagnostics, the prefilled GitHub issue
 │   │   ├── refresh-plan.js            # adaptive refresh: the wait before the next reading, and why
 │   │   ├── archive.js                 # every reading, for good, in IndexedDB -> the chart's long ranges
@@ -642,7 +662,7 @@ bytes, so a reading every five minutes is roughly 10 MB a year
 live under `settings` (`refreshIntervalMinutes`, `adaptiveRefresh`, `notificationsEnabled`,
 `notifyThresholds`, `language`, `paceAlertFactor`, `resetAlertPercent`, `dailyDigest`, `digestTime`, `calendarReminder`, `quietHours`, `soundAlerts`, `soundName`, `soundVolume`, `webhooks`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
-`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `primaryOrg`, `trackedOrgs`, `apiSpend`, `claudeCode`, `claudeCodeLive`, `statusFile`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
+`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `primaryOrg`, `trackedOrgs`, `apiSpend`, `claudeCode`, `claudeCodeLive`, `statusFile`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`, `autoBackup`, `backupKeep`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300), and the mini window's last position and size
 are kept under `miniWindowBounds`:
@@ -778,6 +798,9 @@ written when Developer mode is on, from Options.
   when the pace had slowed for lack of change, or when attempts were failing because
   claude.ai was signed out (a message going through means that is over). Opening the
   popup always tries once.
+- **Backups**: their own alarm, one interval (a day or a week) after the last backup
+  that worked, an hour after one that didn't, and at once if one fell due while the
+  browser was closed.
 - **Per-message cost and failures**: after two failed attempts in a row, the readings
   per-message cost takes around a message are skipped until the next scheduled try,
   so a struggling claude.ai isn't asked more often by someone who is typing. Those
@@ -868,6 +891,19 @@ written when Developer mode is on, from Options.
   so are the alerts that depend on it. "Close to a limit" only speeds things up while
   usage is moving, so the first reading after a quiet spell is at the slower pace.
   The rules are fixed, not learned from your habits, and the switch is all or nothing.
+- A backup goes where the browser puts downloads, because that is the only place an
+  extension can write: a `ClaudeMeter` folder in Downloads, not a folder of your
+  choosing. Each one shows up in the browser's downloads list like any other file,
+  and if the browser is set to ask where to save every download, it asks for backups
+  too. Tidying only touches files ClaudeMeter wrote itself and still finds where it
+  left them; one you moved or renamed is yours. Backups run while the browser is
+  open — one that fell due overnight is made at the next start — and are not
+  encrypted. Restoring merges; it never deletes, and it doesn't bring back settings.
+  The "downloads" permission also lets an extension see your download history;
+  ClaudeMeter only ever looks up its own backups in it. Safari has no downloads API,
+  so there are no automatic backups there (a backup made elsewhere can be restored).
+  Verified in Chromium; not run in Firefox, where the same code hands the browser a
+  blob instead of a data: address.
 - The health check reports what the extension can see of itself. It can't tell whether
   the page script on claude.ai is running in a given tab, whether a notification the
   browser accepted was actually shown by the system (Chrome only says if they are
@@ -1140,6 +1176,8 @@ written when Developer mode is on, from Options.
 - **Developer mode** — keeps raw request/response captures for the debug page
   (`src/debug/debug.html`), off by default.
 - **Long-term archive** — how many readings the archive holds and since when.
+- **Automatic backup** — off, every day or every week; how many files to keep; Back
+  up now; Restore from a backup.
 - **Clear stored data** — wipes snapshot, history, the archive, the hourly usage log, the session
   window log, your chart notes, the spike log, the extra-usage record, message costs,
   the limit-hit log, org cache, and debug captures.

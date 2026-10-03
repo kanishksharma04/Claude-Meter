@@ -10,8 +10,8 @@
 //     granted: { permissions: string[], origins: string[] },   // chrome.permissions.getAll()
 //     userAgent: string,
 //     settings: object,                                         // as stored
-//     state: { latestSnapshot, lastError, refreshPace, orgCache, orgList, claudeCodeStatus,
-//              apiSpendStatus, webhookStatus, snoozeUntil, history, usageLog, messageLog, annotations },
+//     state: { latestSnapshot, lastError, refreshPace, orgCache, orgList, claudeCodeStatus, apiSpendStatus,
+//              webhookStatus, backupStatus, snoozeUntil, history, usageLog, messageLog, annotations },
 //     alarm: { scheduledTime, periodInMinutes } | null,         // the refresh alarm
 //     storageBytes: number | null,
 //     archive: { count, first } | null,                         // null when IndexedDB couldn't be opened
@@ -24,6 +24,7 @@
 import { describePlan } from "./refresh-plan.js";
 import { describeArchive } from "./archive.js";
 import { SERVICES } from "./webhooks.js";
+import { FREQUENCIES } from "./backup.js";
 import { timeAgo, formatClock } from "./time-format.js";
 
 export const ISSUES_URL = "https://github.com/kanishksharma04/Claude-Meter/issues/new";
@@ -179,9 +180,21 @@ function storageCheck({ storageBytes, archive }) {
   return { id: "storage", title, status: "ok", detail: `${kept} Archive: ${describeArchive(archive).replace(/\.$/, "").replace(/^Nothing archived yet$/, "nothing yet")}.` };
 }
 
+function backupCheck({ now, settings, state }) {
+  const title = "Automatic backup";
+  const status = state.backupStatus;
+  const every = FREQUENCIES[settings.autoBackup] ?? 0;
+  if (!every) return { id: "backup", title, status: "off", detail: status?.ok ? `Switched off. The last backup was ${ago(status.at, now)}.` : "Backups are switched off." };
+  if (!status) return { id: "backup", title, status: "warn", detail: "Switched on, but no backup has been made yet." };
+  if (!status.ok) return { id: "backup", title, status: "fail", detail: `${status.problem ?? "The last backup failed."} It is tried again within the hour.`, action: "options" };
+  // Two intervals without one: the alarm isn't firing, or the browser has hardly been open.
+  if (now - status.at > 2 * every) return { id: "backup", title, status: "warn", detail: `The last backup was ${ago(status.at, now)}, later than it should be.`, action: "options" };
+  return { id: "backup", title, status: "ok", detail: `Last backup ${ago(status.at, now)}: ${status.readings.toLocaleString()} readings, ${formatBytes(status.bytes)}.` };
+}
+
 /** @returns {Check[]} */
 export function buildChecks(facts) {
-  return [endpointCheck, scheduleCheck, permissionCheck, optionalAccessCheck, notificationCheck, companionCheck, spendCheck, storageCheck].map((check) => check(facts));
+  return [endpointCheck, scheduleCheck, permissionCheck, optionalAccessCheck, notificationCheck, companionCheck, spendCheck, storageCheck, backupCheck].map((check) => check(facts));
 }
 
 /** "Everything checks out." — or how much doesn't. Things switched off aren't problems. */
@@ -235,7 +248,7 @@ export function describeAgent(userAgent) {
 }
 
 // Settings whose text says nothing about the person: a choice from a fixed list.
-const CHOICE_SETTINGS = ["language", "theme", "accent", "iconStyle", "actionOpens", "tabIndicator", "forecast", "plan", "soundName", "chartRange"];
+const CHOICE_SETTINGS = ["language", "theme", "accent", "iconStyle", "actionOpens", "tabIndicator", "forecast", "plan", "soundName", "chartRange", "autoBackup"];
 
 /** Settings as they can be shown to a stranger: switches, numbers and fixed choices; anything typed in is reduced to whether it is set. */
 export function redactSettings(settings) {
@@ -291,6 +304,7 @@ export function buildDiagnostics(facts) {
       : null,
     apiSpend: { keySaved: Boolean(hasAdminKey), ok: state.apiSpendStatus?.ok ?? null, problem: state.apiSpendStatus?.problem?.code ?? null },
     webhooks: Object.fromEntries(Object.entries(state.webhookStatus ?? {}).map(([id, status]) => [id, status?.ok ? "delivered" : "failed"])),
+    backup: state.backupStatus ? { ok: state.backupStatus.ok, minutesAgo: minutesSince(state.backupStatus.at, now), bytes: state.backupStatus.bytes ?? null } : null,
     stored: {
       bytes: storageBytes,
       history: (state.history ?? []).length,

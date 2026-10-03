@@ -52,11 +52,13 @@ export function manifestFor(target, base) {
   }
 
   if (target === "safari") {
-    // Safari has no side panel, offscreen documents, address-bar keywords or notifications,
+    // Safari has no side panel, offscreen documents, address-bar keywords, notifications or downloads API,
     // and its native messaging only reaches the app the extension ships inside.
     delete manifest.side_panel;
     delete manifest.omnibox;
     manifest.permissions = without(base.permissions, "sidePanel", "offscreen", "notifications", "nativeMessaging");
+    // Nor a downloads API, so no automatic backups there (restoring one still works).
+    delete manifest.optional_permissions;
     return manifest;
   }
 

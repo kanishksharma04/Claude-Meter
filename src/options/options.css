@@ -720,3 +720,26 @@ button.danger {
   justify-content: flex-end;
   gap: 4px 18px;
 }
+
+.data-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+
+.data-actions + .hint {
+  margin-bottom: 4px;
+}
+
+.data-actions ~ #clearDataBtn {
+  margin-top: 14px;
+}
+
+.hint.problem {
+  color: var(--danger);
+}
+
+#backupControls {
+  margin-top: 12px;
+}

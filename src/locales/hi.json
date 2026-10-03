@@ -313,7 +313,19 @@
   "Copy diagnostics": "निदान कॉपी करें",
   "The diagnostics were too long for a link, so the issue has the first part. Copy them and paste the rest.": "निदान एक लिंक के लिए बहुत लंबा था, इसलिए इश्यू में उसका पहला भाग है। इसे कॉपी करें और बाक़ी पेस्ट करें।",
   "Why?": "क्यों?",
-  "Diagnostics": "निदान"
+  "Diagnostics": "निदान",
+  "Automatic backup": "स्वचालित बैकअप",
+  "Saves the whole history as one compressed file in Downloads/ClaudeMeter, on a schedule: every archived reading, the hourly log, lockouts, spikes, message costs and your chart notes. No settings, so no keys or webhook addresses. The browser asks once for permission to save files.": "पूरे इतिहास को तय समय पर डाउनलोड/ClaudeMeter में एक संपीड़ित फ़ाइल के रूप में सहेजता है: हर संग्रहीत रीडिंग, घंटेवार लॉग, लॉकआउट, उछाल, संदेशों की लागत और चार्ट पर आपके नोट। इसमें सेटिंग्स नहीं होतीं, इसलिए कुंजियाँ या वेबहुक पते भी नहीं। ब्राउज़र फ़ाइलें सहेजने की अनुमति एक बार माँगता है।",
+  "Every day": "हर दिन",
+  "Every week": "हर सप्ताह",
+  "Backups to keep": "कितने बैकअप रखें",
+  "Older files are deleted from that folder once there are more than this.": "इससे अधिक हो जाने पर पुरानी फ़ाइलें उस फ़ोल्डर से हटा दी जाती हैं।",
+  "The last 4": "पिछले 4",
+  "The last 8": "पिछले 8",
+  "The last 30": "पिछले 30",
+  "All of them": "सभी",
+  "Back up now": "अभी बैकअप लें",
+  "Restore from a backup…": "बैकअप से पुनर्स्थापित करें…"
  },
  "patterns": [
   [

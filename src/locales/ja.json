@@ -313,7 +313,19 @@
   "Copy diagnostics": "診断情報をコピー",
   "The diagnostics were too long for a link, so the issue has the first part. Copy them and paste the rest.": "診断情報がリンクに収まらなかったため、Issue には最初の部分だけが入っています。コピーして残りを貼り付けてください。",
   "Why?": "原因は？",
-  "Diagnostics": "診断情報"
+  "Diagnostics": "診断情報",
+  "Automatic backup": "自動バックアップ",
+  "Saves the whole history as one compressed file in Downloads/ClaudeMeter, on a schedule: every archived reading, the hourly log, lockouts, spikes, message costs and your chart notes. No settings, so no keys or webhook addresses. The browser asks once for permission to save files.": "履歴全体を1つの圧縮ファイルとして、スケジュールに従って「ダウンロード/ClaudeMeter」に保存します。アーカイブされたすべての計測値、1時間ごとのログ、ロックアウト、急増、メッセージごとのコスト、グラフのメモが含まれます。設定は含まれないため、キーや Webhook のアドレスも含まれません。ファイルを保存する許可を、ブラウザーが一度だけ求めます。",
+  "Every day": "毎日",
+  "Every week": "毎週",
+  "Backups to keep": "保持するバックアップ数",
+  "Older files are deleted from that folder once there are more than this.": "この数を超えると、古いファイルからそのフォルダーより削除されます。",
+  "The last 4": "直近の4件",
+  "The last 8": "直近の8件",
+  "The last 30": "直近の30件",
+  "All of them": "すべて",
+  "Back up now": "今すぐバックアップ",
+  "Restore from a backup…": "バックアップから復元…"
  },
  "patterns": [
   [

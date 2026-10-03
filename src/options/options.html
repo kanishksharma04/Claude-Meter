@@ -589,6 +589,38 @@
           <small class="row-fact" id="archiveInfo" data-no-i18n role="status">…</small>
         </span>
       </div>
+      <div id="backupControls">
+        <label class="row" for="autoBackupSelect">
+          <span>
+            Automatic backup
+            <small>Saves the whole history as one compressed file in Downloads/ClaudeMeter, on a schedule: every archived reading, the hourly log, lockouts, spikes, message costs and your chart notes. No settings, so no keys or webhook addresses. The browser asks once for permission to save files.</small>
+          </span>
+          <select id="autoBackupSelect">
+            <option value="off">Off</option>
+            <option value="daily">Every day</option>
+            <option value="weekly">Every week</option>
+          </select>
+        </label>
+        <label class="row" for="backupKeepSelect">
+          <span>
+            Backups to keep
+            <small>Older files are deleted from that folder once there are more than this.</small>
+          </span>
+          <select id="backupKeepSelect">
+            <option value="4">The last 4</option>
+            <option value="8">The last 8</option>
+            <option value="30">The last 30</option>
+            <option value="0">All of them</option>
+          </select>
+        </label>
+        <p class="hint" id="backupInfo" data-no-i18n role="status"></p>
+      </div>
+      <div class="data-actions">
+        <button id="backupNowBtn" class="secondary" type="button">Back up now</button>
+        <button id="restoreBtn" class="secondary" type="button">Restore from a backup…</button>
+        <input type="file" id="restoreFile" accept=".gz,.json,application/gzip,application/json" hidden />
+      </div>
+      <p class="hint" id="restoreInfo" data-no-i18n role="status" hidden></p>
       <button id="clearDataBtn" class="danger" type="button">Clear stored data</button>
       <span class="sr-only" id="clearStatus" role="status"></span>
       <p class="hint">Removes all captured requests, usage history, and org lookup cache.</p>

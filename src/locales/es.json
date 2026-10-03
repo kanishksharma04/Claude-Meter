@@ -313,7 +313,19 @@
   "Copy diagnostics": "Copiar diagnóstico",
   "The diagnostics were too long for a link, so the issue has the first part. Copy them and paste the rest.": "El diagnóstico era demasiado largo para un enlace, así que la incidencia contiene la primera parte. Cópialo y pega el resto.",
   "Why?": "¿Por qué?",
-  "Diagnostics": "Diagnóstico"
+  "Diagnostics": "Diagnóstico",
+  "Automatic backup": "Copia de seguridad automática",
+  "Saves the whole history as one compressed file in Downloads/ClaudeMeter, on a schedule: every archived reading, the hourly log, lockouts, spikes, message costs and your chart notes. No settings, so no keys or webhook addresses. The browser asks once for permission to save files.": "Guarda todo el historial en un único archivo comprimido en Descargas/ClaudeMeter, de forma programada: cada lectura archivada, el registro por horas, los bloqueos, los picos, el coste de los mensajes y tus notas del gráfico. Sin ajustes, así que sin claves ni direcciones de webhooks. El navegador pide una vez permiso para guardar archivos.",
+  "Every day": "Cada día",
+  "Every week": "Cada semana",
+  "Backups to keep": "Copias que se conservan",
+  "Older files are deleted from that folder once there are more than this.": "Los archivos más antiguos se eliminan de esa carpeta cuando hay más de estos.",
+  "The last 4": "Las últimas 4",
+  "The last 8": "Las últimas 8",
+  "The last 30": "Las últimas 30",
+  "All of them": "Todas",
+  "Back up now": "Hacer copia ahora",
+  "Restore from a backup…": "Restaurar desde una copia…"
  },
  "patterns": [
   [

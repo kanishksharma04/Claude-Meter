@@ -29,6 +29,11 @@ stored data" in Options removes both; uninstalling the
 extension removes all of it. If you use the companion, it also writes a small status
 file to its own folder in your home directory, which you can switch off.
 
+If you turn on automatic backups, the history (not the settings) is also written to
+files in a `ClaudeMeter` folder inside your Downloads folder. They are ordinary,
+unencrypted files on your disk: "Clear stored data" does not remove them, and anything
+that syncs or backs up your Downloads folder will take them along.
+
 ## What leaves your computer
 
 Nothing, unless you turn one of these on or press the button in the last row:
@@ -55,7 +60,8 @@ figures.
 
 The extension asks for access to `claude.ai` only. Access to Slack, Discord, ntfy or
 `api.anthropic.com` is requested one site at a time, when you set that feature up, and
-given back when you switch it off. Every other permission is explained in plain words
+given back when you switch it off. The same goes for permission to save files, which
+only automatic backups use. Every other permission is explained in plain words
 on the extension's welcome page.
 
 ## Changes and contact

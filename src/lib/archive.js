@@ -179,9 +179,13 @@ export async function readWholeArchive() {
   return request.result;
 }
 
-/** How much one organisation has archived, and since when. */
+/**
+ * How much one organisation has archived, and since when — or, with `null`
+ * (the main organisation isn't known yet), how much there is altogether.
+ */
 export async function archiveInfo(orgId = "") {
-  const range = IDBKeyRange.bound([orgId ?? "", 0], [orgId ?? "", Number.MAX_SAFE_INTEGER]);
+  if (orgId == null) return wholeArchiveInfo();
+  const range = IDBKeyRange.bound([orgId, 0], [orgId, Number.MAX_SAFE_INTEGER]);
   let count;
   let first;
   await withStore("readonly", (store) => {
@@ -189,6 +193,23 @@ export async function archiveInfo(orgId = "") {
     first = store.openKeyCursor(range); // keys come in order: the first is the oldest
   });
   return { count: count.result, first: first.result?.key[1] ?? null };
+}
+
+async function wholeArchiveInfo() {
+  let count;
+  let first = null;
+  await withStore("readonly", (store) => {
+    count = store.count();
+    // Keys are sorted by organisation, then time: hop from each organisation's oldest to the next one's.
+    const cursor = store.openKeyCursor();
+    cursor.onsuccess = () => {
+      if (!cursor.result) return;
+      const [org, t] = cursor.result.key;
+      first = first == null ? t : Math.min(first, t);
+      cursor.result.continue([org, Number.MAX_SAFE_INTEGER]);
+    };
+  });
+  return { count: count.result, first };
 }
 
 export async function clearArchive() {

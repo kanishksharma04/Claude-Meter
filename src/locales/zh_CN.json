@@ -313,7 +313,19 @@
   "Copy diagnostics": "复制诊断信息",
   "The diagnostics were too long for a link, so the issue has the first part. Copy them and paste the rest.": "诊断信息太长，链接放不下，所以 issue 中只有前一部分。请复制后把其余内容粘贴进去。",
   "Why?": "为什么？",
-  "Diagnostics": "诊断信息"
+  "Diagnostics": "诊断信息",
+  "Automatic backup": "自动备份",
+  "Saves the whole history as one compressed file in Downloads/ClaudeMeter, on a schedule: every archived reading, the hourly log, lockouts, spikes, message costs and your chart notes. No settings, so no keys or webhook addresses. The browser asks once for permission to save files.": "按计划把全部历史保存为“下载/ClaudeMeter”中的一个压缩文件：每一条存档的读数、按小时的记录、锁定、突增、消息消耗以及你在图表上的备注。不包含设置，因此也不包含密钥或 Webhook 地址。浏览器会请求一次保存文件的权限。",
+  "Every day": "每天",
+  "Every week": "每周",
+  "Backups to keep": "保留的备份数",
+  "Older files are deleted from that folder once there are more than this.": "超过这个数量后，较旧的文件会从该文件夹中删除。",
+  "The last 4": "最近 4 个",
+  "The last 8": "最近 8 个",
+  "The last 30": "最近 30 个",
+  "All of them": "全部保留",
+  "Back up now": "立即备份",
+  "Restore from a backup…": "从备份恢复…"
  },
  "patterns": [
   [

@@ -31,6 +31,10 @@ const PERMISSION_REASONS = {
     name: "Unlimited storage",
     why: "Keep every reading in a database in this browser, so the chart can go back years instead of a day. Nothing is uploaded.",
   },
+  downloads: {
+    name: "Downloads",
+    why: "Save the backups you switched on to a ClaudeMeter folder in Downloads, and remove the older ones. Asked for only when you turn backups on.",
+  },
   alarms: {
     name: "Alarms",
     why: "Wake up every few minutes to refresh your usage, even with no claude.ai tab open.",

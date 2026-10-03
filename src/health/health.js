@@ -23,6 +23,7 @@ const STATE_KEYS = [
   "claudeCodeStatus",
   "apiSpendStatus",
   "webhookStatus",
+  "backupStatus",
   "snoozeUntil",
   "history",
   "usageLog",

@@ -9,6 +9,7 @@ import { foldSnapshot, buildUsageLog } from "./usage-log.js";
 import { foldWindow, buildWindows } from "./session-windows.js";
 import { addAnnotation, removeAnnotation } from "./annotations.js";
 import { detectSpike, addSpike } from "./spikes.js";
+import { LOG_KEYS, logsToRestore } from "./backup.js";
 import { noteActivity, elsewherePoints } from "./attribution.js";
 import { foldExtraUsage } from "./extra-usage.js";
 import { DEFAULT_WEBHOOKS } from "./webhooks.js";
@@ -71,6 +72,8 @@ export const DEFAULT_SETTINGS = {
   spikePercent: 15, // flag a limit that jumps this many points within five minutes; 0 = off (lib/spikes.js)
   chartRange: "day", // the dashboard chart's span: "day" (raw readings) | "week" (hourly log) | "month" | "year" | "all" (the archive)
   chartCompare: false, // overlay the same stretch one week earlier on the chart
+  autoBackup: "off", // write the history to a file in Downloads: "off" | "daily" | "weekly" (lib/backup.js)
+  backupKeep: 8, // how many of those files to keep; 0 = all of them
 };
 
 export const DEFAULT_STATE = {
@@ -79,6 +82,7 @@ export const DEFAULT_STATE = {
   settings: DEFAULT_SETTINGS,
   __debug_captures: [],
   orgCache: null,
+  backupStatus: null, // { ok, at, filename, bytes, readings } or { ok: false, at, problem } — how the last backup went
   refreshPace: null, // how often readings are being taken just now, and why (lib/refresh-plan.js)
   lastError: null,
   modelHint: null, // see modelSwitchHint() in lib/burn-rate.js
@@ -113,6 +117,7 @@ export async function getAll() {
     __debug_captures: stored.__debug_captures ?? DEFAULT_STATE.__debug_captures,
     orgCache: data.orgCache ?? DEFAULT_STATE.orgCache,
     refreshPace: stored.refreshPace ?? DEFAULT_STATE.refreshPace,
+    backupStatus: stored.backupStatus ?? DEFAULT_STATE.backupStatus,
     lastError: data.lastError ?? DEFAULT_STATE.lastError,
     modelHint: data.modelHint ?? DEFAULT_STATE.modelHint,
     messageLog: data.messageLog ?? DEFAULT_STATE.messageLog,
@@ -383,6 +388,17 @@ export async function addNote(text, at = Date.now()) {
 export async function removeNote(id) {
   const { annotations } = await chrome.storage.local.get("annotations");
   await chrome.storage.local.set({ annotations: removeAnnotation(annotations, id) });
+}
+
+/**
+ * Puts a backup's logs back where this browser has none of its own (see
+ * logsToRestore() in lib/backup.js). The readings go to the archive separately.
+ * @returns {Promise<string[]>} the keys written
+ */
+export async function restoreLogs(logs) {
+  const restored = logsToRestore(await chrome.storage.local.get(LOG_KEYS), logs);
+  if (Object.keys(restored).length > 0) await chrome.storage.local.set(restored);
+  return Object.keys(restored);
 }
 
 /** Pause alerts until the given time; 0 resumes them. */
