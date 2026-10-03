@@ -5,6 +5,7 @@ import { describeSpike } from "../lib/spikes.js";
 import { elsewhereSpans } from "../lib/attribution.js";
 import { spentToday, describeExtraUsage } from "../lib/extra-usage.js";
 import { formatDollars, formatTokens } from "../lib/value.js";
+import { compareOrgs } from "../lib/orgs.js";
 import { isSnoozed } from "../lib/snooze.js";
 import { isQuiet, quietUntil } from "../lib/quiet-hours.js";
 import { buildResetCalendar, CALENDAR_FILENAME } from "../lib/ics.js";
@@ -324,6 +325,56 @@ function renderExtraUsage({ extraUsage, extraUsageLog }) {
 }
 
 /**
+ * The organisations followed alongside the main one, as a table: a row per
+ * limit, a column per organisation. Shown only when there is more than one.
+ */
+function renderOrgs({ latestSnapshot, orgCache, orgSnapshots }) {
+  const section = document.getElementById("orgCompare");
+  section.hidden = orgSnapshots.length === 0;
+  if (section.hidden) return;
+
+  const table = compareOrgs({ name: orgCache?.orgName || "Main organisation", snapshot: latestSnapshot }, orgSnapshots);
+  const cellOf = (tag, text, props = {}) => Object.assign(document.createElement(tag), { textContent: text, ...props });
+
+  const head = document.createElement("tr");
+  head.append(
+    cellOf("td", ""),
+    ...table.columns.map((column) => {
+      const th = cellOf("th", column.name, { scope: "col", title: column.main ? `${column.name} — the main organisation` : column.name });
+      th.classList.toggle("main", column.main);
+      return th;
+    })
+  );
+
+  const rows = table.rows.map((row) => {
+    const tr = document.createElement("tr");
+    tr.append(
+      cellOf("th", row.label, { scope: "row" }),
+      ...row.cells.map((cell) => {
+        // No figure: this organisation has no such limit, or couldn't be read at all.
+        if (!cell) return cellOf("td", "–", { className: "none" });
+        const td = cellOf("td", `${cell.percent}%`, { className: `org-pct ${severityClass(cell.percent)}`.trim() });
+        const resetsIn = formatDuration(Date.now(), cell.resetsAt);
+        if (resetsIn) td.title = `Resets in ${resetsIn}`;
+        const bar = document.createElement("span");
+        bar.className = "org-bar";
+        bar.style.width = `${cell.percent}%`;
+        td.append(bar);
+        return td;
+      })
+    );
+    return tr;
+  });
+
+  document.getElementById("orgTable").replaceChildren(head, ...rows);
+
+  const failed = table.columns.filter((column) => column.error);
+  const note = document.getElementById("orgCompareNote");
+  note.hidden = failed.length === 0;
+  note.textContent = `Couldn't read ${failed.map((column) => column.name).join(", ")} just now.`;
+}
+
+/**
  * The Claude Code section: what its local logs add up to for this session,
  * today and the week, priced at API rates. Shown only when switched on.
  */
@@ -627,6 +678,7 @@ function render(state) {
 
   renderBuckets(latestSnapshot, settings, settings.messageCost ? messageLog : []);
   renderExtraUsage(state);
+  renderOrgs(state);
   renderClaudeCode(state);
   renderTopChats(settings.messageCost ? messageLog : []);
   renderLimitHits(limitHits);
@@ -914,6 +966,8 @@ onStorageChanged((changes) => {
     "claudeCodeStatus",
     "apiSpend",
     "apiSpendStatus",
+    "orgSnapshots",
+    "orgCache",
   ];
   if (watched.some((key) => key in changes)) {
     loadAndRender();

@@ -368,10 +368,32 @@ export function buildDemoAnalytics(demo) {
     return { day, total: Object.values(lines).reduce((sum, amount) => sum + amount, 0), lines };
   });
 
+  // A second organisation alongside: a team plan, barely touched this session but well into its week.
+  const teamResets = now + 2 * DAY + 3 * HOUR;
+  const orgSnapshots = [
+    {
+      id: "d3m00rg2-0000-4000-8000-000000000002",
+      name: "Acme Team",
+      error: null,
+      snapshot: {
+        fetchedAt: now,
+        planTier: "Team",
+        session: bucket("Current session", 14, now + 4 * HOUR + 20 * MIN, now),
+        weekly: [bucket("All models", 57, teamResets, now), bucket("Sonnet", 23, teamResets, now)],
+      },
+    },
+  ];
+
   return {
     usageLog,
     sessionWindows,
     spikes,
+    orgCache: { orgId: "d3m00rg1-0000-4000-8000-000000000001", orgName: "Personal", raw: {} },
+    orgList: [
+      { id: "d3m00rg1-0000-4000-8000-000000000001", name: "Personal", chat: true, meta: {} },
+      { id: orgSnapshots[0].id, name: "Acme Team", chat: true, meta: {} },
+    ],
+    orgSnapshots,
     apiSpend: { fetchedAt: now, days: apiDays },
     apiSpendStatus: { ok: true, at: now },
     claudeCode,

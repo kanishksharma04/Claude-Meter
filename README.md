@@ -278,6 +278,14 @@ see [companion/README.md](companion/README.md)), ClaudeMeter reads those logs:
   Options. That is a separate, pay-as-you-go account from the claude.ai plan
   everything else here watches.
 
+- **Several organisations side by side** — a claude.ai sign-in can belong to more than
+  one organisation, each with its own limits. Options lists them: pick which is the
+  **main** one (the toolbar icon, alerts and history are about it) and tick up to
+  three others to **show** alongside. The popup then has a table with a column per
+  organisation and a row per limit, so a personal plan and a team's can be read at a
+  glance instead of by switching. Changing the main one sets its predecessor's
+  readings and history aside and brings the new one's back; nothing is mixed or lost.
+
 ### Alerts
 
 Alerts are off until you turn them on, and everything below respects a snooze and
@@ -346,8 +354,9 @@ There's no documented, public API for this data — claude.ai's own frontend cal
 internal endpoint to render its account usage panel, and this extension calls that
 same endpoint directly:
 
-- `GET https://claude.ai/api/organizations` — lists your orgs; the one with a
-  `"chat"` capability is picked and its `uuid` cached.
+- `GET https://claude.ai/api/organizations` — lists your orgs; the main one is the
+  one you chose in Options, or else the first with a `"chat"` capability, and its
+  `uuid` is cached.
 - `GET https://claude.ai/api/organizations/{org_id}/usage` — returns usage buckets,
   e.g. `five_hour` (current session) and `seven_day` / `seven_day_opus` (weekly, per
   model group where applicable), and for some accounts an `extra_usage` block with the
@@ -485,6 +494,7 @@ claudemeter/
 │   │   ├── sounds.js                  # the alert sounds as notes, and scheduling them on an AudioContext
 │   │   ├── share.js                   # usage summary as text, and as a card drawn on a canvas
 │   │   ├── demo-data.js               # the deterministic made-up dataset behind demo mode
+│   │   ├── orgs.js                    # the organisation list: which is main, which are shown alongside, the table
 │   │   ├── api-spend.js               # Console cost report: the request, days from the response, the summary
 │   │   ├── console-api.js             # fetches that report with the Admin API key
 │   │   ├── claude-code.js             # Claude Code log lines -> usage records -> summary (shared with companion/)
@@ -551,7 +561,7 @@ Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `his
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
 `notifyThresholds`, `paceAlertFactor`, `resetAlertPercent`, `dailyDigest`, `digestTime`, `calendarReminder`, `quietHours`, `soundAlerts`, `soundName`, `soundVolume`, `webhooks`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
-`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `apiSpend`, `claudeCode`, `claudeCodeLive`, `statusFile`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
+`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `primaryOrg`, `trackedOrgs`, `apiSpend`, `claudeCode`, `claudeCodeLive`, `statusFile`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300), and the mini window's last position and size
 are kept under `miniWindowBounds`:
@@ -637,6 +647,10 @@ Spike = {
 }
 ```
 
+The organisations the sign-in belongs to are kept as `orgList`, the current usage of
+those shown alongside as `orgSnapshots`, and each former main organisation's own
+readings and history under `orgState[<id>]` until it is made main again.
+
 The Console cost report is kept as `apiSpend` (`{ fetchedAt, days }`, each day a UTC
 midnight, a total in dollars and its lines by model), with `apiSpendStatus` for how
 the last read went. The Admin API key is stored on its own as `adminApiKey`, outside
@@ -663,6 +677,8 @@ written when Developer mode is on, from Options.
 
 - **Background alarm**: fetches on the interval set in Options (default 5 min),
   regardless of whether a claude.ai tab is open.
+- **Other organisations**: one extra request each, with a normal refresh but at most
+  once a minute.
 - **API spend**: the Console's cost report is daily, so it is read at most every 30
   minutes, alongside a normal refresh.
 - **Claude Code**: pushed by the companion as the logs change, when "Update live" is
@@ -789,6 +805,13 @@ written when Developer mode is on, from Options.
 - Claude Code's bars on the chart share its time axis but not its percentage scale:
   the tallest bar in view is always the same height, whatever it cost. They are there
   to show *when*, and the legend to say *how much*.
+- Organisations shown alongside get their current figures and nothing else: no
+  history, forecasts, alerts or lockout log, which exist only for the main one.
+  Per-message costs are measured against the main organisation, so chatting in a
+  different one on claude.ai measures nothing. A reading the page itself makes for
+  another organisation is ignored rather than filed under the main one. Whether one
+  sign-in's organisations can all be read this way hasn't been checked on a real
+  multi-organisation account.
 - The API spend panel needs an **Admin API key**, which only organisations have:
   Anthropic's Admin API isn't available to individual accounts, and an ordinary API
   key is refused. An Admin key can do far more than read costs, and it is stored in
@@ -928,6 +951,8 @@ written when Developer mode is on, from Options.
 - **Lockout countdown** — show/hide the "back at …" timer while a limit is exhausted.
 - **Measure what each message costs** — on by default; turning it off also stops the
   two extra usage reads around each message.
+- **Organisations** — which organisation is the main one, and which others (up to
+  three) are shown beside it. "Refresh the list" asks claude.ai again.
 - **Anthropic Console API spend** — off by default. Paste an Admin API key to switch it
   on; Remove forgets the key and everything read with it.
 - **Claude Code** — off by default. Shows the install command for the companion, and

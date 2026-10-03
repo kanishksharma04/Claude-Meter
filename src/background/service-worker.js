@@ -19,10 +19,14 @@ import {
   setClaudeCode,
   getAdminKey,
   setApiSpend,
+  setOrgCache,
+  setOrgSnapshots,
+  swapOrgState,
   setSnoozeUntil,
   setDemoState,
 } from "../lib/storage.js";
-import { fetchUsageSnapshot, UsageApiError } from "../lib/usage-api.js";
+import { fetchUsageSnapshot, fetchOrgs, fetchOtherOrgs, UsageApiError } from "../lib/usage-api.js";
+import { extraOrgs, orgIdFromUsageUrl } from "../lib/orgs.js";
 import { normalizeUsageResponse, normalizeExtraUsage } from "../lib/normalize-usage.js";
 import { formatMoney } from "../lib/extra-usage.js";
 import { computeMessageCost } from "../lib/message-cost.js";
@@ -84,6 +88,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
+  if (message?.type === "CLAUDEMETER_LIST_ORGS") {
+    fetchOrgs().then(
+      (orgs) => sendResponse({ ok: true, orgs }),
+      (err) => sendResponse({ ok: false, error: { code: err instanceof UsageApiError ? err.code : "UNKNOWN_ERROR" } })
+    );
+    return true;
+  }
+
   if (message?.type === "CLAUDEMETER_REFRESH_API_SPEND") {
     refreshApiSpend({ force: true }).then(sendResponse);
     return true;
@@ -135,7 +147,9 @@ async function handlePassiveCapture(capture, sender) {
       typeof capture.responseBody === "object"
     ) {
       const orgCache = await getOrgCache();
-      const snapshot = normalizeUsageResponse(capture.responseBody, { orgMeta: orgCache?.raw });
+      // The page may be looking at a different organisation from the main one; its figures aren't ours to file.
+      const forMain = !orgCache || orgIdFromUsageUrl(capture.url) === orgCache.orgId;
+      const snapshot = forMain && normalizeUsageResponse(capture.responseBody, { orgMeta: orgCache?.raw });
       if (snapshot) {
         await applySnapshot(snapshot);
         console.log(LOG_PREFIX, "updated snapshot from passive capture");
@@ -292,8 +306,9 @@ async function refreshUsage() {
     // Alongside, not after: Claude Code's figures don't depend on being signed in to claude.ai.
     refreshClaudeCode().catch((err) => console.warn(LOG_PREFIX, "claude code refresh failed", err));
 
-    const snapshot = await fetchUsageSnapshot();
+    const snapshot = await fetchUsageSnapshot({ primaryOrg: (await getSettings()).primaryOrg });
     await applySnapshot(snapshot);
+    await refreshOtherOrgs();
     console.log(LOG_PREFIX, "refreshed usage snapshot");
     return { ok: true, snapshot };
   } catch (err) {
@@ -344,6 +359,54 @@ async function applySnapshot(snapshot) {
   // This reading may have brought a new session window; Claude Code's figures are counted in the same one.
   await tellCompanionWindow();
   await tellCompanionPlan();
+}
+
+// ------------------------------------------------------------ other orgs --
+// The organisations followed alongside the main one (lib/orgs.js): just their
+// current usage, for the side-by-side view. One request each, so not on every
+// one of the quick refreshes that happen around a message.
+
+const OTHER_ORGS_MIN_INTERVAL_MS = 60_000;
+let otherOrgsReadAt = 0;
+
+async function refreshOtherOrgs({ force = false } = {}) {
+  const { settings, orgList, orgSnapshots } = await getAll();
+  const orgCache = await getOrgCache();
+  if (settings.demoMode) return;
+
+  let orgs = orgList;
+  // Ticked before the list was ever stored (or stored by an older version): fetch it once.
+  if (settings.trackedOrgs.length > 0 && orgs.length === 0) orgs = await fetchOrgs().catch(() => []);
+  const others = extraOrgs(orgs, orgCache?.orgId, settings.trackedOrgs);
+  if (others.length === 0) {
+    if (orgSnapshots.length > 0) await setOrgSnapshots([]);
+    return;
+  }
+  if (!force && Date.now() - otherOrgsReadAt < OTHER_ORGS_MIN_INTERVAL_MS) return;
+  otherOrgsReadAt = Date.now();
+
+  const fresh = await fetchOtherOrgs(others);
+  // A failed read keeps that organisation's last figures on screen, marked with the error.
+  const previous = new Map(orgSnapshots.map((entry) => [entry.id, entry]));
+  await setOrgSnapshots(fresh.map((entry) => (entry.snapshot ? entry : { ...entry, snapshot: previous.get(entry.id)?.snapshot ?? null })));
+}
+
+/**
+ * The user picked a different main organisation. Each organisation keeps its
+ * own readings and history, so the old one's are set aside and the new one's
+ * brought back before anything is fetched.
+ */
+async function switchMainOrg(toId) {
+  const orgCache = await getOrgCache();
+  const { orgList } = await getAll();
+  const target = toId ?? orgList.find((org) => org.chat)?.id ?? orgList[0]?.id;
+  if (!orgCache || !target || orgCache.orgId === target) return;
+
+  await swapOrgState(orgCache.orgId, target);
+  await setOrgCache(null); // looked up afresh, as the new choice
+  otherOrgsReadAt = 0;
+  await updateToolbar((await getAll()).latestSnapshot);
+  await refreshUsage();
 }
 
 // --------------------------------------------------------------- api spend --
@@ -1013,6 +1076,11 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       updateModelHint();
     }
     if (!changes.settings.oldValue?.apiSpend && changes.settings.newValue?.apiSpend) refreshApiSpend({ force: true });
+    if ((changes.settings.oldValue?.primaryOrg ?? null) !== (changes.settings.newValue?.primaryOrg ?? null)) {
+      switchMainOrg(changes.settings.newValue?.primaryOrg ?? null);
+    } else if (JSON.stringify(changes.settings.oldValue?.trackedOrgs ?? []) !== JSON.stringify(changes.settings.newValue?.trackedOrgs ?? [])) {
+      refreshOtherOrgs({ force: true });
+    }
     const companionKeys = (settings) => `${Boolean(settings?.claudeCode)}:${settings?.claudeCodeLive !== false}:${Boolean(settings?.demoMode)}`;
     if (companionKeys(changes.settings.oldValue) !== companionKeys(changes.settings.newValue)) {
       syncCompanion().then(() => refreshClaudeCode({ force: true }));

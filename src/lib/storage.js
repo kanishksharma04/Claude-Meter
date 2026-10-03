@@ -52,6 +52,8 @@ export const DEFAULT_SETTINGS = {
   attachmentWarnTokens: 25000, // warn when a draft's attachments (or project knowledge) are about this heavy; 0 = off
   lockoutOverlay: true, // live "back at 4:30 PM" countdown on claude.ai while a limit is exhausted
   messageCost: true, // measure session % before/after each reply (two extra usage fetches per message)
+  primaryOrg: null, // the organisation everything is about, by id; null = the first that can chat (lib/orgs.js)
+  trackedOrgs: [], // ids of organisations whose usage is read alongside, for the side-by-side view
   apiSpend: false, // show Anthropic Console API spend, read with an Admin API key (lib/api-spend.js)
   claudeCode: false, // show Claude Code usage, read from its local logs by the companion (lib/claude-code.js)
   statusFile: true, // let the companion write status.json / status.txt for the terminal command and other local tools
@@ -85,6 +87,8 @@ export const DEFAULT_STATE = {
   spikes: [], // sudden jumps in usage, oldest first (see lib/spikes.js)
   extraUsage: null, // latest extra-usage spend and cap, when the account has it (see lib/extra-usage.js)
   extraUsageLog: [], // that spend's running total, one entry per day
+  orgList: [], // the organisations this sign-in belongs to: { id, name, chat, meta }
+  orgSnapshots: [], // the other tracked organisations' current usage: { id, name, snapshot, error }
   apiSpend: null, // { fetchedAt, days } — the Console cost report, by day (see lib/api-spend.js)
   apiSpendStatus: null, // { ok, at, problem? } — how the last attempt to read it went
   claudeCode: null, // the companion's latest summary of Claude Code usage (see lib/claude-code.js)
@@ -102,7 +106,7 @@ export async function getAll() {
     history: data.history ?? DEFAULT_STATE.history,
     settings,
     __debug_captures: stored.__debug_captures ?? DEFAULT_STATE.__debug_captures,
-    orgCache: stored.orgCache ?? DEFAULT_STATE.orgCache,
+    orgCache: data.orgCache ?? DEFAULT_STATE.orgCache,
     lastError: data.lastError ?? DEFAULT_STATE.lastError,
     modelHint: data.modelHint ?? DEFAULT_STATE.modelHint,
     messageLog: data.messageLog ?? DEFAULT_STATE.messageLog,
@@ -114,6 +118,8 @@ export async function getAll() {
     spikes: data.spikes ?? DEFAULT_STATE.spikes,
     extraUsage: data.extraUsage ?? DEFAULT_STATE.extraUsage,
     extraUsageLog: data.extraUsageLog ?? DEFAULT_STATE.extraUsageLog,
+    orgList: data.orgList ?? DEFAULT_STATE.orgList,
+    orgSnapshots: data.orgSnapshots ?? DEFAULT_STATE.orgSnapshots,
     apiSpend: data.apiSpend ?? DEFAULT_STATE.apiSpend,
     apiSpendStatus: data.apiSpendStatus ?? DEFAULT_STATE.apiSpendStatus,
     claudeCode: data.claudeCode ?? DEFAULT_STATE.claudeCode,
@@ -177,6 +183,46 @@ export async function getOrgCache() {
 
 export async function setOrgCache(orgMeta) {
   await chrome.storage.local.set({ orgCache: orgMeta });
+}
+
+export async function setOrgList(orgs) {
+  await chrome.storage.local.set({ orgList: orgs });
+}
+
+export async function setOrgSnapshots(entries) {
+  await chrome.storage.local.set({ orgSnapshots: entries });
+}
+
+/**
+ * Everything stored that is about one organisation's usage. When the main
+ * organisation changes, these are set aside under the old one's id and the new
+ * one's are brought back — so each keeps its own history, and one's readings
+ * are never measured against the other's.
+ */
+const ORG_STATE_KEYS = [
+  "latestSnapshot",
+  "history",
+  "usageLog",
+  "sessionWindows",
+  "limitHits",
+  "spikes",
+  "extraUsage",
+  "extraUsageLog",
+  "modelHint",
+  "lastError",
+  "paceAlertDay",
+  "digestDay",
+];
+
+export async function swapOrgState(fromId, toId) {
+  if (!fromId || !toId || fromId === toId) return;
+  const stored = await chrome.storage.local.get([...ORG_STATE_KEYS, "orgState"]);
+  const { orgState = {}, ...current } = stored;
+  orgState[fromId] = current;
+  const restored = orgState[toId] ?? {};
+  delete orgState[toId];
+  await chrome.storage.local.remove(ORG_STATE_KEYS);
+  await chrome.storage.local.set({ ...restored, orgState });
 }
 
 /** Stored settings over the defaults, one level deep for the object-valued ones. */
@@ -364,6 +410,9 @@ export async function clearAllData() {
     claudeCodeStatus: null,
     apiSpend: null,
     apiSpendStatus: null,
+    orgList: [],
+    orgSnapshots: [],
+    orgState: {},
   });
 }
 

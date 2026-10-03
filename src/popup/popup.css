@@ -224,6 +224,71 @@ hr {
   color: var(--warn);
 }
 
+/* -------------------------------------------------------- organisations -- */
+
+.org-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 12px;
+}
+
+.org-table th,
+.org-table td {
+  padding: 4px 0 4px 10px;
+  text-align: right;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.org-table tr > :first-child {
+  width: 38%;
+  padding-left: 0;
+  text-align: left;
+  color: var(--muted);
+}
+
+.org-table th[scope="col"] {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.org-table th.main {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.org-pct {
+  position: relative;
+  font-variant-numeric: tabular-nums;
+}
+
+.org-pct.warn {
+  color: var(--warn);
+}
+
+.org-pct.danger {
+  color: var(--danger);
+}
+
+.org-table .none {
+  color: var(--muted);
+}
+
+/* A hairline meter under each figure, growing from the right edge the figures are aligned to. */
+.org-bar {
+  position: absolute;
+  right: 0;
+  bottom: 1px;
+  height: 2px;
+  max-width: calc(100% - 10px);
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.55;
+}
+
 /* ---------------------------------------------------------- claude code -- */
 
 .cc-totals {
@@ -304,7 +369,7 @@ hr {
    width and colour that would give the number away. Screen readers still get
    the real values — this hides what is on screen, not what the user can know. */
 
-[data-privacy="on"] :is(.usage-pct, #lastMessage, .forecast, .budget-line, #extraUsageDetail, .cc-totals dd, .note-list, .chat-list, #limitHits, #historyBody, #planBadge, .insight-body) {
+[data-privacy="on"] :is(.usage-pct, #lastMessage, .forecast, .budget-line, #extraUsageDetail, .org-pct, .cc-totals dd, .note-list, .chat-list, #limitHits, #historyBody, #planBadge, .insight-body) {
   filter: blur(5px);
   user-select: none;
 }
@@ -771,7 +836,7 @@ html[data-view="mini"] footer {
 }
 
 /* Everything that isn't a meter stays in the popup and the side panel. */
-html[data-view="mini"] :is(#topChats, #limitHits, #hiddenNote, #lastMessage, .budget-line, #extraUsage, #claudeCode, .footer-actions, #learnMoreLink) {
+html[data-view="mini"] :is(#topChats, #limitHits, #hiddenNote, #lastMessage, .budget-line, #extraUsage, #orgCompare, #claudeCode, .footer-actions, #learnMoreLink) {
   display: none;
 }
 
