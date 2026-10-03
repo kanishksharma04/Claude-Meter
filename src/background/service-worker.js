@@ -17,6 +17,8 @@ import {
   setExtraUsage,
   recordWebhookResults,
   setClaudeCode,
+  getAdminKey,
+  setApiSpend,
   setSnoozeUntil,
   setDemoState,
 } from "../lib/storage.js";
@@ -40,6 +42,7 @@ import { resetsToAnnounce, nextResetCheck, describeReset } from "../lib/reset-al
 import { deliverWebhooks } from "../lib/webhooks.js";
 import { isQuiet } from "../lib/quiet-hours.js";
 import { buildDigest, nextDigestAt } from "../lib/digest.js";
+import { fetchSpend } from "../lib/console-api.js";
 import { COMPANION_HOST, companionProblem, planForCompanion } from "../lib/claude-code.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
@@ -79,6 +82,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "CLAUDEMETER_OPEN_MINI") {
     openMiniWindow();
     return false;
+  }
+
+  if (message?.type === "CLAUDEMETER_REFRESH_API_SPEND") {
+    refreshApiSpend({ force: true }).then(sendResponse);
+    return true;
   }
 
   if (message?.type === "CLAUDEMETER_REFRESH_CLAUDE_CODE") {
@@ -280,6 +288,7 @@ async function recordLimitHit(event) {
 async function refreshUsage() {
   try {
     if ((await getSettings()).demoMode) return await refreshDemo();
+    refreshApiSpend().catch((err) => console.warn(LOG_PREFIX, "api spend refresh failed", err));
     // Alongside, not after: Claude Code's figures don't depend on being signed in to claude.ai.
     refreshClaudeCode().catch((err) => console.warn(LOG_PREFIX, "claude code refresh failed", err));
 
@@ -335,6 +344,33 @@ async function applySnapshot(snapshot) {
   // This reading may have brought a new session window; Claude Code's figures are counted in the same one.
   await tellCompanionWindow();
   await tellCompanionPlan();
+}
+
+// --------------------------------------------------------------- api spend --
+// The Anthropic Console's cost report, read with the user's Admin API key
+// (lib/console-api.js). A different account from the claude.ai plan, and a
+// report that only changes by the day, so it is read far less often.
+
+const API_SPEND_MIN_INTERVAL_MS = 30 * 60 * 1000;
+let apiSpendReadAt = 0;
+
+/** @returns {Promise<{ ok: boolean, problem?: object } | null>} null when switched off, keyless or skipped */
+async function refreshApiSpend({ force = false } = {}) {
+  const settings = await getSettings();
+  const key = await getAdminKey();
+  if (!settings.apiSpend || settings.demoMode || !key) return null;
+  if (!force && Date.now() - apiSpendReadAt < API_SPEND_MIN_INTERVAL_MS) return null;
+  apiSpendReadAt = Date.now();
+
+  try {
+    await setApiSpend(await fetchSpend(key), { ok: true });
+    return { ok: true };
+  } catch (err) {
+    const problem = err?.problem ?? { code: "unknown", text: String(err?.message ?? err) };
+    console.warn(LOG_PREFIX, "api spend:", problem.code);
+    await setApiSpend(null, { ok: false, problem });
+    return { ok: false, problem };
+  }
 }
 
 // ------------------------------------------------------------- claude code --
@@ -976,6 +1012,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     if (changes.settings.oldValue?.modelHintPercent !== changes.settings.newValue?.modelHintPercent) {
       updateModelHint();
     }
+    if (!changes.settings.oldValue?.apiSpend && changes.settings.newValue?.apiSpend) refreshApiSpend({ force: true });
     const companionKeys = (settings) => `${Boolean(settings?.claudeCode)}:${settings?.claudeCodeLive !== false}:${Boolean(settings?.demoMode)}`;
     if (companionKeys(changes.settings.oldValue) !== companionKeys(changes.settings.newValue)) {
       syncCompanion().then(() => refreshClaudeCode({ force: true }));

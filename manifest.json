@@ -74,6 +74,7 @@
     "https://hooks.slack.com/*",
     "https://discord.com/*",
     "https://discordapp.com/*",
-    "https://ntfy.sh/*"
+    "https://ntfy.sh/*",
+    "https://api.anthropic.com/*"
   ]
 }

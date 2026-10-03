@@ -52,6 +52,7 @@ export const DEFAULT_SETTINGS = {
   attachmentWarnTokens: 25000, // warn when a draft's attachments (or project knowledge) are about this heavy; 0 = off
   lockoutOverlay: true, // live "back at 4:30 PM" countdown on claude.ai while a limit is exhausted
   messageCost: true, // measure session % before/after each reply (two extra usage fetches per message)
+  apiSpend: false, // show Anthropic Console API spend, read with an Admin API key (lib/api-spend.js)
   claudeCode: false, // show Claude Code usage, read from its local logs by the companion (lib/claude-code.js)
   statusFile: true, // let the companion write status.json / status.txt for the terminal command and other local tools
   claudeCodeLive: true, // keep the companion running and let it push changes, instead of asking on a timer
@@ -84,6 +85,8 @@ export const DEFAULT_STATE = {
   spikes: [], // sudden jumps in usage, oldest first (see lib/spikes.js)
   extraUsage: null, // latest extra-usage spend and cap, when the account has it (see lib/extra-usage.js)
   extraUsageLog: [], // that spend's running total, one entry per day
+  apiSpend: null, // { fetchedAt, days } — the Console cost report, by day (see lib/api-spend.js)
+  apiSpendStatus: null, // { ok, at, problem? } — how the last attempt to read it went
   claudeCode: null, // the companion's latest summary of Claude Code usage (see lib/claude-code.js)
   claudeCodeStatus: null, // { ok, at, version? , problem? } — how the last attempt to reach the companion went
 };
@@ -111,6 +114,8 @@ export async function getAll() {
     spikes: data.spikes ?? DEFAULT_STATE.spikes,
     extraUsage: data.extraUsage ?? DEFAULT_STATE.extraUsage,
     extraUsageLog: data.extraUsageLog ?? DEFAULT_STATE.extraUsageLog,
+    apiSpend: data.apiSpend ?? DEFAULT_STATE.apiSpend,
+    apiSpendStatus: data.apiSpendStatus ?? DEFAULT_STATE.apiSpendStatus,
     claudeCode: data.claudeCode ?? DEFAULT_STATE.claudeCode,
     claudeCodeStatus: data.claudeCodeStatus ?? DEFAULT_STATE.claudeCodeStatus,
     // The user's own words, not a reading — so they are the real ones in demo mode too.
@@ -261,6 +266,28 @@ export async function recordWebhookResults(results, at = Date.now()) {
   await chrome.storage.local.set({ webhookStatus });
 }
 
+/**
+ * The Admin API key for the Console spend panel. Kept apart from the settings,
+ * so nothing that copies, exports or reports settings can take it along.
+ */
+export async function getAdminKey() {
+  const { adminApiKey } = await chrome.storage.local.get("adminApiKey");
+  return typeof adminApiKey === "string" && adminApiKey ? adminApiKey : null;
+}
+
+/** Stores the key; with null, forgets it and everything read with it. */
+export async function setAdminKey(key) {
+  if (key) return chrome.storage.local.set({ adminApiKey: key });
+  await chrome.storage.local.remove(["adminApiKey", "apiSpend", "apiSpendStatus"]);
+}
+
+/** Stores a cost report, or — with no days — just how the attempt went. */
+export async function setApiSpend(days, status) {
+  const update = { apiSpendStatus: { ...status, at: Date.now() } };
+  if (days) update.apiSpend = { fetchedAt: Date.now(), days };
+  await chrome.storage.local.set(update);
+}
+
 /** Stores what the companion sent, or — with no summary — just how the attempt went. */
 export async function setClaudeCode(summary, status) {
   const update = { claudeCodeStatus: { ...status, at: Date.now() } };
@@ -335,6 +362,8 @@ export async function clearAllData() {
     extraUsageLog: [],
     claudeCode: null,
     claudeCodeStatus: null,
+    apiSpend: null,
+    apiSpendStatus: null,
   });
 }
 

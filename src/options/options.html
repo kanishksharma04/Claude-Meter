@@ -254,6 +254,33 @@
     </section>
 
     <section class="card">
+      <h2>Anthropic Console API spend</h2>
+      <label class="row">
+        <span>
+          Show API spend
+          <small>
+            If you also pay for the Claude API, the dashboard can show what it has cost: this month so far, day by
+            day, and by model. That is a separate account from your claude.ai plan, and reading it takes an Admin
+            API key, which only an organisation's admins can create in the Console.
+          </small>
+        </span>
+        <input type="checkbox" id="apiSpendToggle" />
+      </label>
+      <div id="apiSpendSetup">
+        <div class="command">
+          <input type="password" id="adminKeyInput" autocomplete="off" spellcheck="false" placeholder="sk-ant-admin…" aria-label="Admin API key" />
+          <button id="adminKeySaveBtn" class="secondary inline" type="button">Save key</button>
+          <button id="adminKeyRemoveBtn" class="secondary inline" type="button" hidden>Remove</button>
+        </div>
+        <p class="hint">
+          The key is kept in this browser's extension storage, unencrypted, and is sent only to api.anthropic.com to
+          read the cost report. The browser asks your permission for that site when you save it.
+        </p>
+      </div>
+      <p class="hint companion-status" id="apiSpendStatus" role="status"></p>
+    </section>
+
+    <section class="card">
       <h2>Claude Code</h2>
       <label class="row">
         <span>

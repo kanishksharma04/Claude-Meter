@@ -268,6 +268,16 @@ see [companion/README.md](companion/README.md)), ClaudeMeter reads those logs:
   your own user; no administrator rights. Options shows the exact command for your
   copy and says plainly what is wrong if it doesn't connect.
 
+### Accounts and platforms
+
+- **Anthropic Console API spend** — if you also pay for the Claude API, the dashboard
+  shows what it has cost: the month so far, today, yesterday and the last seven days,
+  where the month is heading at its current daily average, a bar for each of the last
+  30 days, and the month's spend by model. It reads the Console's own cost report
+  (`GET /v1/organizations/cost_report`) with an **Admin API key** you paste into
+  Options. That is a separate, pay-as-you-go account from the claude.ai plan
+  everything else here watches.
+
 ### Alerts
 
 Alerts are off until you turn them on, and everything below respects a snooze and
@@ -360,6 +370,10 @@ matching usage request claude.ai's own UI happens to make (e.g. if you open the
 account usage panel yourself) and reuses that response immediately, without waiting
 for the next scheduled fetch. See `src/content/inject-hook.js`.
 
+If you add an Admin API key for the Console spend panel, it is sent to
+`api.anthropic.com` — Anthropic itself, but a different service from claude.ai — and
+only there, to read the cost report.
+
 Nothing is sent to any third-party server unless you set up a webhook — everything
 stays on your machine: in `chrome.storage.local`, and, if you install the Claude Code
 companion, in the status file it writes to its own folder for your other local tools. A webhook is the one exception, and
@@ -384,9 +398,10 @@ address you gave, after the browser has asked you to allow that one site.
   browser sandbox to the Claude Code logs. They start `companion/claudemeter-agent.mjs`,
   a Node.js script with no dependencies that shares `src/lib/claude-code.js` with the
   extension: a long-lived connection for live updates, a one-off message otherwise
-- **`chrome.permissions`** — the four webhook hosts are `optional_host_permissions`,
-  requested one at a time from Options when a webhook is switched on, and given back
-  when it is switched off
+- **`chrome.permissions`** — the four webhook hosts and `api.anthropic.com` are
+  `optional_host_permissions`, requested one at a time from Options when a webhook is
+  switched on or an Admin API key is saved, and given back when it is switched off or
+  removed
 - **`chrome.action`** — toolbar popup, hover title, badge text, and the gauge icon,
   which the service worker draws on an `OffscreenCanvas` and hands to `setIcon()`
 - **`chrome.sidePanel`** — the dashboard; it is the popup page loaded as
@@ -470,6 +485,8 @@ claudemeter/
 │   │   ├── sounds.js                  # the alert sounds as notes, and scheduling them on an AudioContext
 │   │   ├── share.js                   # usage summary as text, and as a card drawn on a canvas
 │   │   ├── demo-data.js               # the deterministic made-up dataset behind demo mode
+│   │   ├── api-spend.js               # Console cost report: the request, days from the response, the summary
+│   │   ├── console-api.js             # fetches that report with the Admin API key
 │   │   ├── claude-code.js             # Claude Code log lines -> usage records -> summary (shared with companion/)
 │   │   ├── package.json               # only says "these files are ES modules", so Node can load them too
 │   │   ├── extra-usage.js             # extra-usage spend: day-by-day record, "today", wording
@@ -534,7 +551,7 @@ Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `his
 live under `settings` (`refreshIntervalMinutes`, `notificationsEnabled`,
 `notifyThresholds`, `paceAlertFactor`, `resetAlertPercent`, `dailyDigest`, `digestTime`, `calendarReminder`, `quietHours`, `soundAlerts`, `soundName`, `soundVolume`, `webhooks`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
-`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `claudeCode`, `claudeCodeLive`, `statusFile`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
+`longContextTokens`, `attachmentWarnTokens`, `lockoutOverlay`, `messageCost`, `apiSpend`, `claudeCode`, `claudeCodeLive`, `statusFile`, `weeklyBudget`, `forecast`, `workdayStart`, `workdayEnd`, `plan`, `planPrice`, `spikePercent`, `chartRange`, `chartCompare`). The current model-switch hint, if any, is kept
 under `modelHint`. Per-message costs
 are appended to `messageLog` (last 300), and the mini window's last position and size
 are kept under `miniWindowBounds`:
@@ -620,6 +637,11 @@ Spike = {
 }
 ```
 
+The Console cost report is kept as `apiSpend` (`{ fetchedAt, days }`, each day a UTC
+midnight, a total in dollars and its lines by model), with `apiSpendStatus` for how
+the last read went. The Admin API key is stored on its own as `adminApiKey`, outside
+`settings`.
+
 The companion's latest summary of Claude Code usage is kept as `claudeCode`, with how
 the last attempt to reach it went in `claudeCodeStatus`.
 
@@ -641,6 +663,8 @@ written when Developer mode is on, from Options.
 
 - **Background alarm**: fetches on the interval set in Options (default 5 min),
   regardless of whether a claude.ai tab is open.
+- **API spend**: the Console's cost report is daily, so it is read at most every 30
+  minutes, alongside a normal refresh.
 - **Claude Code**: pushed by the companion as the logs change, when "Update live" is
   on. Otherwise read with each refresh, but at most once a minute — the companion is
   started, reads the logs touched in the last week, answers and exits.
@@ -765,6 +789,16 @@ written when Developer mode is on, from Options.
 - Claude Code's bars on the chart share its time axis but not its percentage scale:
   the tallest bar in view is always the same height, whatever it cost. They are there
   to show *when*, and the legend to say *how much*.
+- The API spend panel needs an **Admin API key**, which only organisations have:
+  Anthropic's Admin API isn't available to individual accounts, and an ordinary API
+  key is refused. An Admin key can do far more than read costs, and it is stored in
+  this browser's extension storage unencrypted, so treat this as you would pasting it
+  into any tool — ClaudeMeter uses it for the one read-only request and keeps it out
+  of its settings, exports and bug reports. The report's days are UTC days, it lags a
+  few minutes behind real usage, Priority Tier costs aren't in it, and "on course
+  for" is this month's daily average carried to the month's end, nothing cleverer.
+  Not checked against a live Console account: it follows Anthropic's published
+  reference for the endpoint.
 - Claude Code figures are exact where the plan percentages are not — they are the
   API's own token counts — but the dollar amounts are API list prices
   (`src/lib/value.js`), not anything you were charged: on a subscription Claude Code
@@ -894,6 +928,8 @@ written when Developer mode is on, from Options.
 - **Lockout countdown** — show/hide the "back at …" timer while a limit is exhausted.
 - **Measure what each message costs** — on by default; turning it off also stops the
   two extra usage reads around each message.
+- **Anthropic Console API spend** — off by default. Paste an Admin API key to switch it
+  on; Remove forgets the key and everything read with it.
 - **Claude Code** — off by default. Shows the install command for the companion, and
   whether it is connected. **Update live** (on by default) keeps it running and
   watching; off, it is asked once per refresh. **Share usage with local tools** (on by

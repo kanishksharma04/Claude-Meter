@@ -355,10 +355,25 @@ export function buildDemoAnalytics(demo) {
     messages,
   }));
 
+  // The Console's cost report for an API account alongside: a product's steady traffic, quieter at weekends.
+  const utcToday = Math.floor(now / DAY) * DAY;
+  const apiDays = Array.from({ length: 31 }, (_, index) => {
+    const day = utcToday - (30 - index) * DAY;
+    const weekend = [0, 6].includes(new Date(day).getUTCDay());
+    const sonnet = (weekend ? 3.1 : 9.4) * (0.75 + 0.5 * noise(day / DAY));
+    const haiku = (weekend ? 0.6 : 2.2) * (0.8 + 0.4 * noise(day / DAY + 0.5));
+    // Today is part-way through, so its bill is too.
+    const share = index === 30 ? (now - utcToday) / DAY : 1;
+    const lines = { "claude-sonnet-5-5": sonnet * share, "claude-haiku-4-5": haiku * share, "Web search": 0.35 * share };
+    return { day, total: Object.values(lines).reduce((sum, amount) => sum + amount, 0), lines };
+  });
+
   return {
     usageLog,
     sessionWindows,
     spikes,
+    apiSpend: { fetchedAt: now, days: apiDays },
+    apiSpendStatus: { ok: true, at: now },
     claudeCode,
     claudeCodeStatus: { ok: true, at: now, version: "demo" },
     limitHits: [...olderHits, ...demo.limitHits],

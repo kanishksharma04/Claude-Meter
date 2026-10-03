@@ -241,6 +241,49 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* ------------------------------------------------------------ api spend -- */
+
+.spend-total {
+  margin: 0 0 8px;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.spend-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 48px;
+  margin: 12px 0 10px;
+}
+
+.spend-bar {
+  flex: 1;
+  min-width: 0;
+  border-radius: 2px 2px 0 0;
+  background: var(--ok-fill, var(--accent));
+}
+
+.spend-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.spend-lines li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 2px 0;
+}
+
+.insight-summary.problem {
+  color: var(--danger);
+}
+
 /* -------------------------------------------------- claude code: lists -- */
 
 .project-list {

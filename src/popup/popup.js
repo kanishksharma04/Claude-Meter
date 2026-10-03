@@ -912,6 +912,8 @@ onStorageChanged((changes) => {
     "extraUsage",
     "claudeCode",
     "claudeCodeStatus",
+    "apiSpend",
+    "apiSpendStatus",
   ];
   if (watched.some((key) => key in changes)) {
     loadAndRender();

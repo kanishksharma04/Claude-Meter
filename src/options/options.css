@@ -643,3 +643,17 @@ button.danger {
   font-size: 0.95em;
   overflow-wrap: anywhere;
 }
+
+/* ------------------------------------------------------------ api spend -- */
+
+.command input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}

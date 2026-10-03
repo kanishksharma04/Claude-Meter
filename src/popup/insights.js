@@ -13,6 +13,7 @@ import { attribution, describeAttribution } from "../lib/attribution.js";
 import { valueForMoney, describeValue, monthlyPriceFor, formatDollars, formatTokens } from "../lib/value.js";
 import { timeAgo } from "../lib/time-format.js";
 import { modelLabel } from "../lib/claude-code.js";
+import { summarizeSpend } from "../lib/api-spend.js";
 import { formatHour, formatDuration, formatClock, formatMoment } from "../lib/time-format.js";
 
 const $ = (id) => document.getElementById(id);
@@ -197,6 +198,63 @@ function renderValue({ messageLog, usageLog, settings, latestSnapshot }) {
   section.dataset.verdict = value.ready ? "ready" : "learning";
 }
 
+// -------------------------------------------------------------- api spend --
+
+function renderApiSpend({ settings, apiSpend, apiSpendStatus }) {
+  const section = $("apiSpendSection");
+  section.hidden = !settings.apiSpend;
+  if (section.hidden) return;
+
+  const failed = apiSpendStatus && !apiSpendStatus.ok;
+  $("apiSpendBody").hidden = !apiSpend;
+  $("apiSpendNote").classList.toggle("problem", Boolean(failed));
+  $("apiSpendNote").textContent = failed
+    ? `${apiSpend ? "Showing the last report. " : ""}${apiSpendStatus.problem.text}`
+    : apiSpend
+      ? `From the Anthropic Console's cost report · days are UTC · read ${timeAgo(apiSpend.fetchedAt)}`
+      : "Add an Admin API key in Options to read the Console's cost report.";
+  if (!apiSpend) return;
+
+  const spend = summarizeSpend(apiSpend.days);
+  const month = new Date().toLocaleDateString([], { month: "long", timeZone: "UTC" });
+  $("apiSpendHeaderNote").textContent = `${month} so far`;
+  $("apiSpendTotal").textContent = formatDollars(spend.monthToDate);
+  $("apiSpendFigures").replaceChildren(
+    ...[
+      ["Today", spend.today],
+      ["Yesterday", spend.yesterday],
+      ["Last 7 days", spend.last7],
+      ...(spend.projectedMonth != null ? [["On course for", spend.projectedMonth]] : []),
+    ].flatMap(([label, amount]) => [el("dt", {}, label), el("dd", {}, formatDollars(amount))])
+  );
+
+  // Thirty days, a bar each, tallest = the dearest day.
+  const dearest = Math.max(0.01, ...spend.daily.map((day) => day.total));
+  $("apiSpendBars").replaceChildren(
+    ...spend.daily.map((day) => {
+      const date = new Date(day.day).toLocaleDateString([], { day: "numeric", month: "short", timeZone: "UTC" });
+      const bar = el("span", { className: "spend-bar", title: `${date} · ${formatDollars(day.total)}` });
+      bar.style.height = `${Math.max(2, (day.total / dearest) * 100)}%`;
+      return bar;
+    })
+  );
+  $("apiSpendBars").setAttribute(
+    "aria-label",
+    `Daily API spend over the last 30 days: ${formatDollars(spend.last30)} in all, ${formatDollars(dearest)} on the dearest day.`
+  );
+
+  $("apiSpendLines").replaceChildren(
+    ...spend.lines.slice(0, 5).map((line) =>
+      el(
+        "li",
+        {},
+        el("span", {}, /^claude-/.test(line.name) ? modelLabel(line.name) : line.name),
+        el("span", { className: "project-cost" }, `${formatDollars(line.total)} · ${Math.round((line.total / (spend.monthToDate || 1)) * 100)}%`)
+      )
+    )
+  );
+}
+
 // ------------------------------------------------- claude code: projects --
 
 function renderProjects({ settings, claudeCode }) {
@@ -362,6 +420,7 @@ export function renderInsights(state) {
   renderTimeline(state);
   renderSpikes(state);
   renderAttribution(state);
+  renderApiSpend(state);
   renderProjects(state);
   renderSessions(state);
   renderCache(state);
