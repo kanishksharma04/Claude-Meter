@@ -286,6 +286,15 @@ see [companion/README.md](companion/README.md)), ClaudeMeter reads those logs:
   glance instead of by switching. Changing the main one sets its predecessor's
   readings and history aside and brings the new one's back; nothing is mixed or lost.
 
+- **Firefox, Edge and Safari** — `node scripts/build.mjs` packages the extension for
+  each browser from the one codebase, writing the manifest that browser needs. Edge
+  takes Chrome's as it is. Firefox gets an event page in place of the service worker,
+  a sidebar in place of the side panel, and its own add-on id; Safari's drops what
+  Safari has no API for. The code checks for each browser-specific API before using
+  it, and [`store/`](store/) has the listing text, permission justifications and
+  step-by-step submission notes for addons.mozilla.org, Microsoft Edge Add-ons and
+  the Mac App Store. See the limitations below for how far each has been tested.
+
 ### Alerts
 
 Alerts are off until you turn them on, and everything below respects a snooze and
@@ -431,7 +440,12 @@ address you gave, after the browser has asked you to allow that one site.
 
 ```
 claudemeter/
-├── manifest.json
+├── manifest.json                      # Chrome's manifest, and the one the others are derived from
+├── scripts/
+│   ├── build.mjs                      # packages dist/<browser> and a zip for each store
+│   └── manifest-targets.mjs           # what changes in the manifest for Edge, Firefox and Safari
+├── store/                             # listing text and submission steps for AMO, Edge Add-ons and the App Store
+├── PRIVACY.md                         # the privacy policy the stores link to
 ├── companion/                         # the optional local helper that reads Claude Code's logs (Node.js)
 │   ├── claudemeter-agent.mjs          # native-messaging host: answers the extension over stdin/stdout
 │   ├── read-logs.mjs                  # finds and parses ~/.claude/projects/**/*.jsonl, read-only, incrementally
@@ -494,6 +508,7 @@ claudemeter/
 │   │   ├── sounds.js                  # the alert sounds as notes, and scheduling them on an AudioContext
 │   │   ├── share.js                   # usage summary as text, and as a card drawn on a canvas
 │   │   ├── demo-data.js               # the deterministic made-up dataset behind demo mode
+│   │   ├── platform.js                # which browser this is, and its add-on id in Firefox
 │   │   ├── orgs.js                    # the organisation list: which is main, which are shown alongside, the table
 │   │   ├── api-spend.js               # Console cost report: the request, days from the response, the summary
 │   │   ├── console-api.js             # fetches that report with the Admin API key
@@ -520,6 +535,14 @@ Requires a **Chromium 111+** based browser — the content script uses the
 5. A welcome tab opens on first install and tells you whether it can read your usage.
    After that, click the ClaudeMeter toolbar icon — it fetches in the background as
    soon as it loads.
+
+**Other browsers.** Run `node scripts/build.mjs` first, then:
+
+- **Firefox 140+** — `about:debugging` → This Firefox → Load Temporary Add-on →
+  `dist/firefox/manifest.json`.
+- **Edge** — as for Chrome, loading `dist/edge` (or this folder directly).
+- **Safari** — `xcrun safari-web-extension-converter dist/safari` makes an Xcode
+  project to build and run; see [`store/README.md`](store/README.md).
 
 The side panel needs **Chromium 116+**; on older builds the extension still works and
 simply doesn't offer it. Alert sounds need 116+ as well.
@@ -805,6 +828,16 @@ written when Developer mode is on, from Options.
 - Claude Code's bars on the chart share its time axis but not its percentage scale:
   the tallest bar in view is always the same height, whatever it cost. They are there
   to show *when*, and the legend to say *how much*.
+- **How far each browser has been tested.** Chrome and Edge share an engine and a
+  manifest, and the built package is run in Chromium. The Firefox package passes
+  Mozilla's `web-ext lint` with no errors but has **not been run in Firefox**. The
+  Safari manifest has been derived but the port has **not been converted, built or
+  run**, and Safari has no notifications, side panel, address-bar keyword or route to
+  the companion. Nothing has been submitted to any store: that takes a developer
+  account with each, and their review.
+- In Firefox the mini window doesn't remember its place (Firefox doesn't report window
+  moves), and the dashboard lives in the sidebar. The Firefox add-on id is fixed in
+  `src/lib/platform.js` and must not change once published.
 - Organisations shown alongside get their current figures and nothing else: no
   history, forecasts, alerts or lockout log, which exist only for the main one.
   Per-message costs are measured against the main organisation, so chatting in a

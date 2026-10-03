@@ -39,6 +39,17 @@ time the logs change — and that is all it does.
 The same command works on **macOS, Linux and Windows**. To see what it would do
 without doing it, add `--dry-run`.
 
+**Firefox** knows the add-on by the id in its manifest, so there is no id to pass:
+
+```sh
+node companion/install.mjs --firefox
+```
+
+That writes Firefox's own manifest (`~/Library/Application Support/Mozilla/NativeMessagingHosts/`
+on macOS, `~/.mozilla/native-messaging-hosts/` on Linux, a registry value under
+`HKCU\Software\Mozilla\NativeMessagingHosts` on Windows) beside the same launcher.
+Options shows whichever command suits the browser it is open in.
+
 ### What the installer does
 
 A browser will only start a native-messaging host it has been told about, by a small

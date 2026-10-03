@@ -2,9 +2,10 @@
 // Registers the ClaudeMeter companion with your browsers, so the extension can
 // start it — or removes it again.
 //
-//   node companion/install.mjs <extension-id>             install
+//   node companion/install.mjs <extension-id>             install, for Chrome, Edge, Brave…
+//   node companion/install.mjs --firefox                  install, for Firefox
 //   node companion/install.mjs <extension-id> --dry-run   show what would be done
-//   node companion/install.mjs --uninstall                remove
+//   node companion/install.mjs --uninstall                remove (add --firefox for Firefox's)
 //
 // The extension id is the 32-letter one on chrome://extensions; the Claude
 // Code card in ClaudeMeter's Options shows this command with it filled in.
@@ -24,6 +25,7 @@ import { dirname, join, resolve } from "node:path";
 import { posix, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HOST_NAME, dataDir } from "./paths.mjs";
+import { GECKO_ID } from "../src/lib/platform.js";
 import { statusPath } from "./status-file.mjs";
 
 /** Chromium-family browsers: where each keeps its profile, and its registry root on Windows. */
@@ -53,11 +55,12 @@ export function isExtensionId(value) {
  * @param {string} options.agentPath - companion/claudemeter-agent.mjs
  * @param {string} [options.cliPath] - companion/claudemeter.mjs; when given, a `claudemeter` command is set up too
  * @param {(path: string) => boolean} [options.exists] - "is this browser installed?"
+ * @param {boolean} [options.firefox] - register with Firefox instead of the Chromium family
  * @returns {{ files: Array<{ path: string, content: string, mode?: number }>,
  *   registry: Array<{ key: string, value: string }>, browsers: string[], launcher: string, command: string | null }}
  *   `command` is where the `claudemeter` terminal command was put
  */
-export function installPlan({ platform, home, env, extensionId, nodePath, agentPath, cliPath = null, exists = existsSync }) {
+export function installPlan({ platform, home, env, extensionId, nodePath, agentPath, cliPath = null, exists = existsSync, firefox = false }) {
   const windows = platform === "win32";
   const path = windows ? win32 : posix;
   const directory = dataDir(platform, env, home);
@@ -78,7 +81,8 @@ export function installPlan({ platform, home, env, extensionId, nodePath, agentP
         description: "ClaudeMeter companion: reads Claude Code usage for the ClaudeMeter extension",
         path: launcher,
         type: "stdio",
-        allowed_origins: [`chrome-extension://${extensionId}/`],
+        // The two families name the extension allowed in differently: Firefox by add-on id, Chromium by origin.
+        ...(firefox ? { allowed_extensions: [GECKO_ID] } : { allowed_origins: [`chrome-extension://${extensionId}/`] }),
       },
       null,
       2
@@ -88,6 +92,22 @@ export function installPlan({ platform, home, env, extensionId, nodePath, agentP
   if (command) files.push({ path: command, content: script(cliPath), mode: 0o755 });
   const registry = [];
   const browsers = [];
+
+  if (firefox) {
+    // Firefox keeps its hosts in one place per user, whichever channel or profile is in use.
+    if (windows) {
+      const manifestPath = path.join(directory, `${HOST_NAME}.firefox.json`);
+      files.push({ path: manifestPath, content: manifest });
+      registry.push({ key: `HKCU\\Software\\Mozilla\\NativeMessagingHosts\\${HOST_NAME}`, value: manifestPath });
+    } else {
+      const hosts =
+        platform === "darwin"
+          ? path.join(home, "Library", "Application Support", "Mozilla", "NativeMessagingHosts")
+          : path.join(home, ".mozilla", "native-messaging-hosts");
+      files.push({ path: path.join(hosts, `${HOST_NAME}.json`), content: manifest });
+    }
+    return { files, registry, browsers: ["Firefox"], launcher, command };
+  }
 
   if (windows) {
     // One manifest file; each browser is told where it is through the registry.
@@ -143,15 +163,17 @@ async function main() {
   const args = process.argv.slice(2);
   const uninstall = args.includes("--uninstall");
   const dryRun = args.includes("--dry-run");
+  const firefox = args.includes("--firefox");
   const extensionId = args.find((arg) => !arg.startsWith("--"));
 
   if (!["darwin", "linux", "win32"].includes(process.platform)) {
     console.error(`Sorry, the companion can't be installed on ${process.platform} yet.`);
     process.exit(1);
   }
-  if (!uninstall && !isExtensionId(extensionId)) {
-    console.error("Usage: node companion/install.mjs <extension-id> [--dry-run]");
-    console.error("       node companion/install.mjs --uninstall");
+  if (!uninstall && !firefox && !isExtensionId(extensionId)) {
+    console.error("Usage: node companion/install.mjs <extension-id> [--dry-run]     Chrome, Edge, Brave…");
+    console.error("       node companion/install.mjs --firefox [--dry-run]          Firefox");
+    console.error("       node companion/install.mjs --uninstall [--firefox]");
     console.error("\nThe extension id is the 32-letter one shown for ClaudeMeter on chrome://extensions.");
     console.error("ClaudeMeter's Options page has this command ready to copy, with the id filled in.");
     process.exit(1);
@@ -167,6 +189,7 @@ async function main() {
     nodePath: process.execPath,
     agentPath: resolve(here, "claudemeter-agent.mjs"),
     cliPath: resolve(here, "claudemeter.mjs"),
+    firefox,
     // When uninstalling, clear out every browser's folder, not just the ones that look installed.
     exists: uninstall ? () => true : existsSync,
   });

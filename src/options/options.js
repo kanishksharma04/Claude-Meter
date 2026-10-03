@@ -10,6 +10,7 @@ import {
 } from "../lib/storage.js";
 import { isAdminKey, maskKey } from "../lib/api-spend.js";
 import { MAX_EXTRA_ORGS } from "../lib/orgs.js";
+import { detectBrowser, companionInstallCommand } from "../lib/platform.js";
 import { formatClock, formatHour, timeAgo } from "../lib/time-format.js";
 import { SERVICES, checkWebhookUrl } from "../lib/webhooks.js";
 import { SOUNDS } from "../lib/sounds.js";
@@ -269,7 +270,8 @@ const claudeCodeToggle = document.getElementById("claudeCodeToggle");
 const claudeCodeLiveToggle = document.getElementById("claudeCodeLiveToggle");
 const statusFileToggle = document.getElementById("statusFileToggle");
 const claudeCodeStatusNote = document.getElementById("claudeCodeStatus");
-const INSTALL_COMMAND = `node companion/install.mjs ${chrome.runtime.id}`;
+const BROWSER = detectBrowser();
+const INSTALL_COMMAND = companionInstallCommand(BROWSER, chrome.runtime.id);
 
 /** Says how the companion is doing, and keeps the install steps in view until it answers. */
 async function renderClaudeCode() {
@@ -639,7 +641,7 @@ async function renderSnooze() {
 
 /** Lists the manifest's commands with whatever keys Chrome actually bound — it may have dropped a clash. */
 async function renderShortcuts() {
-  const commands = await chrome.commands.getAll();
+  const commands = (await chrome.commands?.getAll()) ?? [];
   document.getElementById("shortcutList").replaceChildren(
     ...commands.flatMap((command) => {
       const term = document.createElement("dt");
@@ -968,8 +970,12 @@ clearDataBtn.addEventListener("click", async () => {
 
 document.getElementById("resumeAlertsBtn").addEventListener("click", () => setSnoozeUntil(0));
 
-document.getElementById("changeShortcutsBtn").addEventListener("click", () => {
-  chrome.tabs.create({ url: "chrome://extensions/shortcuts" });
+// Where shortcuts are changed is the browser's own page, and each browser's is somewhere else.
+const changeShortcutsBtn = document.getElementById("changeShortcutsBtn");
+changeShortcutsBtn.hidden = BROWSER === "safari" || (BROWSER === "firefox" && !chrome.commands?.openShortcutSettings);
+changeShortcutsBtn.addEventListener("click", () => {
+  if (BROWSER === "firefox") chrome.commands.openShortcutSettings();
+  else chrome.tabs.create({ url: "chrome://extensions/shortcuts" });
 });
 // Coming back from Chrome's shortcut page should show the new bindings.
 window.addEventListener("focus", renderShortcuts);

@@ -1,0 +1,56 @@
+# ClaudeMeter privacy policy
+
+ClaudeMeter is a browser extension that shows your claude.ai usage. This is what it
+reads, where it keeps it, and the few cases in which anything leaves your computer.
+
+**The author of ClaudeMeter receives nothing.** There is no ClaudeMeter server, no
+account, no analytics and no crash reporting.
+
+## What it reads
+
+- **Your usage figures from claude.ai** — the percentages and reset times claude.ai
+  shows on its own usage page, fetched with the sign-in your browser already has.
+  ClaudeMeter does not read or store your cookies, password or session tokens.
+- **Counts from the claude.ai page** — when a message is sent and when its reply ends,
+  how many characters long they were, which model was chosen, and the chat's title.
+  The text of your messages and Claude's replies is not read.
+- **Optionally, Claude Code's logs on your computer** — only if you install the
+  companion program and switch Claude Code on: token counts, model, working
+  directory, time and session title from `~/.claude/projects`. Not the conversations.
+- **Optionally, your Anthropic Console cost report** — only if you paste in an Admin
+  API key.
+
+## Where it is kept
+
+In your browser's extension storage on your computer, unencrypted, like any
+extension's data. "Clear stored data" in Options removes it; uninstalling the
+extension removes all of it. If you use the companion, it also writes a small status
+file to its own folder in your home directory, which you can switch off.
+
+## What leaves your computer
+
+Nothing, unless you turn one of these on:
+
+| You switch on | What is sent | To whom |
+|---|---|---|
+| Nothing (the default) | Requests for your own usage figures | claude.ai, as your browser would send them |
+| A webhook | The text of each usage alert, such as "Current session usage just crossed 80%" | The Slack, Discord or ntfy address you entered |
+| Console API spend | Your Admin API key, to read the cost report | api.anthropic.com |
+
+In privacy mode, alert text carries no figures.
+
+## Permissions
+
+The extension asks for access to `claude.ai` only. Access to Slack, Discord, ntfy or
+`api.anthropic.com` is requested one site at a time, when you set that feature up, and
+given back when you switch it off. Every other permission is explained in plain words
+on the extension's welcome page.
+
+## Changes and contact
+
+Changes to this policy are made in this file, in the project's public repository:
+<https://github.com/kanishksharma04/Claude-Meter>. Questions and reports go to its
+issue tracker.
+
+ClaudeMeter is an independent project. It is not made by, endorsed by or affiliated
+with Anthropic.

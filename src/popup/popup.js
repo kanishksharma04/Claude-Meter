@@ -905,17 +905,16 @@ document.getElementById("settingsLink").addEventListener("click", () => {
 // sidePanel.open() has to run inside the click itself — any await before it
 // drops the user gesture — so look the window id up ahead of time.
 let hostWindowId = null;
-if (VIEW === "popup" && chrome.sidePanel?.open) {
+if (VIEW === "popup" && (chrome.sidePanel?.open || chrome.sidebarAction?.open)) {
   sidePanelBtn.hidden = false;
   chrome.windows.getCurrent().then((win) => (hostWindowId = win.id));
 }
 
 sidePanelBtn.addEventListener("click", () => {
   if (hostWindowId == null) return;
-  chrome.sidePanel
-    .open({ windowId: hostWindowId })
-    .then(() => window.close())
-    .catch((err) => console.warn("[ClaudeMeter] could not open the side panel", err));
+  // Chromium has a side panel; Firefox has a sidebar that shows the same page.
+  const opening = chrome.sidePanel?.open ? chrome.sidePanel.open({ windowId: hostWindowId }) : chrome.sidebarAction.open();
+  opening.then(() => window.close()).catch((err) => console.warn("[ClaudeMeter] could not open the side panel", err));
 });
 
 // Teach the shortcut where the button is: "Refresh now (Alt+Shift+R)".

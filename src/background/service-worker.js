@@ -47,6 +47,7 @@ import { deliverWebhooks } from "../lib/webhooks.js";
 import { isQuiet } from "../lib/quiet-hours.js";
 import { buildDigest, nextDigestAt } from "../lib/digest.js";
 import { fetchSpend } from "../lib/console-api.js";
+import { scheduleSound } from "../lib/sounds.js";
 import { COMPANION_HOST, companionProblem, planForCompanion } from "../lib/claude-code.js";
 
 const LOG_PREFIX = "[ClaudeMeter]";
@@ -660,7 +661,8 @@ async function sendAlert({ id, message, discreet }) {
   if (!settings.notificationsEnabled || isSnoozed(snoozeUntil) || isQuiet(settings.quietHours)) return false;
 
   const text = settings.privacyMode ? discreet : message;
-  chrome.notifications.create(`claudemeter-${id}`, {
+  // Safari has no notifications API; there the alert still reaches webhooks and plays its sound.
+  chrome.notifications?.create(`claudemeter-${id}`, {
     type: "basic",
     iconUrl: chrome.runtime.getURL("src/icons/icon128.png"),
     title: "ClaudeMeter",
@@ -703,7 +705,7 @@ async function sendDigest() {
 }
 
 // A digest is an invitation to look closer: clicking it opens the dashboard.
-chrome.notifications.onClicked.addListener((notificationId) => {
+chrome.notifications?.onClicked.addListener((notificationId) => {
   if (!notificationId.startsWith("claudemeter-digest-")) return;
   chrome.notifications.clear(notificationId);
   openUrl(DASHBOARD_URL);
@@ -716,11 +718,26 @@ chrome.notifications.onClicked.addListener((notificationId) => {
 const OFFSCREEN_URL = "src/offscreen/offscreen.html";
 let soundQueue = Promise.resolve();
 
+/** Plays a sound from this page — only possible where the background is a page and not a service worker. */
+async function playSoundHere(sound, volume) {
+  if (typeof AudioContext === "undefined") return { ok: false, detail: "This browser can't play alert sounds." };
+  const context = new AudioContext();
+  await context.resume();
+  if (context.state !== "running") {
+    await context.close();
+    return { ok: false, detail: "The browser wouldn't start audio." };
+  }
+  await new Promise((resolve) => setTimeout(resolve, scheduleSound(context, sound, volume) * 1000 + 100));
+  await context.close();
+  return { ok: true };
+}
+
 /** @returns {Promise<{ ok: boolean, detail?: string }>} */
 function playAlertSound(sound, volume) {
   // One at a time: two alerts landing together would otherwise fight over the one offscreen document.
   soundQueue = soundQueue.then(async () => {
-    if (!chrome.offscreen) return { ok: false, detail: "This browser has no offscreen documents." };
+    // Firefox has no offscreen documents and doesn't need one: its background is a page, which can play sound itself.
+    if (!chrome.offscreen) return playSoundHere(sound, volume);
     try {
       if (!(await chrome.offscreen.hasDocument())) {
         await chrome.offscreen.createDocument({
@@ -849,6 +866,7 @@ async function applyActionSurface() {
 const MENU_CONTEXTS = ["action"];
 
 async function createContextMenu() {
+  if (!chrome.contextMenus) return;
   await chrome.contextMenus.removeAll();
   const add = (properties) => chrome.contextMenus.create({ contexts: MENU_CONTEXTS, ...properties });
 
@@ -861,6 +879,7 @@ async function createContextMenu() {
   add({ id: "snooze:off", parentId: "snooze", title: "Resume alerts", enabled: false });
   add({ id: "history", title: "Open history" });
   if (chrome.sidePanel?.open) add({ id: "sidepanel", title: "Open side panel" });
+  else if (chrome.sidebarAction?.open) add({ id: "sidepanel", title: "Open sidebar" }); // Firefox's equivalent
   add({ id: "mini", title: "Open mini window" });
   const { privacyMode } = await getSettings();
   add({ id: "privacy", type: "checkbox", title: "Privacy mode (hide numbers)", checked: privacyMode });
@@ -868,12 +887,13 @@ async function createContextMenu() {
   await syncSnooze();
 }
 
-chrome.contextMenus.onClicked.addListener((info, tab) => {
+chrome.contextMenus?.onClicked.addListener((info, tab) => {
   const id = String(info.menuItemId);
 
   if (id === "sidepanel") {
     // Must be called straight from the click — an await first would drop the user gesture.
-    chrome.sidePanel.open({ windowId: tab.windowId }).catch((err) => console.warn(LOG_PREFIX, "side panel:", err));
+    const opening = chrome.sidePanel?.open ? chrome.sidePanel.open({ windowId: tab.windowId }) : chrome.sidebarAction.open();
+    opening.catch((err) => console.warn(LOG_PREFIX, "side panel:", err));
   } else if (id === "refresh") {
     refreshUsage();
   } else if (id === "history") {
@@ -901,10 +921,10 @@ async function syncSnooze() {
   else chrome.alarms.clear(SNOOZE_ALARM_NAME);
 
   try {
-    await chrome.contextMenus.update("snooze", {
+    await chrome.contextMenus?.update("snooze", {
       title: snoozed ? `Alerts snoozed until ${formatClock(snoozeUntil)}` : "Snooze alerts",
     });
-    await chrome.contextMenus.update("snooze:off", { enabled: snoozed });
+    await chrome.contextMenus?.update("snooze:off", { enabled: snoozed });
   } catch {
     // The menu isn't built yet (first run before onInstalled) — createContextMenu() calls back here.
   }
@@ -934,7 +954,7 @@ async function flashBadge(text, color) {
   await updateToolbar(latestSnapshot);
 }
 
-chrome.commands.onCommand.addListener(async (command) => {
+chrome.commands?.onCommand.addListener(async (command) => {
   if (command === "refresh-usage") {
     const result = await refreshUsage();
     await flashBadge(result.ok ? "\u2713" : "!", result.ok ? "#3fb950" : "#e5484d");
@@ -960,12 +980,13 @@ function openUrl(url, disposition = "newForegroundTab") {
   return chrome.tabs.create({ url, active: disposition !== "newBackgroundTab" });
 }
 
-chrome.omnibox.onInputStarted.addListener(() => {
+// (Safari has no address-bar keywords, hence the "?." on each of these.)
+chrome.omnibox?.onInputStarted.addListener(() => {
   // The numbers in the dropdown should be current by the time the user has typed the space.
   refreshUsage();
 });
 
-chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
+chrome.omnibox?.onInputChanged.addListener(async (text, suggest) => {
   const { latestSnapshot, settings } = await getAll();
   const { defaultDescription, suggestions } = buildSuggestions(text, latestSnapshot, {
     concealed: settings.privacyMode,
@@ -974,7 +995,7 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
   suggest(suggestions);
 });
 
-chrome.omnibox.onInputEntered.addListener(async (text, disposition) => {
+chrome.omnibox?.onInputEntered.addListener(async (text, disposition) => {
   const { latestSnapshot } = await getAll();
   const command = resolveCommand(text, Boolean(latestSnapshot));
 
@@ -1018,7 +1039,8 @@ async function openMiniWindow() {
   await chrome.storage.session.set({ miniWindowId: created.id });
 }
 
-chrome.windows.onBoundsChanged.addListener(async (win) => {
+// Firefox doesn't report window moves, so there the mini window opens at its default size and place each time.
+chrome.windows.onBoundsChanged?.addListener(async (win) => {
   const { miniWindowId } = await chrome.storage.session.get("miniWindowId");
   if (win.id !== miniWindowId) return;
   const { left, top, width, height } = win;
@@ -1099,7 +1121,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     if (changes.settings.oldValue?.privacyMode !== changes.settings.newValue?.privacyMode) {
       // Keep the menu's tick in step when the mode was switched somewhere else.
       const checked = Boolean(changes.settings.newValue?.privacyMode);
-      chrome.contextMenus.update("privacy", { checked }).catch(() => {});
+      chrome.contextMenus?.update("privacy", { checked }).catch(() => {});
     }
     // What the terminal shows follows privacy mode and the warning levels too.
     const planKeys = (settings) =>
