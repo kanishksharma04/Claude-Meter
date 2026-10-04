@@ -27,7 +27,7 @@ import {
 } from "../lib/storage.js";
 import { fetchUsageSnapshot, fetchOrgs, fetchOtherOrgs, UsageApiError } from "../lib/usage-api.js";
 import { extraOrgs, orgIdFromUsageUrl } from "../lib/orgs.js";
-import { captureAllowed, trimBody } from "../lib/capture-rules.js";
+import { captureAllowed, captureKind, trimBody } from "../lib/capture-rules.js";
 import { archiveReadings, restoreRecords, seedRecords, readWholeArchive } from "../lib/archive.js";
 import {
   BACKUP_ALARM_NAME,
@@ -72,9 +72,6 @@ const RESET_ALARM_NAME = "claudemeter-reset-check";
 const DIGEST_ALARM_NAME = "claudemeter-digest";
 // How long a keyboard shortcut's confirmation stays on the toolbar badge.
 const BADGE_FLASH_MS = 1500;
-const USAGE_ENDPOINT_PATTERN = /\/api\/organizations\/[^/]+\/usage(?:[/?]|$)/;
-// claude.ai's settings page reads the extra-usage spend and cap from here.
-const SPEND_LIMIT_ENDPOINT_PATTERN = /\/api\/organizations\/[^/]+\/overage_spend_limit(?:[/?]|$)/;
 // A "before" reading this fresh is reused rather than re-fetched when a message is sent.
 const BEFORE_MAX_AGE_MS = 20_000;
 // The usage endpoint lags the end of a reply slightly; wait before the "after" reading.
@@ -166,18 +163,20 @@ async function handlePassiveCapture(capture, sender) {
       });
     }
 
+    // Only an answer that worked is a reading. The page's own request can fail like any
+    // other — a 429, a 500, a sign-in page — and what comes back then is an error body.
+    const answered = capture.method === "GET" && capture.status === 200 && capture.responseBody && typeof capture.responseBody === "object";
+    if (settings.demoMode || !answered) return;
+    const kind = captureKind(capture.url);
+
     // Zero-cost passive update: if the page itself just made this exact
     // request (e.g. user opened claude.ai's own usage panel), reuse that
     // response instead of waiting for the next active refresh.
-    if (
-      !settings.demoMode &&
-      USAGE_ENDPOINT_PATTERN.test(capture.url) &&
-      capture.responseBody &&
-      typeof capture.responseBody === "object"
-    ) {
+    if (kind === "usage") {
       const orgCache = await getOrgCache();
       // The page may be looking at a different organisation from the main one; its figures aren't ours to file.
       const forMain = !orgCache || orgIdFromUsageUrl(capture.url) === orgCache.orgId;
+      // null when there is no limit in it: then the reading in hand stays as it is.
       const snapshot = forMain && normalizeUsageResponse(capture.responseBody, { orgMeta: orgCache?.raw });
       if (snapshot) {
         await applySnapshot(snapshot);
@@ -186,7 +185,7 @@ async function handlePassiveCapture(capture, sender) {
     }
 
     // Same idea for extra usage: when the page loads its own spend-limit data, read it over its shoulder.
-    if (!settings.demoMode && capture.method === "GET" && SPEND_LIMIT_ENDPOINT_PATTERN.test(capture.url)) {
+    if (kind === "spend") {
       const extraUsage = normalizeExtraUsage(capture.responseBody);
       if (extraUsage) await setExtraUsage(extraUsage, capture.timestamp ?? Date.now());
     }
@@ -1275,9 +1274,23 @@ async function scrubOldCaptures() {
   await chrome.storage.local.set({ __debug_captures: [], capturesScrubbed: true });
 }
 
+/**
+ * An earlier version stored an answer with no limits in it — an error body, a
+ * changed shape — as if it were a reading. Any such are taken out again, so the
+ * last real reading is the one on show.
+ */
+async function dropEmptyReadings() {
+  const { latestSnapshot, history = [] } = await chrome.storage.local.get(["latestSnapshot", "history"]);
+  const real = (snapshot) => Boolean(snapshot?.session) || (snapshot?.weekly ?? []).length > 0;
+  if ((!latestSnapshot || real(latestSnapshot)) && history.every(real)) return;
+  const kept = history.filter(real);
+  await chrome.storage.local.set({ history: kept, latestSnapshot: real(latestSnapshot) ? latestSnapshot : (kept.at(-1) ?? null) });
+}
+
 chrome.runtime.onInstalled.addListener((details) => {
   console.log(LOG_PREFIX, "extension installed");
   scrubOldCaptures().catch((err) => console.warn(LOG_PREFIX, "could not clear old captures", err));
+  dropEmptyReadings().catch((err) => console.warn(LOG_PREFIX, "could not tidy the stored readings", err));
   ensureAlarm();
   scheduleDigest();
   scheduleBackup();

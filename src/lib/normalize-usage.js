@@ -3,8 +3,10 @@
 // into the UsageSnapshot shape the rest of the extension consumes.
 //
 // The endpoint is undocumented — this file must never throw on a response
-// shape it doesn't fully recognize. Anything it can't confidently parse is
-// simply omitted rather than crashing the caller.
+// shape it doesn't fully recognize. A limit it can't confidently parse is
+// simply omitted rather than crashing the caller. But a response with no limit
+// in it at all is not a reading: it is an error body, or a shape this parser
+// has never seen, and it comes back as null so that it can't replace a good one.
 //
 // Known shape (reverse-engineered, confirmed against multiple open-source
 // claude.ai usage extensions as of mid-2026):
@@ -130,12 +132,23 @@ function detectPlanTier(orgMeta) {
 }
 
 /**
+ * Does the response name any limit at all, filled in or not? An organisation
+ * with no chat limits answers with the usual keys set to null; a changed or
+ * mistaken response doesn't have the keys.
+ */
+export function hasUsageKeys(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
+  return Object.keys(raw).some((key) => SESSION_KEY_PATTERN.test(key) || WEEKLY_KEY_PATTERN.test(key));
+}
+
+/**
  * @param {unknown} raw - parsed JSON body from the usage endpoint
  * @param {{ orgMeta?: object }} [context] - extra data (e.g. org record) for fields the usage endpoint itself doesn't carry
- * @returns {import("./types").UsageSnapshot | null} null only if raw is unusable (not an object at all)
+ * @returns {import("./types").UsageSnapshot | null} null when there is no reading in it: not an object, or
+ *   an object with neither a session limit nor a weekly one that could be read
  */
 export function normalizeUsageResponse(raw, context = {}) {
-  if (!raw || typeof raw !== "object") return null;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
 
   const fetchedAt = Date.now();
   const keys = Object.keys(raw);
@@ -149,6 +162,8 @@ export function normalizeUsageResponse(raw, context = {}) {
     .filter((k) => WEEKLY_KEY_PATTERN.test(k))
     .map((k) => normalizeBucket(raw[k], fetchedAt, humanizeWeeklyLabel(k)))
     .filter(Boolean);
+
+  if (!session && weekly.length === 0) return null;
 
   return {
     fetchedAt,

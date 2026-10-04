@@ -42,7 +42,7 @@ export function extraOrgs(orgs, primaryId, trackedIds) {
 
 /** The organisation a usage request was for, from its URL. */
 export function orgIdFromUsageUrl(url) {
-  return /\/api\/organizations\/([^/?#]+)\/usage(?:[/?#]|$)/.exec(String(url ?? ""))?.[1] ?? null;
+  return /\/api\/organizations\/([^/?#]+)\/usage\/?(?:[?#]|$)/.exec(String(url ?? ""))?.[1] ?? null;
 }
 
 /**

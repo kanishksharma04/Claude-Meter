@@ -7,8 +7,13 @@
 // Endpoints (reverse-engineered, not officially documented):
 //   GET https://claude.ai/api/organizations            -> list orgs; the main one is the user's choice, else the first with "chat"
 //   GET https://claude.ai/api/organizations/{id}/usage -> five_hour / seven_day / seven_day_* blocks
+//
+// Every failure is a UsageApiError with a code: NETWORK_ERROR, NOT_LOGGED_IN,
+// HTTP_<status>, BAD_JSON, NO_ORGS, and — for an answer that arrived but has no
+// reading in it — UNPARSEABLE_RESPONSE (a shape this version can't read) or
+// NO_LIMITS (the usual keys, all empty). None of them replaces the last good reading.
 
-import { normalizeUsageResponse } from "./normalize-usage.js";
+import { normalizeUsageResponse, hasUsageKeys } from "./normalize-usage.js";
 import { getOrgCache, setOrgCache, setOrgList } from "./storage.js";
 import { normalizeOrgs, choosePrimary } from "./orgs.js";
 
@@ -72,8 +77,12 @@ async function discoverOrg(preferredId) {
 async function fetchUsageFor(orgId, meta) {
   const raw = await fetchJson(`https://claude.ai/api/organizations/${orgId}/usage`);
   const snapshot = normalizeUsageResponse(raw, { orgMeta: meta });
-  if (!snapshot) throw new UsageApiError("UNPARSEABLE_RESPONSE", "Usage response was not an object");
-  return snapshot;
+  if (snapshot) return snapshot;
+  // Answered, but with no reading in it. The usual keys with nothing in them is an organisation
+  // without chat limits; anything else is a response this version doesn't know how to read.
+  if (hasUsageKeys(raw)) throw new UsageApiError("NO_LIMITS", "The usage response has no session or weekly limit in it");
+  const keys = raw && typeof raw === "object" ? Object.keys(raw).slice(0, 8).join(", ") : typeof raw;
+  throw new UsageApiError("UNPARSEABLE_RESPONSE", `No usage limits found in the response (${keys || "empty"})`);
 }
 
 /**

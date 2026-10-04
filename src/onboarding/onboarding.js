@@ -63,6 +63,8 @@ const PERMISSION_REASONS = {
 
 const SIGNIN_PROBLEMS = {
   NOT_LOGGED_IN: "You're not signed in to claude.ai in this browser. Sign in, then come back to this tab.",
+  UNPARSEABLE_RESPONSE: "claude.ai answered, but not with usage figures ClaudeMeter can read. Its API may have changed: the health page can report it.",
+  NO_LIMITS: "You're signed in, but this organisation has no session or weekly limit to show.",
   NETWORK_ERROR: "Couldn't reach claude.ai. Check your connection and try again.",
   NO_ORGS: "claude.ai didn't return an account to read usage from. Sign in to claude.ai and try again.",
 };

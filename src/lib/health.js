@@ -42,6 +42,8 @@ export function describeUsageError(code) {
   if (/^HTTP_5\d\d$/.test(code)) return `claude.ai answered with a server error (${code.replace("_", " ")}). These usually pass on their own.`;
   if (/^HTTP_\d+$/.test(code)) return `claude.ai refused the request (${code.replace("_", " ")}). If it keeps happening, its API may have changed: worth reporting.`;
   if (code === "BAD_JSON") return "claude.ai answered with something that isn't usage data. Its API may have changed: worth reporting.";
+  if (code === "UNPARSEABLE_RESPONSE") return "claude.ai answered, but with no usage limits ClaudeMeter can read. Its API has probably changed: worth reporting.";
+  if (code === "NO_LIMITS") return "claude.ai answered, but this organisation has no session or weekly limit to show. If it is the wrong organisation, choose another in Options.";
   if (code === "NO_ORGS") return "This sign-in doesn't belong to any organisation, so there is no usage to read.";
   return `The last reading failed (${code || "no reason given"}).`;
 }
@@ -59,6 +61,10 @@ function endpointCheck({ now, settings, state }) {
     return { id: "endpoint", title, status: "fail", detail: describeUsageError(error.code) + lastGood, action };
   }
   if (!snapshot) return { id: "endpoint", title, status: "warn", detail: "No reading yet. Sign in at claude.ai, then check again.", action: "claude" };
+  // Kept by an earlier version, which stored an answer with nothing in it as if it were a reading.
+  if (!snapshot.session && (snapshot.weekly ?? []).length === 0) {
+    return { id: "endpoint", title, status: "fail", detail: "The reading in hand has no limits in it, so there is nothing to show. Check again to replace it.", action: "retry" };
+  }
 
   // Three waits without a reading is more than a late alarm: the browser was asleep, or something is stuck.
   const expected = (pace?.minutes ?? settings.refreshIntervalMinutes) * 60_000;

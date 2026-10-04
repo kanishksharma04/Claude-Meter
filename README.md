@@ -837,11 +837,16 @@ first run of this one empties that list once (`capturesScrubbed`).
 - **Passive capture**: if claude.ai's own UI makes the exact usage request while a
   claude.ai tab is open, that response is captured and applied immediately too. The
   same goes for the `overage_spend_limit` request its settings page makes, which
-  carries the extra-usage spend and cap.
+  carries the extra-usage spend and cap. Only an answer that worked counts: a `GET`
+  that came back `200` with limits in it. The page's own request failing (a 429, a
+  server error) changes nothing.
 - **Around each message** (when per-message cost is on): once as you send — skipped if
   the last reading is under 20 seconds old — and once ~1.5 s after the reply ends.
 - Failed refreshes never wipe the UI — the popup keeps showing the last known-good
-  snapshot with an inline "Couldn't refresh — showing data from X ago" warning.
+  snapshot with an inline "Couldn't refresh — showing data from X ago" warning. That
+  includes an answer that arrives but has no reading in it: `UNPARSEABLE_RESPONSE`
+  when it isn't a shape this version can read, `NO_LIMITS` when the organisation
+  simply has no session or weekly limit.
 
 ## Known limitations
 
@@ -849,10 +854,12 @@ first run of this one empties that list once (`capturesScrubbed`).
   other open-source claude.ai usage extensions use, e.g.
   [lugia19/Claude-Usage-Extension](https://github.com/lugia19/Claude-Usage-Extension),
   [sshnox/Claude-Usage-Tracker](https://github.com/sshnox/Claude-Usage-Tracker)) — it
-  can change shape, move, or disappear without notice, at which point normalization
-  will silently degrade to partial data rather than crash (see
-  `src/lib/normalize-usage.js`), but the popup may show stale or missing numbers until
-  the endpoint/parser is updated.
+  can change shape, move, or disappear without notice. A limit that can no longer be
+  read is left out and the rest still shown (see `src/lib/normalize-usage.js`); an
+  answer with no limit in it at all is treated as a failed refresh
+  (`UNPARSEABLE_RESPONSE`), so the last good reading stays on screen with the usual
+  "Couldn't refresh" warning and the health page says the API has probably changed.
+  Either way the numbers are stale or partial until the parser is updated.
 - Plan tier badge (Free/Pro/Max 5x/Max 20x/Team/Enterprise) is rarely populated — the
   usage endpoint itself doesn't return it, and the org-list endpoint's plan field name
   isn't confirmed, so the badge is best-effort and often simply hidden.
