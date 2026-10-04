@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ClaudeMeter",
-  "version": "0.1.0",
+  "version": "0.8.0",
   "description": "__MSG_extDescription__",
   "default_locale": "en",
   "icons": {
@@ -64,7 +64,15 @@
     },
     {
       "matches": ["https://claude.ai/*"],
-      "js": ["src/content/page-ui.js"],
+      "js": [
+        "src/content/page-ui/core.js",
+        "src/content/page-ui/styles.js",
+        "src/content/page-ui/dock.js",
+        "src/content/page-ui/banners.js",
+        "src/content/page-ui/tab-indicator.js",
+        "src/content/page-ui/nudges.js",
+        "src/content/page-ui/main.js"
+      ],
       "run_at": "document_idle",
       "all_frames": false
     }

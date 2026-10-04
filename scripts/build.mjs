@@ -63,6 +63,9 @@ async function main() {
     const { folder, archive } = await build(target);
     console.log(`${target.padEnd(8)} ${folder}`);
     console.log(`${"".padEnd(8)} ${archive ?? "(no zip tool found: zip the folder's contents yourself)"}`);
+    // Said every time, so the folder isn't taken for more than it is.
+    if (target === "safari") console.log(`${"".padEnd(8)} (untested: this manifest has never been converted with Xcode or run in Safari)`);
+    if (target === "firefox") console.log(`${"".padEnd(8)} (passes web-ext lint; not yet run in Firefox)`);
   }
   console.log("\nNext steps for each store are in store/README.md.");
 }

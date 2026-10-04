@@ -327,7 +327,8 @@
   "Back up now": "今すぐバックアップ",
   "Restore from a backup…": "バックアップから復元…",
   "Reset everything": "すべてリセット",
-  "Clears the data as above, puts every setting back to its default (webhook addresses included) and gives back the optional permissions. Backup files in Downloads are yours and stay.": "上記と同じくデータを消去し、すべての設定を初期値に戻し（Webhook のアドレスを含む）、任意の権限を返上します。ダウンロードフォルダ内のバックアップファイルはそのまま残ります。"
+  "Clears the data as above, puts every setting back to its default (webhook addresses included) and gives back the optional permissions. Backup files in Downloads are yours and stay.": "上記と同じくデータを消去し、すべての設定を初期値に戻し（Webhook のアドレスを含む）、任意の権限を返上します。ダウンロードフォルダ内のバックアップファイルはそのまま残ります。",
+  "Demo": "デモ"
  },
  "patterns": [
   [

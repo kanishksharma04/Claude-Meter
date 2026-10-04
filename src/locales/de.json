@@ -327,7 +327,8 @@
   "Back up now": "Jetzt sichern",
   "Restore from a backup…": "Aus Sicherung wiederherstellen…",
   "Reset everything": "Alles zurücksetzen",
-  "Clears the data as above, puts every setting back to its default (webhook addresses included) and gives back the optional permissions. Backup files in Downloads are yours and stay.": "Löscht die Daten wie oben, setzt alle Einstellungen auf die Standardwerte zurück (auch die Webhook-Adressen) und gibt die optionalen Berechtigungen zurück. Sicherungsdateien im Download-Ordner bleiben erhalten."
+  "Clears the data as above, puts every setting back to its default (webhook addresses included) and gives back the optional permissions. Backup files in Downloads are yours and stay.": "Löscht die Daten wie oben, setzt alle Einstellungen auf die Standardwerte zurück (auch die Webhook-Adressen) und gibt die optionalen Berechtigungen zurück. Sicherungsdateien im Download-Ordner bleiben erhalten.",
+  "Demo": "Demo"
  },
  "patterns": [
   [

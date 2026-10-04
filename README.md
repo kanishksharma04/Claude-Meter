@@ -475,6 +475,8 @@ address you gave, after the browser has asked you to allow that one site.
 - **Manifest V3** — targets Chrome, Edge, and Brave (any Chromium-based browser)
 - **Vanilla JavaScript (ES modules)** — no framework, no bundler, no build step;
   `src/**/*.js` is loaded and run as-is
+- **Tests on Node's own test runner** — `npm test` runs `node --test`, with nothing to
+  install: no test framework, no dependencies at all (see [Tests](#tests))
 - **Plain HTML/CSS** — hand-written; the theme tokens live once in
   `src/shared/theme.css` as CSS custom properties, and `src/lib/theme.js` picks the
   theme and accent for every page
@@ -523,7 +525,12 @@ address you gave, after the browser has asked you to allow that one site.
 claudemeter/
 ├── manifest.json                      # Chrome's manifest, and the one the others are derived from
 ├── _locales/                          # the manifest's own strings (description, shortcut names), per language
+├── package.json                       # the scripts below (test, check, build); no dependencies
+├── LICENSE                            # MIT
+├── .github/workflows/ci.yml           # runs the checks, the tests, the builds and Mozilla's linter on every push
+├── tests/                             # node --test: one file per area, and helpers.mjs with the stand-ins they share
 ├── scripts/
+│   ├── check-syntax.mjs               # parses every script in the repository
 │   ├── check-locales.mjs              # checks every translation covers the same strings
 │   ├── build.mjs                      # packages dist/<browser> and a zip for each store
 │   └── manifest-targets.mjs           # what changes in the manifest for Edge, Firefox and Safari
@@ -541,17 +548,29 @@ claudemeter/
 │   ├── install.mjs                    # registers it with your browsers on macOS, Linux and Windows
 │   └── paths.mjs                      # where ~/.claude and the companion's own folder are
 ├── src/
-│   ├── background/service-worker.js   # active fetch on alarm/request, badge, notifications
+│   ├── background/
+│   │   ├── service-worker.js          # the entry: the listeners that wake the worker, and nothing else
+│   │   ├── refresh.js                 # asking claude.ai for usage, and everything a new reading sets off
+│   │   ├── page-events.js             # what the page script reports: its own usage requests, messages, limit hits
+│   │   ├── alerts.js                  # notifications, webhooks, sounds, the daily digest
+│   │   ├── toolbar.js                 # the icon, its badge and its hover text
+│   │   ├── surfaces.js                # the icon's menu, shortcuts, the address-bar keyword, the mini window
+│   │   ├── companion.js               # Claude Code usage through the native-messaging companion
+│   │   ├── backup-job.js              # the scheduled backup to Downloads
+│   │   └── shared.js                  # names and addresses those share
 │   ├── content/
 │   │   ├── inject-hook.js             # MAIN world: patches fetch/XHR, dispatches captures + chat events
 │   │   ├── relay.js                   # ISOLATED world: forwards both to the background worker
-│   │   └── page-ui.js                 # ISOLATED world: in-page UI (pill, banners, lockout timer) in a shadow root
+│   │   └── page-ui/                   # ISOLATED world: in-page UI (pill, banners, lockout timer) in a shadow root.
+│   │                                  #   Seven files sharing one scope, in manifest order: core, styles, dock,
+│   │                                  #   banners, tab-indicator, nudges, main
 │   ├── popup/                         # toolbar popup, ?view=panel side panel dashboard, ?view=mini window
 │   │   └── insights.js                # the dashboard's analytics sections
 │   ├── report/                        # the weekly report page (printable)
 │   ├── health/                        # the health check and bug report page
 │   ├── offscreen/                     # windowless page the worker opens to play an alert sound
-│   ├── options/                       # refresh interval, notifications, theme, developer mode
+│   ├── options/                       # options.js (the entry) plus a module per larger card:
+│   │                                  #   orgs, api-spend, claude-code, alerts, data
 │   ├── onboarding/                    # first-run welcome page: sign-in check, permissions, alerts
 │   ├── debug/                         # debug.html — raw capture viewer (developer mode only)
 │   ├── lib/
@@ -612,6 +631,51 @@ claudemeter/
 │   └── icons/                         # toolbar/store icon set (16/32/48/128)
 └── README.md
 ```
+
+## Tests
+
+```
+npm test          # the tests
+npm run check     # every script parses; every translation is complete
+npm run verify    # both of those, then build every browser's package
+```
+
+Nothing needs installing first: the tests use `node --test` and `node:assert`, which
+come with Node.js (20 or newer), and stand-ins of their own for the parts of a browser
+the code talks to (`tests/helpers.mjs`). What they cover:
+
+- **`capture-rules`** — what the page hook may read. The rules are checked against a
+  table of addresses, and then the real `inject-hook.js` and `relay.js` are run
+  against that same table, so their copies of the rules can't drift from the original.
+  A conversation's text is checked never to leave the page.
+- **`normalize-usage`** — the usage response: the 0–100 scale, never rounding up to
+  full, an error body or unknown shape not counting as a reading.
+- **`thresholds`**, **`refresh-plan`**, **`readings`** — alerts and what has been
+  announced; the wait between readings; the hourly log, session windows, archive
+  records, spikes, resets and message costs worked out from one reading and the next.
+- **`storage`** — the locks: readings, settings and log entries written at once from
+  several places all survive. Run against a storage stand-in that is asynchronous the
+  way the real one is.
+- **`backup-health`** — backups round-tripping and restoring; the health checks; that
+  diagnostics carry no names, ids, keys, addresses or figures.
+- **`companion`** — reading Claude Code's log lines; the install plan; the launcher,
+  which is written out and actually run, with its Node present and with it gone.
+- **`project`** — the repository as a whole: every file the manifest and the pages name
+  exists; every `import` names something its module exports, and nothing is used
+  without being imported (there is no bundler to say so); every static string on the
+  translated pages has a translation; each browser's manifest comes out right.
+
+What they don't cover is anything that needs a real browser: the service worker's
+listeners, IndexedDB, the pages, the UI drawn on claude.ai. Those were checked by
+driving the extension in Chromium against a made-up claude.ai, by hand-written
+scripts that are not in the repository because they need Playwright. And nothing —
+test or script — has been run against the real claude.ai: see Known limitations.
+
+GitHub Actions (`.github/workflows/ci.yml`) runs `npm run verify` on Node 20 and 22
+for every push and pull request, and Mozilla's `web-ext lint` over the Firefox build.
+
+**Version.** `manifest.json` carries it, and it goes up with each batch of work:
+0.8.0 is the first release plus seven. The companion has its own (`companion/README.md`).
 
 ## Load it locally (Chrome / Edge / Brave)
 
@@ -1044,6 +1108,13 @@ first run of this one empties that list once (`capturesScrubbed`).
   its translations until they are updated — it then shows in English rather than
   breaking, and `node scripts/check-locales.mjs` only checks the languages against
   each other, not against the pages.
+- **Not checked against the real claude.ai.** Everything this extension knows about
+  claude.ai's endpoints — the usage response and its scale, the organisation list, the
+  reply stream, the limit-reached marker — comes from other open-source extensions and
+  from reading, and every test and browser run here used a made-up claude.ai that
+  answers the way those say it does. The first run in a signed-in browser is the real
+  test. To help with it: switch on Developer mode, open claude.ai's usage settings,
+  and the debug page shows exactly what came back.
 - **How far each browser has been tested.** Chrome and Edge share an engine and a
   manifest, and the built package is run in Chromium. The Firefox package passes
   Mozilla's `web-ext lint` with no errors but has **not been run in Firefox**. The
@@ -1255,6 +1326,10 @@ first run of this one empties that list once (`capturesScrubbed`).
   backups. Optional permissions (the webhook sites, `api.anthropic.com`, downloads)
   are given back. It leaves the extension as a new install would find it, apart from
   backup files already in Downloads, which are yours.
+
+## Licence
+
+[MIT](LICENSE).
 
 ## Author
 

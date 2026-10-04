@@ -1,0 +1,40 @@
+# Runs on every push and pull request: the same checks as `npm run verify`
+# locally, and Mozilla's linter over the Firefox build. Nothing is published.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # No install step: the extension, its scripts and its tests have no dependencies.
+      - name: Every script parses, every translation is complete
+        run: npm run check
+      - name: Tests
+        run: npm test
+      - name: Build every browser's package
+        run: npm run build
+
+  firefox-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/build.mjs firefox
+      # The one tool fetched from npm, and only here: Mozilla's own check of the add-on.
+      - run: npx --yes web-ext@8 lint --source-dir dist/firefox

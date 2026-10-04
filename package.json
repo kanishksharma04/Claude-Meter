@@ -1,0 +1,15 @@
+{
+  "name": "claudemeter",
+  "private": true,
+  "description": "Browser extension that shows claude.ai usage. This file exists for the scripts below: the extension itself has no dependencies and no build step.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test tests/",
+    "check": "node scripts/check-syntax.mjs && node scripts/check-locales.mjs",
+    "build": "node scripts/build.mjs",
+    "verify": "npm run check && npm test && npm run build"
+  }
+}

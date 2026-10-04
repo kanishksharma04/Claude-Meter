@@ -1,6 +1,6 @@
 // One definition of "how full is too full": where a meter turns amber and red,
 // and in which colours. Used by the toolbar icon, the popup bars and the
-// options preview, and mirrored in src/content/page-ui.js for the in-page UI.
+// options preview, and mirrored in src/content/page-ui/core.js for the in-page UI.
 
 export const DEFAULT_CUTOFFS = { warnAt: 80, dangerAt: 95 };
 

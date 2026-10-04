@@ -1,6 +1,6 @@
 // Which theme and accent an extension page should wear. The palettes
 // themselves are in src/shared/theme.css; this only picks one and sets the
-// accent. Mirrored (in miniature) in src/content/page-ui.js for the in-page UI.
+// accent. Mirrored (in miniature) in src/content/page-ui/core.js for the in-page UI.
 
 export const DEFAULT_ACCENT = "clay";
 

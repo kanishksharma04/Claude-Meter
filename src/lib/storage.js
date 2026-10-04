@@ -93,7 +93,7 @@ export const DEFAULT_SETTINGS = {
   developerMode: false,
   demoMode: false, // show made-up usage everywhere and fetch nothing (lib/demo-data.js)
   demoLabel: true, // mark the popup with a "Demo" badge while demo mode is on
-  inlinePill: true, // usage pill next to claude.ai's composer (src/content/page-ui.js)
+  inlinePill: true, // usage pill next to claude.ai's composer (src/content/page-ui/)
   tabIndicator: "title", // usage % on the claude.ai tab: "off" | "title" | "favicon" | "both"
   preSendWarnPercent: 80, // warn above the composer while drafting at/above this %; 0 = off
   modelHintPercent: 50, // suggest a lighter model once a model-specific weekly bucket is this full; 0 = off

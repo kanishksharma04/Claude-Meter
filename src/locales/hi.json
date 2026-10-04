@@ -327,7 +327,8 @@
   "Back up now": "अभी बैकअप लें",
   "Restore from a backup…": "बैकअप से पुनर्स्थापित करें…",
   "Reset everything": "सब कुछ रीसेट करें",
-  "Clears the data as above, puts every setting back to its default (webhook addresses included) and gives back the optional permissions. Backup files in Downloads are yours and stay.": "ऊपर की तरह डेटा मिटाता है, हर सेटिंग को डिफ़ॉल्ट पर लौटाता है (वेबहुक पते सहित) और वैकल्पिक अनुमतियाँ वापस कर देता है। डाउनलोड फ़ोल्डर की बैकअप फ़ाइलें आपकी हैं और बनी रहती हैं।"
+  "Clears the data as above, puts every setting back to its default (webhook addresses included) and gives back the optional permissions. Backup files in Downloads are yours and stay.": "ऊपर की तरह डेटा मिटाता है, हर सेटिंग को डिफ़ॉल्ट पर लौटाता है (वेबहुक पते सहित) और वैकल्पिक अनुमतियाँ वापस कर देता है। डाउनलोड फ़ोल्डर की बैकअप फ़ाइलें आपकी हैं और बनी रहती हैं।",
+  "Demo": "डेमो"
  },
  "patterns": [
   [

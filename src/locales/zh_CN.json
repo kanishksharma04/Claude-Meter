@@ -327,7 +327,8 @@
   "Back up now": "立即备份",
   "Restore from a backup…": "从备份恢复…",
   "Reset everything": "全部重置",
-  "Clears the data as above, puts every setting back to its default (webhook addresses included) and gives back the optional permissions. Backup files in Downloads are yours and stay.": "像上面一样清除数据，将所有设置恢复为默认值（包括 Webhook 地址），并交还可选权限。下载文件夹中的备份文件属于您，会保留。"
+  "Clears the data as above, puts every setting back to its default (webhook addresses included) and gives back the optional permissions. Backup files in Downloads are yours and stay.": "像上面一样清除数据，将所有设置恢复为默认值（包括 Webhook 地址），并交还可选权限。下载文件夹中的备份文件属于您，会保留。",
+  "Demo": "演示"
  },
  "patterns": [
   [
