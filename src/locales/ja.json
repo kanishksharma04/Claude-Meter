@@ -177,7 +177,7 @@
   "Turn this off for clean screenshots.": "すっきりしたスクリーンショットにはオフにしてください。",
   "Developer / Debug": "開発者 / デバッグ",
   "Developer mode": "開発者モード",
-  "Keeps raw request/response captures for inspection on the debug page.": "リクエストとレスポンスの生データを、デバッグページで調べられるよう保存します。",
+  "Keeps the last 20 raw answers to claude.ai's usage and billing requests for the debug page. Chats, projects and files are never kept.": "claude.ai の使用量と請求に関するリクエストへの生の応答を、直近20件までデバッグページ用に保存します。チャット、プロジェクト、ファイルは保存されません。",
   "Open Debug Captures →": "デバッグ記録を開く →",
   "Data": "データ",
   "Clear stored data": "保存したデータを消去",

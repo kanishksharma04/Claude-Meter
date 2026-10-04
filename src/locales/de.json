@@ -177,7 +177,7 @@
   "Turn this off for clean screenshots.": "Für saubere Screenshots ausschalten.",
   "Developer / Debug": "Entwicklung / Debug",
   "Developer mode": "Entwicklermodus",
-  "Keeps raw request/response captures for inspection on the debug page.": "Bewahrt rohe Mitschnitte von Anfragen und Antworten zur Ansicht auf der Debug-Seite auf.",
+  "Keeps the last 20 raw answers to claude.ai's usage and billing requests for the debug page. Chats, projects and files are never kept.": "Bewahrt die letzten 20 rohen Antworten auf die Nutzungs- und Abrechnungsanfragen von claude.ai für die Debug-Seite auf. Chats, Projekte und Dateien werden nie aufbewahrt.",
   "Open Debug Captures →": "Debug-Mitschnitte öffnen →",
   "Data": "Daten",
   "Clear stored data": "Gespeicherte Daten löschen",

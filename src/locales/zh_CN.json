@@ -177,7 +177,7 @@
   "Turn this off for clean screenshots.": "想要干净的截图时请关闭。",
   "Developer / Debug": "开发者 / 调试",
   "Developer mode": "开发者模式",
-  "Keeps raw request/response captures for inspection on the debug page.": "保留原始的请求和响应记录，以便在调试页面查看。",
+  "Keeps the last 20 raw answers to claude.ai's usage and billing requests for the debug page. Chats, projects and files are never kept.": "为调试页面保留 claude.ai 用量和账单请求的最近 20 条原始响应。聊天、项目和文件绝不会被保留。",
   "Open Debug Captures →": "打开调试记录 →",
   "Data": "数据",
   "Clear stored data": "清除已保存的数据",

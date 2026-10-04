@@ -177,7 +177,7 @@
   "Turn this off for clean screenshots.": "Desactívalo para capturas limpias.",
   "Developer / Debug": "Desarrollo / Depuración",
   "Developer mode": "Modo desarrollador",
-  "Keeps raw request/response captures for inspection on the debug page.": "Conserva las capturas en bruto de peticiones y respuestas para inspeccionarlas en la página de depuración.",
+  "Keeps the last 20 raw answers to claude.ai's usage and billing requests for the debug page. Chats, projects and files are never kept.": "Conserva las últimas 20 respuestas en bruto a las peticiones de uso y facturación de claude.ai para la página de depuración. Nunca se guardan chats, proyectos ni archivos.",
   "Open Debug Captures →": "Abrir capturas de depuración →",
   "Data": "Datos",
   "Clear stored data": "Borrar los datos guardados",

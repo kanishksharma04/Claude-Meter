@@ -9,11 +9,18 @@
 // never do). It only observes traffic the page already made and hands
 // matches off via a CustomEvent; src/content/relay.js (isolated world)
 // listens for that event and forwards it to the background service worker.
+//
+// What it may read the answer to is narrow, and written down in
+// src/lib/capture-rules.js: the usage endpoint and the spend-limit endpoint,
+// always; a few more that sound like usage or billing, only while developer
+// mode is on; and never anything under a chat, a project or a file.
 
 (() => {
-  const MATCH_KEYWORDS = ["usage", "limit", "quota", "rate", "organizations", "billing"];
   const EVENT_NAME = "__claudemeter_capture__";
   const CHAT_EVENT_NAME = "__claudemeter_chat__";
+  // The relay says whether developer mode is on; this script asks it to, once it is listening.
+  const CONFIG_EVENT_NAME = "__claudemeter_config__";
+  const READY_EVENT_NAME = "__claudemeter_hook_ready__";
   const COMPLETION_PATTERN =
     /\/api\/organizations\/[^/]+\/chat_conversations\/([0-9a-f-]+)\/(?:retry_)?completion(?:[/?]|$)/i;
   const CONVERSATION_PATTERN = /\/api\/organizations\/[^/]+\/chat_conversations\/([0-9a-f-]+)(?:\?|$)/i;
@@ -21,9 +28,40 @@
   const LOG_PREFIX = "[ClaudeMeter:discovery]";
   const MAX_BODY_CHARS = 20000;
 
-  function matchesKeywords(absoluteUrl) {
-    const lower = absoluteUrl.toLowerCase();
-    return MATCH_KEYWORDS.some((kw) => lower.includes(kw));
+  // Mirrors src/lib/capture-rules.js — this script can't import it. Keep the two in step.
+  const ORG_PATH = "/api/organizations/[^/]+";
+  const USAGE_PATH = new RegExp(`^${ORG_PATH}/usage/?$`);
+  const SPEND_LIMIT_PATH = new RegExp(`^${ORG_PATH}/overage_spend_limit/?$`);
+  const PRIVATE_PATH = /\/(?:chat_conversations|projects|files|artifacts|memory|skills)(?:\/|$)/i;
+  const DISCOVERY_PATH = /^\/api\/.*(?:usage|limit|quota|billing|overage|subscription)/i;
+  const ORG_LIST_PATH = /^\/api\/organizations\/?$/;
+
+  // Developer mode. Off until the relay says otherwise, so nothing extra is read by default.
+  let discovery = false;
+  window.addEventListener(CONFIG_EVENT_NAME, (event) => {
+    discovery = event.detail === "discovery";
+  });
+
+  /** May the answer to this request be read? See the rules at the top of src/lib/capture-rules.js. */
+  function shouldCapture(absoluteUrl) {
+    let parsed;
+    try {
+      parsed = new URL(absoluteUrl);
+    } catch {
+      return false;
+    }
+    if (parsed.origin !== "https://claude.ai") return false;
+    const path = parsed.pathname;
+    if (PRIVATE_PATH.test(path)) return false;
+    if (USAGE_PATH.test(path) || SPEND_LIMIT_PATH.test(path)) return true;
+    return discovery && (DISCOVERY_PATH.test(path) || ORG_LIST_PATH.test(path));
+  }
+
+  /** A response as it is handed on: parsed when it is small JSON, otherwise the start of its text. */
+  function captureBody(text) {
+    if (typeof text !== "string") return null;
+    if (text.length > MAX_BODY_CHARS) return text.slice(0, MAX_BODY_CHARS);
+    return safeJsonParse(text) ?? text;
   }
 
   function toAbsoluteUrl(url) {
@@ -48,7 +86,8 @@
 
   function emitCapture(capture) {
     try {
-      console.log(LOG_PREFIX, capture.method, capture.url, capture);
+      // Only someone looking for an endpoint wants these in the console.
+      if (discovery) console.log(LOG_PREFIX, capture.method, capture.url, capture);
       window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: capture }));
     } catch (err) {
       console.warn(LOG_PREFIX, "failed to emit capture", err);
@@ -303,7 +342,7 @@
       watchConversation(response, absoluteUrl, method);
       watchProjectDocs(response, absoluteUrl, method);
 
-      if (absoluteUrl && matchesKeywords(absoluteUrl)) {
+      if (absoluteUrl && shouldCapture(absoluteUrl)) {
         response
           .clone()
           .text()
@@ -315,7 +354,7 @@
               url: absoluteUrl,
               method,
               status: response.status,
-              responseBody: safeJsonParse(text) ?? text.slice(0, MAX_BODY_CHARS),
+              responseBody: captureBody(text),
             });
           })
           .catch((err) => console.warn(LOG_PREFIX, "could not read fetch response body", err));
@@ -347,14 +386,14 @@
   XMLHttpRequest.prototype.send = function claudeMeterSend(...args) {
     try {
       const meta = this.__claudemeter;
-      if (meta && matchesKeywords(meta.url)) {
+      if (meta && shouldCapture(meta.url)) {
         this.addEventListener("loadend", () => {
           try {
             let body;
             if (this.responseType === "" || this.responseType === "text") {
-              body = safeJsonParse(this.responseText) ?? this.responseText.slice(0, MAX_BODY_CHARS);
+              body = captureBody(this.responseText);
             } else if (this.responseType === "json") {
-              body = this.response;
+              body = captureBody(JSON.stringify(this.response ?? null));
             } else {
               body = `[unsupported responseType: ${this.responseType}]`;
             }
@@ -378,5 +417,6 @@
     return OriginalSend.apply(this, args);
   };
 
-  console.log(LOG_PREFIX, "network hooks installed (fetch + XHR) — watching for", MATCH_KEYWORDS.join(", "));
+  // The relay may have loaded first and spoken before anyone was listening: ask it to say again.
+  window.dispatchEvent(new CustomEvent(READY_EVENT_NAME));
 })();

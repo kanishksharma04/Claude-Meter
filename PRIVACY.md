@@ -13,7 +13,20 @@ account, no analytics and no crash reporting.
   ClaudeMeter does not read or store your cookies, password or session tokens.
 - **Counts from the claude.ai page** — when a message is sent and when its reply ends,
   how many characters long they were, which model was chosen, and the chat's title.
-  The text of your messages and Claude's replies is not read.
+  The text of your messages and Claude's replies is counted inside the page and goes
+  no further: it is not passed to the rest of the extension, stored or logged.
+- **claude.ai's own usage requests** — when the claude.ai page itself asks for your
+  usage or your extra-usage spend, ClaudeMeter reads that answer too, so its figures
+  are current without asking again. Those two requests are the only ones whose answers
+  it reads. Requests for chats, projects, files and everything else are left alone.
+- **Optionally, more of claude.ai's usage and billing requests** — only while
+  Developer mode is switched on in Options. It exists for working out where claude.ai
+  keeps its usage figures when it moves them: the last 20 answers to requests whose
+  address mentions usage, limits, quota, billing or subscription, and the list of your
+  organisations, are kept for the debug page and printed in the page's console. They
+  can include your organisation's name and plan. Requests for chats, projects and
+  files are never read, in this mode or any other. Switching Developer mode off stops
+  it; "Clear stored data" removes what was kept.
 - **Optionally, Claude Code's logs on your computer** — only if you install the
   companion program and switch Claude Code on: token counts, model, working
   directory, time and session title from `~/.claude/projects`. Not the conversations.

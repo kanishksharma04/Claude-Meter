@@ -177,7 +177,7 @@
   "Turn this off for clean screenshots.": "साफ़ स्क्रीनशॉट के लिए इसे बंद करें।",
   "Developer / Debug": "डेवलपर / डीबग",
   "Developer mode": "डेवलपर मोड",
-  "Keeps raw request/response captures for inspection on the debug page.": "डीबग पेज पर जाँच के लिए अनुरोध और जवाब की कच्ची प्रतियाँ रखता है।",
+  "Keeps the last 20 raw answers to claude.ai's usage and billing requests for the debug page. Chats, projects and files are never kept.": "claude.ai के उपयोग और बिलिंग अनुरोधों के पिछले 20 कच्चे जवाब डीबग पेज के लिए रखता है। चैट, प्रोजेक्ट और फ़ाइलें कभी नहीं रखी जातीं।",
   "Open Debug Captures →": "डीबग प्रतियाँ खोलें →",
   "Data": "डेटा",
   "Clear stored data": "सहेजा हुआ डेटा मिटाएँ",

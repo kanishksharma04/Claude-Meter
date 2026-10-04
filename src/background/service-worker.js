@@ -27,6 +27,7 @@ import {
 } from "../lib/storage.js";
 import { fetchUsageSnapshot, fetchOrgs, fetchOtherOrgs, UsageApiError } from "../lib/usage-api.js";
 import { extraOrgs, orgIdFromUsageUrl } from "../lib/orgs.js";
+import { captureAllowed, trimBody } from "../lib/capture-rules.js";
 import { archiveReadings, restoreRecords, seedRecords, readWholeArchive } from "../lib/archive.js";
 import {
   BACKUP_ALARM_NAME,
@@ -152,10 +153,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function handlePassiveCapture(capture, sender) {
   try {
     const settings = await getSettings();
+    // The page hook and the relay have both applied these rules already; a capture
+    // that reaches here against them didn't come from either, and is dropped.
+    if (!captureAllowed(capture?.url, settings.developerMode)) return;
 
     if (settings.developerMode) {
       await pushDebugCapture({
         ...capture,
+        responseBody: trimBody(capture.responseBody),
         tabId: sender?.tab?.id ?? null,
         pageUrl: sender?.tab?.url ?? sender?.url ?? null,
       });
@@ -1259,8 +1264,20 @@ async function backingOff() {
 
 const ensureAlarm = () => scheduleRefresh();
 
+/**
+ * Captures kept by an earlier version could hold more than usage figures: its
+ * page hook read every request under /api/organizations, chats included. Once,
+ * on the first run of a version with the narrower rules, they are thrown away.
+ */
+async function scrubOldCaptures() {
+  const { capturesScrubbed } = await chrome.storage.local.get("capturesScrubbed");
+  if (capturesScrubbed) return;
+  await chrome.storage.local.set({ __debug_captures: [], capturesScrubbed: true });
+}
+
 chrome.runtime.onInstalled.addListener((details) => {
   console.log(LOG_PREFIX, "extension installed");
+  scrubOldCaptures().catch((err) => console.warn(LOG_PREFIX, "could not clear old captures", err));
   ensureAlarm();
   scheduleDigest();
   scheduleBackup();

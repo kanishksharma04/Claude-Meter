@@ -445,6 +445,18 @@ matching usage request claude.ai's own UI happens to make (e.g. if you open the
 account usage panel yourself) and reuses that response immediately, without waiting
 for the next scheduled fetch. See `src/content/inject-hook.js`.
 
+That script sits on the page's `fetch`, so what it may read is kept deliberately
+narrow and written down in one place, `src/lib/capture-rules.js`: the answers to
+`…/usage` and `…/overage_spend_limit`, and nothing else. Developer mode adds requests
+whose address mentions usage, limits, quota, billing or subscription, plus the
+organisation list — for finding the figures again if claude.ai moves them. Anything
+under a chat, a project or a file is never read in either mode. The rule is applied
+three times over (the page script, the relay beside it, the background worker), a
+response larger than 20,000 characters is cut short rather than passed on whole, and
+nothing is printed to the page's console unless Developer mode is on. To count thread
+length the page script does look at a conversation as it loads, but only the counts
+leave the page.
+
 If you add an Admin API key for the Console spend panel, it is sent to
 `api.anthropic.com` — Anthropic itself, but a different service from claude.ai — and
 only there, to read the cost report.
@@ -588,6 +600,7 @@ claudemeter/
 │   │   ├── package.json               # only says "these files are ES modules", so Node can load them too
 │   │   ├── extra-usage.js             # extra-usage spend: day-by-day record, "today", wording
 │   │   ├── usage-api.js               # org discovery + usage fetch + typed errors
+│   │   ├── capture-rules.js           # which of the page's requests the hook may read (and which never)
 │   │   └── normalize-usage.js         # raw usage response -> UsageSnapshot (+ extra-usage block)
 │   ├── locales/                       # the translations: English text -> translated text, one file per language
 │   ├── shared/theme.css               # theme tokens for every extension page
@@ -772,7 +785,9 @@ an alarm at that time clears it, so it ends even if the browser was closed meanw
 Per-conversation totals aren't stored — `src/lib/conversation-costs.js` derives them
 from `messageLog` on demand, so they only cover the messages still in that log.
  Raw request/response captures (`__debug_captures`, last 20) are only
-written when Developer mode is on, from Options.
+written when Developer mode is on, from Options, and only for the requests
+`src/lib/capture-rules.js` allows. An earlier version captured more widely, so the
+first run of this one empties that list once (`capturesScrubbed`).
 
 ## Refresh behavior
 
@@ -1173,8 +1188,9 @@ written when Developer mode is on, from Options.
 - **Accent colour** — one of six presets. High contrast uses its own accent so a
   softer preset can't undo the contrast.
 - **Demo mode** — show the demo dataset everywhere, with or without the "Demo" badge.
-- **Developer mode** — keeps raw request/response captures for the debug page
-  (`src/debug/debug.html`), off by default.
+- **Developer mode** — keeps the last 20 raw answers to claude.ai's usage and billing
+  requests for the debug page (`src/debug/debug.html`), off by default. Chats,
+  projects and files are never captured.
 - **Long-term archive** — how many readings the archive holds and since when.
 - **Automatic backup** — off, every day or every week; how many files to keep; Back
   up now; Restore from a backup.
