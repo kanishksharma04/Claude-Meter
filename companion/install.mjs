@@ -18,7 +18,7 @@
 // rights, and nothing outside your own user profile is touched.
 
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -37,6 +37,79 @@ const BROWSERS = [
   { name: "Brave", darwin: "BraveSoftware/Brave-Browser", linux: "BraveSoftware/Brave-Browser", registry: "BraveSoftware\\Brave-Browser" },
   { name: "Vivaldi", darwin: "Vivaldi", linux: "vivaldi", registry: "Vivaldi" },
 ];
+
+/** Folders a version manager or Homebrew keeps one Node release in: a path through them is gone after the next upgrade. */
+const VERSIONED_NODE = /[\\/](?:Cellar[\\/]node[^\\/]*|\.nvm[\\/]versions|fnm[\\/]node-versions|\.volta[\\/]tools[\\/]image|\.asdf[\\/]installs|mise[\\/]installs|n[\\/]versions|nvs[\\/]node)[\\/]/i;
+
+/** Where a `node` that stays put across upgrades is usually found, likeliest first. */
+export function stableNodeCandidates(platform, home, env = {}) {
+  if (platform === "win32") return [win32.join(env.ProgramFiles || "C:\\Program Files", "nodejs", "node.exe")];
+  return [
+    "/opt/homebrew/bin/node",
+    "/usr/local/bin/node",
+    "/usr/bin/node",
+    posix.join(home, ".volta", "bin", "node"),
+    posix.join(home, ".local", "share", "fnm", "aliases", "default", "bin", "node"),
+    posix.join(home, ".nvm", "current", "bin", "node"),
+  ];
+}
+
+/**
+ * The Node.js to name in the launcher. Node reports where it really is, with
+ * links followed — under Homebrew, a folder named after the release, which the
+ * next `brew upgrade` deletes. If one of the usual, lasting places points at
+ * that same binary today, that place is named instead; otherwise the path is
+ * kept as it is, and the launcher's own search is the safety net.
+ */
+export function stableNodePath(execPath, { platform, home, env = {}, exists = existsSync, realpath = realpathSync } = {}) {
+  if (!VERSIONED_NODE.test(execPath)) return execPath;
+  const real = (path) => {
+    try {
+      return realpath(path);
+    } catch {
+      return null;
+    }
+  };
+  const target = real(execPath) ?? execPath;
+  return stableNodeCandidates(platform, home, env).find((candidate) => exists(candidate) && real(candidate) === target) ?? execPath;
+}
+
+/** A value as one word of a POSIX shell script, whatever characters are in it. */
+const shellWord = (value) => `'${String(value).replace(/'/g, `'\\''`)}'`;
+
+/**
+ * The launcher: runs `target` with the Node.js the companion was installed
+ * with — or, if that has since gone, with the first one it can find, so an
+ * upgrade doesn't leave the browser saying the companion has crashed.
+ */
+export function launcherScript({ platform, home, env = {}, nodePath, target }) {
+  const candidates = stableNodeCandidates(platform, home, env).filter((candidate) => candidate !== nodePath);
+  if (platform === "win32") {
+    return [
+      "@echo off",
+      "setlocal",
+      `set "NODE=${nodePath}"`,
+      // Gone since the install: whatever "node" is on PATH, then where the installer from nodejs.org puts it.
+      'if not exist "%NODE%" for %%I in (node.exe) do set "NODE=%%~$PATH:I"',
+      ...candidates.map((candidate) => `if not exist "%NODE%" set "NODE=${candidate}"`),
+      `"%NODE%" "${target}" %*`,
+      "",
+    ].join("\r\n");
+  }
+  return [
+    "#!/bin/sh",
+    "# Written by ClaudeMeter's companion/install.mjs. Runs the companion with the Node.js it was",
+    "# installed with, or - if an upgrade has since moved that one - with the first it can find.",
+    `NODE=${shellWord(nodePath)}`,
+    'if [ ! -x "$NODE" ]; then',
+    `  for candidate in ${candidates.map(shellWord).join(" ")} "$HOME"/.nvm/versions/node/*/bin/node "$(command -v node 2>/dev/null)"; do`,
+    '    if [ -n "$candidate" ] && [ -x "$candidate" ]; then NODE="$candidate"; break; fi',
+    "  done",
+    "fi",
+    `exec "$NODE" ${shellWord(target)} "$@"`,
+    "",
+  ].join("\n");
+}
 
 export function isExtensionId(value) {
   return /^[a-p]{32}$/.test(String(value ?? ""));
@@ -68,8 +141,7 @@ export function installPlan({ platform, home, env, extensionId, nodePath, agentP
   // The browser needs something it can execute directly. Naming Node by its full path matters:
   // a browser started from the dock or the Start menu doesn't have your shell's PATH.
   const launcher = path.join(directory, windows ? "claudemeter-agent.cmd" : "claudemeter-agent");
-  const script = (target) =>
-    windows ? `@echo off\r\n"${nodePath}" "${target}" %*\r\n` : `#!/bin/sh\nexec "${nodePath}" "${target}" "$@"\n`;
+  const script = (target) => launcherScript({ platform, home, env, nodePath, target });
   const launcherContent = script(agentPath);
   // The terminal command, in a folder of its own so it can go on PATH without the launcher coming too.
   const command = cliPath ? path.join(directory, "bin", windows ? "claudemeter.cmd" : "claudemeter") : null;
@@ -186,7 +258,8 @@ async function main() {
     env: process.env,
     // Uninstalling removes the same paths whatever id was installed with.
     extensionId: extensionId ?? "a".repeat(32),
-    nodePath: process.execPath,
+    // Not simply where this Node is: that can be a folder the next upgrade removes.
+    nodePath: stableNodePath(process.execPath, { platform: process.platform, home: homedir(), env: process.env }),
     agentPath: resolve(here, "claudemeter-agent.mjs"),
     cliPath: resolve(here, "claudemeter.mjs"),
     firefox,

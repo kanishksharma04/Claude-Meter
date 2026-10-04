@@ -38,13 +38,16 @@ account, no analytics and no crash reporting.
 In your browser's extension storage on your computer, unencrypted, like any
 extension's data — settings and recent readings in the extension's storage area, and
 the long-term archive of readings in a local database (IndexedDB) beside it. "Clear
-stored data" in Options removes both; uninstalling the
-extension removes all of it. If you use the companion, it also writes a small status
+stored data" in Options removes every reading and log from both, and the Admin API
+key if you saved one; your settings stay, webhook addresses among them. "Reset
+everything" removes those too, and gives back any optional permission you granted.
+Uninstalling the extension removes all of it. If you use the companion, it also writes a small status
 file to its own folder in your home directory, which you can switch off.
 
 If you turn on automatic backups, the history (not the settings) is also written to
 files in a `ClaudeMeter` folder inside your Downloads folder. They are ordinary,
-unencrypted files on your disk: "Clear stored data" does not remove them, and anything
+unencrypted files on your disk: neither "Clear stored data" nor "Reset everything"
+removes them, and anything
 that syncs or backs up your Downloads folder will take them along.
 
 ## What leaves your computer

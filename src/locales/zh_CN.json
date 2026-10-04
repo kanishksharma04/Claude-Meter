@@ -181,7 +181,7 @@
   "Open Debug Captures →": "打开调试记录 →",
   "Data": "数据",
   "Clear stored data": "清除已保存的数据",
-  "Removes all captured requests, usage history, and org lookup cache.": "删除所有已捕获的请求、用量历史和组织缓存。",
+  "Removes every reading and log ClaudeMeter has kept, the Admin API key and the organisation lookup. Your settings stay.": "删除 ClaudeMeter 保存的所有读数和日志、Admin API 密钥以及组织查询缓存。您的设置会保留。",
   "Current thresholds": "当前阈值",
   "New threshold, in percent": "新阈值(百分比)",
   "Time of the daily digest": "每日摘要的时间",
@@ -325,7 +325,9 @@
   "The last 30": "最近 30 个",
   "All of them": "全部保留",
   "Back up now": "立即备份",
-  "Restore from a backup…": "从备份恢复…"
+  "Restore from a backup…": "从备份恢复…",
+  "Reset everything": "全部重置",
+  "Clears the data as above, puts every setting back to its default (webhook addresses included) and gives back the optional permissions. Backup files in Downloads are yours and stay.": "像上面一样清除数据，将所有设置恢复为默认值（包括 Webhook 地址），并交还可选权限。下载文件夹中的备份文件属于您，会保留。"
  },
  "patterns": [
   [

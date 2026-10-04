@@ -61,9 +61,21 @@ manifest naming the program and the one extension allowed to use it.
 | **Linux** | `~/.claudemeter/claudemeter-agent` | `~/.config/<browser>/NativeMessagingHosts/com.claudemeter.agent.json` | `~/.claudemeter/bin/claudemeter` |
 | **Windows** | `%LOCALAPPDATA%\ClaudeMeter\claudemeter-agent.cmd` | `%LOCALAPPDATA%\ClaudeMeter\com.claudemeter.agent.json`, pointed to by `HKCU\Software\<browser>\NativeMessagingHosts\com.claudemeter.agent` | `%LOCALAPPDATA%\ClaudeMeter\bin\claudemeter.cmd` |
 
-The launcher is a two-line script that runs the companion with the full path of the
+The launcher is a short script that runs the companion with the full path of the
 Node.js you ran the installer with. That matters: a browser started from the dock or
 the Start menu doesn't have your shell's `PATH`, so a bare `node` often isn't found.
+
+Which path gets written down matters too. Node reports where it really is, and under
+Homebrew or a version manager that is a folder named after the release
+(`/opt/homebrew/Cellar/node/26.0.0/…`, `~/.nvm/versions/node/v22.1.0/…`), which the
+next upgrade removes. So the installer names a lasting path instead where one points
+at the same Node today (`/opt/homebrew/bin/node`, `/usr/local/bin/node`, Volta's or
+fnm's default); and if the path in the launcher has gone anyway, the launcher looks
+in those places, under `~/.nvm/versions`, and on `PATH`, and runs the first Node it
+finds. Any Node.js 18 or newer will do. If it finds none, the browser reports that
+the companion stopped at once, and running the installer again puts it right. The
+Windows launcher does the same with `PATH` and `%ProgramFiles%\nodejs`; like the rest
+of the Windows path, that has not been run on Windows.
 
 It covers Chrome, Chromium, Edge, Brave and Vivaldi. On macOS and Linux it writes a
 manifest for each of those it finds a profile for; on Windows it sets the registry

@@ -181,7 +181,7 @@
   "Open Debug Captures →": "Debug-Mitschnitte öffnen →",
   "Data": "Daten",
   "Clear stored data": "Gespeicherte Daten löschen",
-  "Removes all captured requests, usage history, and org lookup cache.": "Entfernt alle mitgeschnittenen Anfragen, den Nutzungsverlauf und den Organisations-Cache.",
+  "Removes every reading and log ClaudeMeter has kept, the Admin API key and the organisation lookup. Your settings stay.": "Entfernt alle Messwerte und Protokolle, die ClaudeMeter gespeichert hat, den Admin-API-Schlüssel und die Organisationsabfrage. Die Einstellungen bleiben erhalten.",
   "Current thresholds": "Aktuelle Schwellen",
   "New threshold, in percent": "Neue Schwelle, in Prozent",
   "Time of the daily digest": "Uhrzeit der Tagesübersicht",
@@ -325,7 +325,9 @@
   "The last 30": "Die letzten 30",
   "All of them": "Alle",
   "Back up now": "Jetzt sichern",
-  "Restore from a backup…": "Aus Sicherung wiederherstellen…"
+  "Restore from a backup…": "Aus Sicherung wiederherstellen…",
+  "Reset everything": "Alles zurücksetzen",
+  "Clears the data as above, puts every setting back to its default (webhook addresses included) and gives back the optional permissions. Backup files in Downloads are yours and stay.": "Löscht die Daten wie oben, setzt alle Einstellungen auf die Standardwerte zurück (auch die Webhook-Adressen) und gibt die optionalen Berechtigungen zurück. Sicherungsdateien im Download-Ordner bleiben erhalten."
  },
  "patterns": [
   [

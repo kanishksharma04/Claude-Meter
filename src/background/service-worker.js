@@ -994,7 +994,10 @@ async function maybeNotify(previousSnapshot, snapshot) {
   let alerted = alertedThresholds;
 
   for (const bucket of bucketsOf(snapshot)) {
-    const before = previousByLabel.get(bucket.label) ?? 0;
+    // A limit the last reading didn't have hasn't crossed anything: it has only just been seen
+    // (a new model limit, extra usage switched on, a reading that had been partial).
+    if (!previousByLabel.has(bucket.label)) continue;
+    const before = previousByLabel.get(bucket.label);
     const crossed = crossedThreshold(settings.notifyThresholds, before, bucket.percentUsed);
     if (crossed == null || alreadyAlerted(alerted, bucket, crossed, snapshot.fetchedAt)) continue;
 

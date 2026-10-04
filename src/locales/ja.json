@@ -181,7 +181,7 @@
   "Open Debug Captures →": "デバッグ記録を開く →",
   "Data": "データ",
   "Clear stored data": "保存したデータを消去",
-  "Removes all captured requests, usage history, and org lookup cache.": "取得したリクエスト、使用量の履歴、組織のキャッシュをすべて削除します。",
+  "Removes every reading and log ClaudeMeter has kept, the Admin API key and the organisation lookup. Your settings stay.": "ClaudeMeter が保存したすべての計測値とログ、Admin API キー、組織情報のキャッシュを削除します。設定は残ります。",
   "Current thresholds": "現在のしきい値",
   "New threshold, in percent": "新しいしきい値 (パーセント)",
   "Time of the daily digest": "日次まとめの時刻",
@@ -325,7 +325,9 @@
   "The last 30": "直近の30件",
   "All of them": "すべて",
   "Back up now": "今すぐバックアップ",
-  "Restore from a backup…": "バックアップから復元…"
+  "Restore from a backup…": "バックアップから復元…",
+  "Reset everything": "すべてリセット",
+  "Clears the data as above, puts every setting back to its default (webhook addresses included) and gives back the optional permissions. Backup files in Downloads are yours and stay.": "上記と同じくデータを消去し、すべての設定を初期値に戻し（Webhook のアドレスを含む）、任意の権限を返上します。ダウンロードフォルダ内のバックアップファイルはそのまま残ります。"
  },
  "patterns": [
   [

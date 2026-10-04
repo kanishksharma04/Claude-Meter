@@ -496,7 +496,9 @@ address you gave, after the browser has asked you to allow that one site.
   are switched on and given back when they are switched off. The service worker gzips
   the history with `CompressionStream` and hands it to `downloads.download()` as a
   `data:` address (a service worker can't make a `blob:` one; Firefox's event page
-  can, and does), then uses `downloads.removeFile()` to delete its own older backups
+  can, and does), then uses `downloads.removeFile()` to delete its own older backups.
+  A `data:` address has no practical size limit here: files of 3 MB and 20 MB were
+  written this way in Chromium, and two years of readings is about 400 KB
 - **IndexedDB** — every reading, the hourly log and the session windows (`src/lib/archive.js`), with
   `unlimitedStorage` so the browser doesn't cap or evict it
 - **`chrome.action`** — toolbar popup, hover title, badge text, and the gauge icon,
@@ -1180,7 +1182,9 @@ first run of this one empties that list once (`capturesScrubbed`).
   interval set.
 - **Notifications** — desktop notification when session or weekly usage crosses one of
   your thresholds (80% and 95% to begin with; add any others, up to eight). It only
-  fires on the transition, not on every fetch above a threshold. While alerts are
+  fires on the transition, not on every fetch above a threshold, and a limit that has
+  only just appeared in the readings (a new model limit, extra usage switched on) is
+  not a transition, wherever it stands. While alerts are
   snoozed this card says until when and offers Resume.
 - **Pace alert** — Off, or at 1.5× / 2× (default) / 3× your usual pace for the day so far.
 - **Reset alert** — Off, or when the limit had reached 80% / 90% (default) / 100%.
@@ -1241,7 +1245,16 @@ first run of this one empties that list once (`capturesScrubbed`).
   up now; Restore from a backup.
 - **Clear stored data** — wipes snapshot, history, the archive, the hourly usage log, the session
   window log, your chart notes, the spike log, the extra-usage record, message costs,
-  the limit-hit log, org cache, and debug captures.
+  the limit-hit log, org cache, and debug captures — and the Admin API key with the
+  cost report read with it (the API spend switch goes off and `api.anthropic.com` is
+  given back), the record of webhook deliveries, and what the refresh pace and the
+  once-a-day alerts remember. Settings stay, and so does the list of backups already
+  written, which is what lets old ones be tidied.
+- **Reset everything** — the above, and every setting back to its default: webhook
+  addresses, thresholds, colours, the chosen organisation, the snooze, the list of
+  backups. Optional permissions (the webhook sites, `api.anthropic.com`, downloads)
+  are given back. It leaves the extension as a new install would find it, apart from
+  backup files already in Downloads, which are yours.
 
 ## Author
 

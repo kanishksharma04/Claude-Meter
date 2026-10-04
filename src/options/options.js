@@ -7,6 +7,7 @@ import {
   getAdminKey,
   setAdminKey,
   clearAllData,
+  resetEverything,
   getOrgCache,
   restoreLogs,
   onStorageChanged,
@@ -19,7 +20,7 @@ import { MAX_EXTRA_ORGS } from "../lib/orgs.js";
 import { detectBrowser, companionInstallCommand } from "../lib/platform.js";
 import { LANGUAGES, localizePage } from "../lib/i18n.js";
 import { formatClock, formatHour, timeAgo } from "../lib/time-format.js";
-import { SERVICES, checkWebhookUrl } from "../lib/webhooks.js";
+import { SERVICES, WEBHOOK_ORIGINS, checkWebhookUrl } from "../lib/webhooks.js";
 import { SOUNDS } from "../lib/sounds.js";
 import { buildResetCalendar, weeklyResets, reminderLabel, REMINDER_OPTIONS, CALENDAR_FILENAME } from "../lib/ics.js";
 import {
@@ -1095,13 +1096,29 @@ document.getElementById("restoreFile").addEventListener("change", async (event) 
 renderBackup();
 
 clearDataBtn.addEventListener("click", async () => {
-  if (!confirm("Clear all stored ClaudeMeter data (captures + usage snapshot + history + the long-term archive + hourly usage log + session windows + chart notes + spikes + extra-usage record + message costs + limit-hit log)?")) return;
+  if (!confirm("Clear all stored ClaudeMeter data (captures + usage snapshot + history + the long-term archive + hourly usage log + session windows + chart notes + spikes + extra-usage record + message costs + limit-hit log + the Admin API key)? Your settings stay.")) return;
   await clearAllData();
   await clearArchive().catch(() => {});
+  // The key went with the data, so the panel it fed is switched off and its site given back.
+  await setSettings({ apiSpend: false });
+  chrome.permissions.remove({ origins: [API_ORIGIN] }).catch(() => {});
+  renderApiSpend();
   renderArchiveInfo();
   clearDataBtn.textContent = "Cleared!";
   document.getElementById("clearStatus").textContent = "Stored data cleared.";
   setTimeout(() => (clearDataBtn.textContent = "Clear stored data"), 1200);
+});
+
+document.getElementById("resetAllBtn").addEventListener("click", async () => {
+  if (!confirm("Reset ClaudeMeter completely? Every reading, log, key and webhook address is removed and every setting goes back to its default, as on a new install. Backup files already in Downloads are left alone. This can't be undone.")) return;
+  await resetEverything();
+  await clearArchive().catch(() => {});
+  // One at a time: asking for several at once fails as a whole if any one of them was never granted.
+  for (const origin of [...WEBHOOK_ORIGINS, API_ORIGIN]) await chrome.permissions.remove({ origins: [origin] }).catch(() => {});
+  await chrome.permissions.remove(DOWNLOADS).catch(() => {});
+  // A first reading for the clean slate, then the page as a new install would show it.
+  await chrome.runtime.sendMessage({ type: "CLAUDEMETER_REFRESH" }).catch(() => null);
+  location.reload();
 });
 
 document.getElementById("resumeAlertsBtn").addEventListener("click", () => setSnoozeUntil(0));

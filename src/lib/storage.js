@@ -555,6 +555,10 @@ export function clearAllData() {
   return withLock("reading", async () => {
     // What a version before the archive kept here, if the move hasn't happened yet. The archive itself is cleared by clearArchive().
     await chrome.storage.local.remove(["history", "usageLog", "sessionWindows"]);
+    // Not readings, but kept because of them or beside them: the key the cost report was read with,
+    // how the last webhook deliveries went, and what the refresh and the once-a-day alerts remember.
+    // The record of backups stays — the files are still on disk, and it is how old ones get tidied.
+    await chrome.storage.local.remove(["adminApiKey", "webhookStatus", "refreshPace", "paceAlertDay", "digestDay"]);
     await chrome.storage.local.set({
       latestSnapshot: null,
       __debug_captures: [],
@@ -579,6 +583,22 @@ export function clearAllData() {
       orgState: {},
     });
   });
+}
+
+/**
+ * Back to a new install: every reading, log, key and setting gone. (The
+ * archive is emptied separately, by clearArchive(); optional permissions are
+ * the page's to give back.)
+ */
+export function resetEverything() {
+  return withLock("reading", () =>
+    withLock("settings", async () => {
+      await chrome.storage.local.clear();
+      await chrome.storage.session?.clear?.();
+      // Nothing an older version left behind remains to be put right.
+      await chrome.storage.local.set({ logsMoved: true, capturesScrubbed: true });
+    })
+  );
 }
 
 export function onStorageChanged(callback) {

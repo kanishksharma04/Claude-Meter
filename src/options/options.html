@@ -623,7 +623,9 @@
       <p class="hint" id="restoreInfo" data-no-i18n role="status" hidden></p>
       <button id="clearDataBtn" class="danger" type="button">Clear stored data</button>
       <span class="sr-only" id="clearStatus" role="status"></span>
-      <p class="hint">Removes all captured requests, usage history, and org lookup cache.</p>
+      <p class="hint">Removes every reading and log ClaudeMeter has kept, the Admin API key and the organisation lookup. Your settings stay.</p>
+      <button id="resetAllBtn" class="danger" type="button">Reset everything</button>
+      <p class="hint">Clears the data as above, puts every setting back to its default (webhook addresses included) and gives back the optional permissions. Backup files in Downloads are yours and stay.</p>
     </section>
 
     <script type="module" src="options.js"></script>
