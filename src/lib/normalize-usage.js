@@ -11,7 +11,7 @@
 // Known shape (reverse-engineered, confirmed against multiple open-source
 // claude.ai usage extensions as of mid-2026):
 //   {
-//     "five_hour":       { "utilization": <0-1 or 0-100>, "resets_at": "<ISO8601>" },
+//     "five_hour":       { "utilization": <0-100>, "resets_at": "<ISO8601>" },
 //     "seven_day":       { "utilization": ..., "resets_at": ... },
 //     "seven_day_opus":  { "utilization": ..., "resets_at": ... },
 //     // possibly other "seven_day_<model>" keys
@@ -30,13 +30,28 @@ const SESSION_KEY_PATTERN = /^five_hour/i;
 const WEEKLY_KEY_PATTERN = /^seven_day/i;
 const PLAN_FIELD_CANDIDATES = ["rate_limit_tier", "plan_tier", "plan", "subscription_tier", "tier"];
 
+/**
+ * A percentage as the rest of the extension uses it: a whole number, 0 to 100.
+ * 100 means the limit is used up, and a great deal hangs on it — a lockout is
+ * logged, the countdown shown on claude.ai — so it is never reached by rounding:
+ * 99.6 is 99, and only 100 or more is 100.
+ */
+export function wholePercent(value) {
+  if (typeof value !== "number" || Number.isNaN(value)) return null;
+  if (value >= 100) return 100;
+  return Math.max(0, Math.min(99, Math.round(value)));
+}
+
+/**
+ * "utilization" as a percentage. It is taken to be on a 0–100 scale, always:
+ * that is what the endpoint sends, and guessing otherwise from the size of the
+ * number (reading 0.5 as a half rather than as half a percent) turns the first
+ * minutes of every window into a false "50% used". Should claude.ai ever send
+ * 0–1 fractions instead, every limit will read 0% or 1% — plainly wrong, and
+ * not a false alarm.
+ */
 function toPercent(rawValue) {
-  if (typeof rawValue !== "number" || Number.isNaN(rawValue)) return null;
-  // Below 1 is read as a 0–1 fraction. Exactly 1 is read as 1%, not 100%: on
-  // the 0–100 scale the endpoint uses today that's an everyday reading, and
-  // calling it "full" would raise a false lockout.
-  const pct = rawValue < 1 ? rawValue * 100 : rawValue;
-  return Math.max(0, Math.min(100, Math.round(pct)));
+  return wholePercent(rawValue);
 }
 
 function toEpochMs(rawValue) {
@@ -95,7 +110,7 @@ export function normalizeExtraUsage(block) {
   if (typeof flag !== "boolean" && used == null && limit == null) return null;
 
   const percentUsed =
-    used != null && limit > 0 ? Math.max(0, Math.min(100, Math.round((used / limit) * 100))) : toPercent(block.utilization);
+    used != null && limit > 0 ? wholePercent((used / limit) * 100) : toPercent(block.utilization);
   return {
     enabled: typeof flag === "boolean" ? flag : true,
     used,

@@ -860,6 +860,17 @@ first run of this one empties that list once (`capturesScrubbed`).
   (`UNPARSEABLE_RESPONSE`), so the last good reading stays on screen with the usual
   "Couldn't refresh" warning and the health page says the API has probably changed.
   Either way the numbers are stale or partial until the parser is updated.
+- Percentages are whole numbers, and `utilization` is read as being on a 0–100 scale,
+  whatever its size: 0.5 is half a percent (shown as 1%, by ordinary rounding), not a
+  half. An earlier version guessed that anything under 1 was a 0–1 fraction,
+  which would have shown the start of every window as tens of percent used. A limit
+  only reads 100% — which is what logs a lockout and starts the countdown on claude.ai
+  — when the endpoint says 100 or more; 99.6 is 99%. The scale is taken from the
+  other open-source extensions and has **not been checked against a live account**
+  from this repository: if every limit reads 0% or 1% while you are plainly using
+  Claude, the endpoint is sending fractions, and that is worth an issue. To see what
+  it sends, switch on Developer mode, open claude.ai's usage settings, and look at
+  the capture on the debug page.
 - Plan tier badge (Free/Pro/Max 5x/Max 20x/Team/Enterprise) is rarely populated — the
   usage endpoint itself doesn't return it, and the org-list endpoint's plan field name
   isn't confirmed, so the badge is best-effort and often simply hidden.
