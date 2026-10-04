@@ -1038,7 +1038,7 @@ setInterval(() => {
 
 // Translate the page before it first draws, so it doesn't flash English; and again from scratch if the language changes.
 let pageLanguage = null;
-const translated = getAll().then(async ({ settings }) => {
+const translated = getAll({ logs: false }).then(async ({ settings }) => {
   pageLanguage = settings.language;
   await localizePage(settings);
 });

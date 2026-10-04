@@ -1,14 +1,21 @@
 // Thin wrapper around chrome.storage.local with schema defaults.
 // Shared by the background worker, popup, options, and debug pages.
+//
+// Not everything it hands out is in chrome.storage. The readings themselves
+// ("the history"), the hourly usage log and the session windows grow with
+// every reading, and chrome.storage rewrites a key whole each time and sends
+// the old and new values to every listening page — so those three live in
+// IndexedDB (lib/archive.js), a record at a time, and getAll() reads them from
+// there. What stays here is small: the latest reading, the settings, the
+// short event logs.
 
 import { appendMessage, prunePending } from "./message-cost.js";
 import { addLimitHit, observeFullBuckets } from "./limit-hits.js";
 import { DEFAULT_BUCKET_PREFS } from "./bucket-prefs.js";
 import { buildDemoState, buildDemoAnalytics } from "./demo-data.js";
-import { foldSnapshot, buildUsageLog } from "./usage-log.js";
-import { foldWindow, buildWindows } from "./session-windows.js";
+import { fileReading, readLogs, readReadings, putLogs, restoreRecords, seedRecords, RECENT_READINGS } from "./archive.js";
 import { addAnnotation, removeAnnotation } from "./annotations.js";
-import { detectSpike, addSpike } from "./spikes.js";
+import { detectSpike, addSpike, SPIKE_WINDOW_MS } from "./spikes.js";
 import { LOG_KEYS, logsToRestore } from "./backup.js";
 import { noteActivity, elsewherePoints } from "./attribution.js";
 import { foldExtraUsage } from "./extra-usage.js";
@@ -52,10 +59,11 @@ export function withLock(name, work) {
 }
 
 export const MAX_DEBUG_CAPTURES = 20;
-// Enough for the dashboard chart to cover about a day at the default refresh interval,
-// and for the sums that compare one reading with the last. Every reading is also
-// filed in the archive (lib/archive.js), which is not capped.
-export const MAX_HISTORY = 500;
+// How many of the latest readings getAll() hands out as `history`: enough for the
+// dashboard chart to cover about a day at the default refresh interval, and for the
+// sums that compare one reading with the last. The archive they are read from
+// (lib/archive.js) keeps every one.
+export const MAX_HISTORY = RECENT_READINGS;
 
 export const DEFAULT_SETTINGS = {
   refreshIntervalMinutes: 5,
@@ -114,7 +122,7 @@ export const DEFAULT_SETTINGS = {
 
 export const DEFAULT_STATE = {
   latestSnapshot: null,
-  history: [],
+  history: [], // the latest readings, oldest first — read from the archive, not stored here
   settings: DEFAULT_SETTINGS,
   __debug_captures: [],
   orgCache: null,
@@ -126,8 +134,8 @@ export const DEFAULT_STATE = {
   pendingMessages: {}, // requestId -> { before snapshot, ... } for replies still streaming
   limitHits: [], // "limit reached" events, oldest first (see lib/limit-hits.js)
   snoozeUntil: 0, // epoch ms until which alerts are paused; 0 = not snoozed (see lib/snooze.js)
-  usageLog: [], // one compact record per hour, eight weeks deep (see lib/usage-log.js)
-  sessionWindows: [], // past 5-hour session windows, oldest first (see lib/session-windows.js)
+  usageLog: [], // one compact record per hour, eight weeks deep (see lib/usage-log.js) — in the archive too
+  sessionWindows: [], // past 5-hour session windows, oldest first (see lib/session-windows.js) — likewise
   annotations: [], // the user's notes on the chart, oldest first (see lib/annotations.js)
   spikes: [], // sudden jumps in usage, oldest first (see lib/spikes.js)
   extraUsage: null, // latest extra-usage spend and cap, when the account has it (see lib/extra-usage.js)
@@ -140,12 +148,29 @@ export const DEFAULT_STATE = {
   claudeCodeStatus: null, // { ok, at, version? , problem? } — how the last attempt to reach the companion went
 };
 
-export async function getAll() {
-  const stored = await chrome.storage.local.get([...Object.keys(DEFAULT_STATE), "demoState"]);
+/** The keys of DEFAULT_STATE that chrome.storage actually holds. */
+const STORED_KEYS = Object.keys(DEFAULT_STATE).filter((key) => !["history", "usageLog", "sessionWindows"].includes(key));
+
+/**
+ * Everything, with defaults filled in.
+ * @param {object} [options]
+ * @param {boolean} [options.logs] - whether to read `history`, `usageLog` and `sessionWindows` from the archive
+ *   as well. A caller that only wants the latest reading or the settings passes false and is spared the trip.
+ */
+export async function getAll({ logs = true } = {}) {
+  const stored = await chrome.storage.local.get([...STORED_KEYS, "demoState"]);
   const settings = withDefaults(stored.settings);
+  // The three that live in the archive. If it can't be opened, the rest is still worth having.
+  const filed =
+    logs && !settings.demoMode
+      ? await readLogs(stored.orgCache?.orgId ?? "", { recent: MAX_HISTORY }).catch((error) => {
+          console.warn("[ClaudeMeter] could not read the archive", error);
+          return {};
+        })
+      : {};
   // Demo mode swaps made-up readings in here, at read time. The real ones stay
   // in storage untouched, so switching it off shows exactly what was there before.
-  const data = settings.demoMode ? { ...stored, ...demoData(stored.demoState) } : stored;
+  const data = settings.demoMode ? { ...stored, ...demoData(stored.demoState) } : { ...stored, ...filed };
   return {
     latestSnapshot: data.latestSnapshot ?? DEFAULT_STATE.latestSnapshot,
     history: data.history ?? DEFAULT_STATE.history,
@@ -196,29 +221,54 @@ export async function setDemoState(demoState) {
 }
 
 /**
- * Stores a new snapshot as the latest, appends it to the capped rolling
- * history, and folds it into the long-term records: the hourly usage log and
- * the list of session windows.
+ * Stores a new reading as the latest and files it: in the archive's readings,
+ * and folded into the hourly usage log and the list of session windows.
+ * @returns {Promise<object>} the reading as stored
  */
 export function setLatestSnapshot(reading) {
   return withLock("history", async () => {
-    const stored = await chrome.storage.local.get(["history", "usageLog", "sessionWindows", "localActivity"]);
-    const history = stored.history ?? [];
+    const { latestSnapshot: previous = null, localActivity, orgCache } = await chrome.storage.local.get(["latestSnapshot", "localActivity", "orgCache"]);
     // Mark the reading with whatever part of its rise this browser had no hand in.
-    const elsewhere = elsewherePoints(history.at(-1), reading, stored.localActivity);
+    const elsewhere = elsewherePoints(previous, reading, localActivity);
     const snapshot = elsewhere > 0 ? { ...reading, elsewhere } : reading;
-    // First run with either record: seed it from whatever history is already there.
-    const usageLog = stored.usageLog ?? buildUsageLog(history);
-    const sessionWindows = stored.sessionWindows ?? buildWindows(history);
-    await chrome.storage.local.set({
-      latestSnapshot: snapshot,
-      history: [...history, snapshot].slice(-MAX_HISTORY),
-      usageLog: foldSnapshot(usageLog, history.at(-1) ?? null, snapshot),
-      sessionWindows: foldWindow(sessionWindows, snapshot),
-      lastError: null,
+    // Filed first: pages redraw when the latest reading changes, and should find it in the history when they do.
+    await fileReading(snapshot, previous, orgCache?.orgId ?? "").catch((error) => {
+      // The archive is the long memory, not the reading: one that couldn't be filed is still the latest.
+      console.warn("[ClaudeMeter] could not file the reading", error);
     });
+    await chrome.storage.local.set({ latestSnapshot: snapshot, lastError: null });
     return snapshot;
   });
+}
+
+/**
+ * The move out of chrome.storage, made once. Versions before this one kept the
+ * history, the hourly log and the session windows there — for the main
+ * organisation, and inside `orgState` for any set aside by a switch. They are
+ * put into the archive under their organisation and taken out of storage.
+ * The caller holds the "reading" lock, so no reading lands half way through.
+ * @returns {Promise<boolean>} whether there was anything to do
+ */
+export async function moveLogsToArchive() {
+  const stored = await chrome.storage.local.get(["logsMoved", "history", "usageLog", "sessionWindows", "orgState", "orgCache"]);
+  if (stored.logsMoved) return false;
+
+  const real = (snapshot) => Boolean(snapshot?.session) || (snapshot?.weekly ?? []).length > 0;
+  const orgState = stored.orgState ?? {};
+  const sets = [[stored.orgCache?.orgId ?? "", stored], ...Object.entries(orgState)];
+  for (const [orgId, state] of sets) {
+    const history = (state.history ?? []).filter(real);
+    // The readings, and before the first of them an hourly outline from the log, so the chart's long ranges reach back.
+    await restoreRecords(seedRecords({ history, usageLog: state.usageLog ?? [] }, orgId));
+    await putLogs(orgId, { usageLog: state.usageLog ?? [], sessionWindows: state.sessionWindows ?? [] });
+  }
+
+  const slim = Object.fromEntries(
+    Object.entries(orgState).map(([orgId, { history, usageLog, sessionWindows, ...rest }]) => [orgId, rest])
+  );
+  await chrome.storage.local.remove(["history", "usageLog", "sessionWindows"]);
+  await chrome.storage.local.set({ orgState: slim, logsMoved: true, archiveSeeded: true });
+  return sets.some(([, state]) => (state.history ?? []).length + (state.usageLog ?? []).length + (state.sessionWindows ?? []).length > 0);
 }
 
 export async function setLastError(errorInfo) {
@@ -243,16 +293,14 @@ export async function setOrgSnapshots(entries) {
 }
 
 /**
- * Everything stored that is about one organisation's usage. When the main
+ * Everything in storage that is about one organisation's usage. When the main
  * organisation changes, these are set aside under the old one's id and the new
- * one's are brought back — so each keeps its own history, and one's readings
- * are never measured against the other's.
+ * one's are brought back — so each keeps its own, and one's readings are never
+ * measured against the other's. The history, the hourly log and the session
+ * windows need no such exchange: the archive files them by organisation.
  */
 const ORG_STATE_KEYS = [
   "latestSnapshot",
-  "history",
-  "usageLog",
-  "sessionWindows",
   "limitHits",
   "spikes",
   "extraUsage",
@@ -447,7 +495,10 @@ export function noteFullBuckets(snapshot) {
  */
 export function recordSpike(snapshot, percent) {
   return withLock("spikes", async () => {
-    const { history = [], spikes = [] } = await chrome.storage.local.get(["history", "spikes"]);
+    if (!(percent > 0)) return null;
+    const { spikes = [], orgCache } = await chrome.storage.local.get(["spikes", "orgCache"]);
+    // Only the last few minutes matter (lib/spikes.js); a little more is read than it will look at.
+    const history = await readReadings(orgCache?.orgId ?? "", snapshot.fetchedAt - 2 * SPIKE_WINDOW_MS, snapshot.fetchedAt).catch(() => []);
     const spike = detectSpike(history, snapshot, { percent, since: spikes.at(-1)?.at ?? 0 });
     if (spike) await chrome.storage.local.set({ spikes: addSpike(spikes, spike) });
     return spike;
@@ -475,13 +526,19 @@ export function removeNote(id) {
 /**
  * Puts a backup's logs back where this browser has none of its own (see
  * logsToRestore() in lib/backup.js). The readings go to the archive separately.
+ * @param {object} logs - by LOG_KEYS
+ * @param {string} [orgId] - the organisation the hourly log and the session windows belong to
  * @returns {Promise<string[]>} the keys written
  */
-export function restoreLogs(logs) {
+export function restoreLogs(logs, orgId = "") {
   return withLock("reading", async () => {
-    const restored = logsToRestore(await chrome.storage.local.get(LOG_KEYS), logs);
+    const filed = await readLogs(orgId, { recent: 0 }).catch(() => ({}));
+    const current = { ...(await chrome.storage.local.get(LOG_KEYS)), usageLog: filed.usageLog ?? [], sessionWindows: filed.sessionWindows ?? [] };
+    const { usageLog, sessionWindows, ...restored } = logsToRestore(current, logs);
+    // Two of the logs live in the archive; the rest in storage.
+    if (usageLog || sessionWindows) await putLogs(orgId, { usageLog, sessionWindows });
     if (Object.keys(restored).length > 0) await chrome.storage.local.set(restored);
-    return Object.keys(restored);
+    return [...Object.keys(restored), ...(usageLog ? ["usageLog"] : []), ...(sessionWindows ? ["sessionWindows"] : [])];
   });
 }
 
@@ -496,9 +553,10 @@ export async function clearDebugCaptures() {
 
 export function clearAllData() {
   return withLock("reading", async () => {
+    // What a version before the archive kept here, if the move hasn't happened yet. The archive itself is cleared by clearArchive().
+    await chrome.storage.local.remove(["history", "usageLog", "sessionWindows"]);
     await chrome.storage.local.set({
       latestSnapshot: null,
-      history: [],
       __debug_captures: [],
       orgCache: null,
       lastError: null,
@@ -506,8 +564,6 @@ export function clearAllData() {
       messageLog: [],
       pendingMessages: {},
       limitHits: [],
-      usageLog: [],
-      sessionWindows: [],
       annotations: [],
       spikes: [],
       localActivity: null,

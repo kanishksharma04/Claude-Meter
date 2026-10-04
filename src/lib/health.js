@@ -11,10 +11,11 @@
 //     userAgent: string,
 //     settings: object,                                         // as stored
 //     state: { latestSnapshot, lastError, refreshPace, orgCache, orgList, claudeCodeStatus, apiSpendStatus,
-//              webhookStatus, backupStatus, snoozeUntil, history, usageLog, messageLog, annotations },
+//              webhookStatus, backupStatus, snoozeUntil, messageLog, annotations },
 //     alarm: { scheduledTime, periodInMinutes } | null,         // the refresh alarm
 //     storageBytes: number | null,
 //     archive: { count, first } | null,                         // null when IndexedDB couldn't be opened
+//     logs: { hours, windows } | null,                          // how much the hourly log and the session windows hold
 //     notifications: "granted" | "denied" | null,               // null when the browser can't say
 //     hasAdminKey: boolean,
 //   }
@@ -179,9 +180,10 @@ export function formatBytes(bytes) {
 
 function storageCheck({ storageBytes, archive }) {
   const title = "Storage";
-  const kept = `Settings and recent readings: ${formatBytes(storageBytes)}.`;
+  const kept = `Settings and the latest reading: ${formatBytes(storageBytes)}.`;
   if (!archive) {
-    return { id: "storage", title, status: "warn", detail: `${kept} The long-term archive can't be opened in this window, so the chart's longer ranges fall back to the hourly log.` };
+    // The history, the hourly log and the session windows all live there.
+    return { id: "storage", title, status: "fail", detail: `${kept} The archive can't be opened in this window, so the chart and the analytics have nothing to draw from. The latest reading and the alerts still work.` };
   }
   return { id: "storage", title, status: "ok", detail: `${kept} Archive: ${describeArchive(archive).replace(/\.$/, "").replace(/^Nothing archived yet$/, "nothing yet")}.` };
 }
@@ -282,7 +284,7 @@ const minutesSince = (epochMs, now) => (epochMs ? Math.round((now - epochMs) / 6
  * or notes, and no usage figures — only which limits exist.
  */
 export function buildDiagnostics(facts) {
-  const { now, manifest, granted, userAgent, settings, state, alarm, storageBytes, archive, notifications, hasAdminKey } = facts;
+  const { now, manifest, granted, userAgent, settings, state, alarm, storageBytes, archive, logs, notifications, hasAdminKey } = facts;
   const snapshot = state.latestSnapshot;
   const pace = state.refreshPace;
   return {
@@ -313,8 +315,8 @@ export function buildDiagnostics(facts) {
     backup: state.backupStatus ? { ok: state.backupStatus.ok, minutesAgo: minutesSince(state.backupStatus.at, now), bytes: state.backupStatus.bytes ?? null } : null,
     stored: {
       bytes: storageBytes,
-      history: (state.history ?? []).length,
-      usageLogHours: (state.usageLog ?? []).length,
+      usageLogHours: logs ? logs.hours : "unavailable",
+      sessionWindows: logs ? logs.windows : "unavailable",
       messageLog: (state.messageLog ?? []).length,
       notes: (state.annotations ?? []).length,
       archive: archive ? { readings: archive.count, days: archive.first ? Math.round((now - archive.first) / 86_400_000) : 0 } : "unavailable",

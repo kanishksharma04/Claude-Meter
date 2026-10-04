@@ -10,6 +10,7 @@
 //     version: 1,
 //     createdAt: number,
 //     extensionVersion: string,
+//     logsOrg: string | null,       // the organisation the usageLog and sessionWindows below belong to
 //     readings: Array<Record>,      // the archive (lib/archive.js), every organisation
 //     logs: {                       // what storage holds besides: eight weeks of hours, windows, events
 //       usageLog, sessionWindows, limitHits, spikes, extraUsageLog, messageLog, annotations
@@ -39,12 +40,15 @@ export const RETRY_MS = 60 * 60 * 1000;
 
 // ---------------------------------------------------------------- content --
 
-export function buildBackup({ now = Date.now(), extensionVersion = "", readings = [], logs = {} }) {
+export function buildBackup({ now = Date.now(), extensionVersion = "", readings = [], logs = {}, logsOrg = null }) {
   return {
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
     createdAt: now,
     extensionVersion,
+    // Whose hourly log and session windows these are: the organisation that was the main one.
+    // (Readings say so themselves; a backup from before the archive held these doesn't.)
+    logsOrg,
     readings,
     logs: Object.fromEntries(LOG_KEYS.map((key) => [key, Array.isArray(logs[key]) ? logs[key] : []])),
   };
@@ -66,6 +70,19 @@ export function checkBackup(parsed) {
   if (!(parsed.version <= BACKUP_VERSION)) return { ok: false, problem: "That backup was made by a newer version of ClaudeMeter. Update the extension, then restore it." };
   if (!Array.isArray(parsed.readings)) return { ok: false, problem: "That backup is damaged: it has no list of readings." };
   return { ok: true, backup: { ...parsed, logs: buildBackup({ logs: parsed.logs ?? {} }).logs } };
+}
+
+/**
+ * The organisation a backup's hourly log and session windows should be filed
+ * under: the one it names; failing that the main one here; failing that the
+ * one most of its readings are for (a new profile, not yet signed in).
+ */
+export function logsOrgOf(backup, currentOrgId = null) {
+  if (typeof backup?.logsOrg === "string") return backup.logsOrg;
+  if (currentOrgId) return currentOrgId;
+  const counts = new Map();
+  for (const record of backup?.readings ?? []) counts.set(record.o, (counts.get(record.o) ?? 0) + 1);
+  return [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
 }
 
 /**

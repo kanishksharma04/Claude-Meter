@@ -6,7 +6,7 @@
 import { getSettings, getAdminKey, getOrgCache, onStorageChanged } from "../lib/storage.js";
 import { buildChecks, summarizeChecks, buildDiagnostics, formatDiagnostics, issueUrl } from "../lib/health.js";
 import { REFRESH_ALARM_NAME } from "../lib/refresh-plan.js";
-import { archiveInfo } from "../lib/archive.js";
+import { archiveInfo, logCounts } from "../lib/archive.js";
 import { applyTheme, onSystemThemeChange } from "../lib/theme.js";
 import { localizePage } from "../lib/i18n.js";
 
@@ -25,8 +25,6 @@ const STATE_KEYS = [
   "webhookStatus",
   "backupStatus",
   "snoozeUntil",
-  "history",
-  "usageLog",
   "messageLog",
   "annotations",
 ];
@@ -59,6 +57,7 @@ async function gatherFacts() {
     getOrgCache(),
   ]);
   const archive = await archiveInfo(orgCache?.orgId ?? "").catch(() => null);
+  const logs = await logCounts().catch(() => null);
   return {
     now: Date.now(),
     manifest: chrome.runtime.getManifest(),
@@ -69,6 +68,7 @@ async function gatherFacts() {
     alarm: alarm ?? null,
     storageBytes,
     archive,
+    logs,
     notifications,
     hasAdminKey: Boolean(adminKey), // the key itself never comes near this page's output
   };

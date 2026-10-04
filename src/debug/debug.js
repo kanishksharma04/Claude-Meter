@@ -4,7 +4,7 @@ const listEl = document.getElementById("captureList");
 const template = document.getElementById("captureTemplate");
 
 async function render() {
-  const { __debug_captures: captures } = await getAll();
+  const { __debug_captures: captures } = await getAll({ logs: false });
 
   listEl.innerHTML = "";
 

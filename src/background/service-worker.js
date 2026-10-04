@@ -26,11 +26,12 @@ import {
   setDemoState,
   updateSettings,
   withLock,
+  moveLogsToArchive,
 } from "../lib/storage.js";
 import { fetchUsageSnapshot, fetchOrgs, fetchOtherOrgs, UsageApiError } from "../lib/usage-api.js";
 import { extraOrgs, orgIdFromUsageUrl } from "../lib/orgs.js";
 import { captureAllowed, captureKind, trimBody } from "../lib/capture-rules.js";
-import { archiveReadings, restoreRecords, seedRecords, readWholeArchive } from "../lib/archive.js";
+import { readWholeArchive, readLogs } from "../lib/archive.js";
 import {
   BACKUP_ALARM_NAME,
   LOG_KEYS,
@@ -262,7 +263,7 @@ function setThreadChars(conversationId, change) {
 }
 
 async function recordMessageStart(event) {
-  let { latestSnapshot: before } = await getAll();
+  let { latestSnapshot: before } = await getAll({ logs: false });
   if (!before || Date.now() - before.fetchedAt > BEFORE_MAX_AGE_MS) {
     if (await backingOff()) return; // this message goes unmeasured rather than adding to the trouble
     const result = await refreshUsage();
@@ -320,7 +321,7 @@ async function recordLimitHit(event) {
   // Refresh first: a hit usually means the numbers we hold are behind, and the
   // fresh reading can supply a reset time the response didn't carry.
   const result = await refreshUsage({ notBefore: Date.now() });
-  const snapshot = result.ok ? result.snapshot : (await getAll()).latestSnapshot;
+  const snapshot = result.ok ? result.snapshot : (await getAll({ logs: false })).latestSnapshot;
 
   const hit = {
     at: event.timestamp ?? Date.now(),
@@ -416,7 +417,7 @@ async function applyDemoMode(on) {
   if (on) return refreshDemo();
   await setDemoState(null);
   // Back to reality: show what was stored before, then try for a fresh reading.
-  await updateToolbar((await getAll()).latestSnapshot);
+  await updateToolbar((await getAll({ logs: false })).latestSnapshot);
   await refreshUsage();
 }
 
@@ -439,7 +440,8 @@ function applySnapshot(snapshot, { generation = orgGeneration } = {}) {
     const overtaken = previous && snapshot.fetchedAt <= previous.fetchedAt && previous.fetchedAt <= Date.now() + CLOCK_SLACK_MS;
     if (overtaken) return false;
 
-    await archiveSnapshot(await setLatestSnapshot(snapshot));
+    await moveLogs(); // only ever does anything once, on the first reading after an update
+    await setLatestSnapshot(snapshot);
     if (snapshot.extraUsage) await setExtraUsage(snapshot.extraUsage, snapshot.fetchedAt);
     await noteFullBuckets(snapshot);
     await updateToolbar(snapshot);
@@ -460,26 +462,17 @@ function applySnapshot(snapshot, { generation = orgGeneration } = {}) {
 }
 
 // ---------------------------------------------------------------- archive --
-// Every reading also goes into the archive (lib/archive.js): storage keeps the
-// last few hundred to work from, the archive keeps all of them for the chart's
-// longer ranges. The first time, it is started off with what storage already
-// holds, for the main organisation and any set aside by a switch.
+// The readings, the hourly log and the session windows are kept in IndexedDB
+// (lib/archive.js); lib/storage.js files each reading there as it stores it.
+// Versions before that kept all three in chrome.storage, and the first run of
+// this one moves them across. Callers hold the "reading" lock.
 
-async function archiveSnapshot(snapshot) {
+async function moveLogs() {
   try {
-    const orgId = (await getOrgCache())?.orgId ?? "";
-    const { archiveSeeded, history, usageLog, orgState = {} } = await chrome.storage.local.get(["archiveSeeded", "history", "usageLog", "orgState"]);
-    if (!archiveSeeded) {
-      await restoreRecords([
-        ...Object.entries(orgState).flatMap(([id, state]) => seedRecords(state, id)),
-        ...seedRecords({ history, usageLog }, orgId),
-      ]);
-      await chrome.storage.local.set({ archiveSeeded: true });
-    }
-    await archiveReadings([snapshot], orgId);
+    if (await moveLogsToArchive()) console.log(LOG_PREFIX, "moved the history into the archive");
   } catch (error) {
-    // The archive is extra: a reading that couldn't be filed is still the latest reading.
-    console.warn("[ClaudeMeter] could not archive the reading", error);
+    // Left where it was, and tried again with the next reading.
+    console.warn(LOG_PREFIX, "could not move the history into the archive", error);
   }
 }
 
@@ -521,8 +514,11 @@ async function writeBackup() {
     if (!chrome.downloads) throw new Error("chrome.downloads is undefined");
     const { backupKeep } = await getSettings();
     const readings = await readWholeArchive();
-    const logs = await chrome.storage.local.get(LOG_KEYS);
-    const backup = buildBackup({ now, extensionVersion: chrome.runtime.getManifest().version, readings, logs });
+    // The hourly log and the session windows are the main organisation's, read from the archive; the rest is in storage.
+    const logsOrg = (await getOrgCache())?.orgId ?? "";
+    const { usageLog, sessionWindows } = await readLogs(logsOrg, { recent: 0 });
+    const logs = { ...(await chrome.storage.local.get(LOG_KEYS)), usageLog, sessionWindows };
+    const backup = buildBackup({ now, extensionVersion: chrome.runtime.getManifest().version, readings, logs, logsOrg });
     const bytes = await gzip(JSON.stringify(backup));
     const filename = backupFilename(now);
 
@@ -580,7 +576,7 @@ const OTHER_ORGS_MIN_INTERVAL_MS = 60_000;
 let otherOrgsReadAt = 0;
 
 async function refreshOtherOrgs({ force = false } = {}) {
-  const { settings, orgList, orgSnapshots } = await getAll();
+  const { settings, orgList, orgSnapshots } = await getAll({ logs: false });
   const orgCache = await getOrgCache();
   if (settings.demoMode) return;
 
@@ -608,7 +604,7 @@ async function refreshOtherOrgs({ force = false } = {}) {
  */
 async function switchMainOrg(toId) {
   const orgCache = await getOrgCache();
-  const { orgList } = await getAll();
+  const { orgList } = await getAll({ logs: false });
   const target = toId ?? orgList.find((org) => org.chat)?.id ?? orgList[0]?.id;
   if (!orgCache || !target || orgCache.orgId === target) return;
 
@@ -619,7 +615,7 @@ async function switchMainOrg(toId) {
     await setOrgCache(null); // looked up afresh, as the new choice
   });
   otherOrgsReadAt = 0;
-  await updateToolbar((await getAll()).latestSnapshot);
+  await updateToolbar((await getAll({ logs: false })).latestSnapshot);
   await refreshUsage({ notBefore: Date.now() });
 }
 
@@ -873,7 +869,7 @@ function bucketsOf(snapshot) {
  * @returns {Promise<boolean>} whether it was sent
  */
 async function sendAlert({ id, message, discreet }) {
-  const { settings, snoozeUntil } = await getAll();
+  const { settings, snoozeUntil } = await getAll({ logs: false });
   if (!settings.notificationsEnabled || isSnoozed(snoozeUntil) || isQuiet(settings.quietHours)) return false;
 
   const text = settings.privacyMode ? discreet : message;
@@ -987,7 +983,7 @@ async function sendToWebhooks(text, only = null) {
 }
 
 async function maybeNotify(previousSnapshot, snapshot) {
-  const { settings } = await getAll();
+  const { settings } = await getAll({ logs: false });
   // Skip the very first successful fetch — there's no prior reading to
   // compare against, so "crossing" a threshold isn't meaningful yet.
   if (!previousSnapshot) return;
@@ -1138,7 +1134,7 @@ chrome.contextMenus?.onClicked.addListener((info, tab) => {
 
 /** Brings the menu and the wake-up alarm in line with the stored snooze. Runs whenever it changes. */
 async function syncSnooze() {
-  const { snoozeUntil } = await getAll();
+  const { snoozeUntil } = await getAll({ logs: false });
   const snoozed = isSnoozed(snoozeUntil);
 
   // An alarm, not a timer: the worker won't be alive when a 4-hour snooze runs out.
@@ -1175,7 +1171,7 @@ async function flashBadge(text, color) {
   } finally {
     badgeFlashing = false;
   }
-  const { latestSnapshot } = await getAll();
+  const { latestSnapshot } = await getAll({ logs: false });
   await updateToolbar(latestSnapshot);
 }
 
@@ -1184,7 +1180,7 @@ chrome.commands?.onCommand.addListener(async (command) => {
     const result = await refreshUsage();
     await flashBadge(result.ok ? "\u2713" : "!", result.ok ? "#3fb950" : "#e5484d");
   } else if (command === "toggle-snooze") {
-    const { snoozeUntil } = await getAll();
+    const { snoozeUntil } = await getAll({ logs: false });
     const resuming = isSnoozed(snoozeUntil);
     await setSnoozeUntil(resuming ? 0 : snoozeEnd(DEFAULT_SNOOZE));
     await flashBadge(resuming ? "on" : "zz", "#7d8ba0");
@@ -1213,7 +1209,7 @@ chrome.omnibox?.onInputStarted.addListener(() => {
 });
 
 chrome.omnibox?.onInputChanged.addListener(async (text, suggest) => {
-  const { latestSnapshot, settings } = await getAll();
+  const { latestSnapshot, settings } = await getAll({ logs: false });
   const { defaultDescription, suggestions } = buildSuggestions(text, latestSnapshot, {
     concealed: settings.privacyMode,
   });
@@ -1222,7 +1218,7 @@ chrome.omnibox?.onInputChanged.addListener(async (text, suggest) => {
 });
 
 chrome.omnibox?.onInputEntered.addListener(async (text, disposition) => {
-  const { latestSnapshot } = await getAll();
+  const { latestSnapshot } = await getAll({ logs: false });
   const command = resolveCommand(text, Boolean(latestSnapshot));
 
   if (command === "refresh") await refreshUsage();
@@ -1348,21 +1344,29 @@ async function scrubOldCaptures() {
 
 /**
  * An earlier version stored an answer with no limits in it — an error body, a
- * changed shape — as if it were a reading. Any such are taken out again, so the
- * last real reading is the one on show.
+ * changed shape — as if it were a reading. If that is what is on show, the last
+ * real one takes its place. (The history is cleaned of them as it is moved
+ * into the archive, and the archive doesn't hand them out.)
  */
 async function dropEmptyReadings() {
   const { latestSnapshot, history = [] } = await chrome.storage.local.get(["latestSnapshot", "history"]);
   const real = (snapshot) => Boolean(snapshot?.session) || (snapshot?.weekly ?? []).length > 0;
-  if ((!latestSnapshot || real(latestSnapshot)) && history.every(real)) return;
-  const kept = history.filter(real);
-  await chrome.storage.local.set({ history: kept, latestSnapshot: real(latestSnapshot) ? latestSnapshot : (kept.at(-1) ?? null) });
+  if (!latestSnapshot || real(latestSnapshot)) return;
+  await chrome.storage.local.set({ latestSnapshot: history.findLast(real) ?? null });
+}
+
+/** What a new version has to put right in what an older one left behind. In order, and with no reading landing in between. */
+function migrate() {
+  return withLock("reading", async () => {
+    await scrubOldCaptures().catch((err) => console.warn(LOG_PREFIX, "could not clear old captures", err));
+    await dropEmptyReadings().catch((err) => console.warn(LOG_PREFIX, "could not tidy the stored readings", err));
+    await moveLogs();
+  });
 }
 
 chrome.runtime.onInstalled.addListener((details) => {
   console.log(LOG_PREFIX, "extension installed");
-  scrubOldCaptures().catch((err) => console.warn(LOG_PREFIX, "could not clear old captures", err));
-  dropEmptyReadings().catch((err) => console.warn(LOG_PREFIX, "could not tidy the stored readings", err));
+  migrate();
   ensureAlarm();
   scheduleDigest();
   scheduleBackup();
@@ -1415,7 +1419,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     const digestKeys = (settings) => `${Boolean(settings?.dailyDigest)}@${settings?.digestTime}`;
     if (digestKeys(changes.settings.oldValue) !== digestKeys(changes.settings.newValue)) scheduleDigest();
     if (changes.settings.oldValue?.resetAlertPercent !== changes.settings.newValue?.resetAlertPercent) {
-      getAll().then(({ latestSnapshot }) => latestSnapshot && scheduleResetCheck(latestSnapshot));
+      getAll({ logs: false }).then(({ latestSnapshot }) => latestSnapshot && scheduleResetCheck(latestSnapshot));
     }
     if (changes.settings.oldValue?.actionOpens !== changes.settings.newValue?.actionOpens) {
       applyActionSurface();
@@ -1439,7 +1443,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     const toolbarKeys = ["iconStyle", "warnAt", "dangerAt", "severityColors", "privacyMode"];
     const pick = (settings) => JSON.stringify(toolbarKeys.map((key) => settings?.[key]));
     if (pick(changes.settings.oldValue) !== pick(changes.settings.newValue)) {
-      getAll().then(({ latestSnapshot }) => updateToolbar(latestSnapshot));
+      getAll({ logs: false }).then(({ latestSnapshot }) => updateToolbar(latestSnapshot));
     }
   }
 });

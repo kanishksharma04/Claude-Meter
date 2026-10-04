@@ -12,7 +12,7 @@ import {
   onStorageChanged,
 } from "../lib/storage.js";
 import { archiveInfo, clearArchive, describeArchive, restoreRecords } from "../lib/archive.js";
-import { describeBackup, readBackupFile, checkBackup, FREQUENCIES, DEFAULT_KEEP } from "../lib/backup.js";
+import { describeBackup, readBackupFile, checkBackup, logsOrgOf, FREQUENCIES, DEFAULT_KEEP } from "../lib/backup.js";
 import { describePlan } from "../lib/refresh-plan.js";
 import { isAdminKey, maskKey } from "../lib/api-spend.js";
 import { MAX_EXTRA_ORGS } from "../lib/orgs.js";
@@ -109,7 +109,7 @@ function buildAccentSwatches(selected) {
 
 /** Shows what the gauge icon looks like right now (or a sample reading before there is any data). */
 async function renderGaugePreview() {
-  const { latestSnapshot, settings } = await getAll();
+  const { latestSnapshot, settings } = await getAll({ logs: false });
   const percent = latestSnapshot?.session?.percentUsed ?? 62;
   const color = severityColor(percent, settings);
   drawGauge(gaugePreview.getContext("2d"), gaugePreview.width, { percent, color });
@@ -151,7 +151,7 @@ const orgNote = document.getElementById("orgNote");
 
 /** One row per organisation: its name, whether it is the main one, and whether it is shown alongside. */
 async function renderOrgs() {
-  const { settings, orgList, orgCache } = await getAll();
+  const { settings, orgList, orgCache } = await getAll({ logs: false });
   const mainId = orgCache?.orgId ?? null;
   const extras = settings.trackedOrgs.filter((id) => id !== mainId && orgList.some((org) => org.id === id));
 
@@ -190,7 +190,7 @@ async function renderOrgs() {
 }
 
 orgListEl.addEventListener("change", async (event) => {
-  const { settings, orgCache } = await getAll();
+  const { settings, orgCache } = await getAll({ logs: false });
   if (event.target.type === "radio") {
     // The new main one stops being an "extra"; the old one doesn't become one unless ticked later.
     await setSettings({ primaryOrg: event.target.value, trackedOrgs: settings.trackedOrgs.filter((id) => id !== event.target.value) });
@@ -228,7 +228,7 @@ function setApiSpendNote(text, problem = false) {
 }
 
 async function renderApiSpend() {
-  const { settings, apiSpendStatus } = await getAll();
+  const { settings, apiSpendStatus } = await getAll({ logs: false });
   const key = await getAdminKey();
   apiSpendToggle.checked = settings.apiSpend;
   document.getElementById("apiSpendSetup").hidden = !settings.apiSpend;
@@ -282,7 +282,7 @@ const INSTALL_COMMAND = companionInstallCommand(BROWSER, chrome.runtime.id);
 
 /** Says how the companion is doing, and keeps the install steps in view until it answers. */
 async function renderClaudeCode() {
-  const { settings, claudeCodeStatus, claudeCode } = await getAll();
+  const { settings, claudeCodeStatus, claudeCode } = await getAll({ logs: false });
   claudeCodeToggle.checked = settings.claudeCode;
   claudeCodeLiveToggle.checked = settings.claudeCodeLive;
   claudeCodeLiveToggle.disabled = !settings.claudeCode;
@@ -372,7 +372,7 @@ calendarReminderSelect.addEventListener("change", async () => {
 });
 
 document.getElementById("calendarBtn").addEventListener("click", async () => {
-  const { latestSnapshot, settings } = await getAll();
+  const { latestSnapshot, settings } = await getAll({ logs: false });
   const calendar = buildResetCalendar(latestSnapshot, { reminderMinutes: settings.calendarReminder });
   if (!calendar) {
     calendarNote.textContent = "No weekly reset time is known yet. Sign in to claude.ai, then try again.";
@@ -640,7 +640,7 @@ function renderDemo(settings) {
 }
 
 async function renderSnooze() {
-  const { snoozeUntil } = await getAll();
+  const { snoozeUntil } = await getAll({ logs: false });
   document.getElementById("snoozeRow").hidden = !isSnoozed(snoozeUntil);
   document.getElementById("snoozeInfo").textContent = `Alerts are snoozed until ${formatClock(snoozeUntil)}`;
 }
@@ -708,7 +708,7 @@ const adaptiveRefreshToggle = document.getElementById("adaptiveRefreshToggle");
 
 /** What the adaptive pace is doing just now, and when the next reading is due. */
 async function renderRefreshPace() {
-  const { settings, refreshPace } = await getAll();
+  const { settings, refreshPace } = await getAll({ logs: false });
   const info = document.getElementById("refreshPaceInfo");
   // Demo mode fetches nothing, and a fixed interval needs no explaining.
   info.hidden = !settings.adaptiveRefresh || settings.demoMode || !refreshPace?.minutes || refreshPace.mode === "fixed";
@@ -1020,7 +1020,7 @@ const restoreInfo = document.getElementById("restoreInfo");
 const DOWNLOADS = { permissions: ["downloads"] };
 
 async function renderBackup() {
-  const { settings, backupStatus } = await getAll();
+  const { settings, backupStatus } = await getAll({ logs: false });
   // Safari has no downloads API: nothing to schedule, though a backup made elsewhere can still be restored.
   document.getElementById("backupControls").hidden = backupNowBtn.hidden = BROWSER === "safari";
   autoBackupSelect.value = settings.autoBackup in FREQUENCIES ? settings.autoBackup : "off";
@@ -1045,7 +1045,7 @@ autoBackupSelect.addEventListener("change", async () => {
   // Nothing saves files any more: hand the permission back, as the webhooks do with theirs.
   if (frequency === "off") chrome.permissions.remove(DOWNLOADS).catch(() => {});
   // A first backup follows within moments of switching on; the line above updates when it lands.
-  if (frequency !== "off" && !(await getAll()).backupStatus) backupInfo.textContent = "Making the first backup…";
+  if (frequency !== "off" && !(await getAll({ logs: false })).backupStatus) backupInfo.textContent = "Making the first backup…";
 });
 
 backupKeepSelect.addEventListener("change", () => setSettings({ backupKeep: Number(backupKeepSelect.value) }));
@@ -1079,7 +1079,7 @@ document.getElementById("restoreFile").addEventListener("change", async (event) 
     const checked = checkBackup(await readBackupFile(await file.arrayBuffer()));
     if (!checked.ok) throw new Error(checked.problem);
     const readings = await restoreRecords(checked.backup.readings);
-    const logs = await restoreLogs(checked.backup.logs);
+    const logs = await restoreLogs(checked.backup.logs, logsOrgOf(checked.backup, (await getOrgCache())?.orgId));
     const made = new Date(checked.backup.createdAt).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
     restoreInfo.textContent =
       `Restored the backup of ${made}: ${readings.toLocaleString()} reading${readings === 1 ? "" : "s"} merged into the archive` +

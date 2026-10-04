@@ -497,7 +497,7 @@ address you gave, after the browser has asked you to allow that one site.
   the history with `CompressionStream` and hands it to `downloads.download()` as a
   `data:` address (a service worker can't make a `blob:` one; Firefox's event page
   can, and does), then uses `downloads.removeFile()` to delete its own older backups
-- **IndexedDB** — the long-term archive of readings (`src/lib/archive.js`), with
+- **IndexedDB** — every reading, the hourly log and the session windows (`src/lib/archive.js`), with
   `unlimitedStorage` so the browser doesn't cap or evict it
 - **`chrome.action`** — toolbar popup, hover title, badge text, and the gauge icon,
   which the service worker draws on an `OffscreenCanvas` and hands to `setIcon()`
@@ -572,7 +572,7 @@ claudemeter/
 │   │   ├── backup.js                  # the history as one gzipped file: contents, schedule, pruning, restore
 │   │   ├── health.js                  # health checks, redacted diagnostics, the prefilled GitHub issue
 │   │   ├── refresh-plan.js            # adaptive refresh: the wait before the next reading, and why
-│   │   ├── archive.js                 # every reading, for good, in IndexedDB -> the chart's long ranges
+│   │   ├── archive.js                 # IndexedDB: every reading for good, plus the hourly log and session windows
 │   │   ├── session-windows.js         # log of past 5-hour windows + the timeline rows drawn from it
 │   │   ├── heatmap.js                 # usage log -> weekday × hour averages
 │   │   ├── budget.js                  # weekly limit -> % a day until reset, and today's share used
@@ -668,13 +668,22 @@ The latest extra-usage reading is also kept on its own as `extraUsage` (it can c
 a second endpoint, below), with the month's running total at the end of each day in
 `extraUsageLog` (last 62 days) so "today" can be worked out.
 
-Stored in `chrome.storage.local` as `latestSnapshot`, plus a capped rolling `history`
-(last 500 snapshots) that feeds the 24-hour chart and the burn-rate maths. Every
-reading is also appended to the **archive**, an IndexedDB database (`claudemeter`,
+The latest reading is stored in `chrome.storage.local` as `latestSnapshot`. Every
+reading is appended to the **archive**, an IndexedDB database (`claudemeter`,
 store `readings`, keyed by organisation and time) that is never trimmed and holds one
 compact record each — `{ o, t, s, sr, w: [[label, %, resetsAt]], e? }`, about 100
 bytes, so a reading every five minutes is roughly 10 MB a year
-([`src/lib/archive.js`](src/lib/archive.js)). Settings
+([`src/lib/archive.js`](src/lib/archive.js)). The `history` the 24-hour chart and
+the burn-rate maths work from is simply the newest 500 of those, read back when a
+page asks.
+
+Only what is small stays in `chrome.storage`, and that is on purpose: it rewrites a
+key whole on every change and sends the old and new values to every page listening.
+Earlier versions kept the history, the hourly log and the session windows there, so
+each reading rewrote about 450 KB — once eight weeks had built up — and delivered it
+to every open claude.ai tab. Those three now live in the archive database (stores
+`readings`, `hours`, `windows`), where a reading adds one record and updates two.
+What an earlier version stored is moved across once (`logsMoved`). Settings
 live under `settings` (`refreshIntervalMinutes`, `adaptiveRefresh`, `notificationsEnabled`,
 `notifyThresholds`, `language`, `paceAlertFactor`, `resetAlertPercent`, `dailyDigest`, `digestTime`, `calendarReminder`, `quietHours`, `soundAlerts`, `soundName`, `soundVolume`, `webhooks`, `theme`, `accent`, `iconStyle`, `warnAt`, `dangerAt`, `severityColors`,
 `bucketPrefs`, `privacyMode`, `actionOpens`, `developerMode`, `demoMode`, `demoLabel`, `inlinePill`, `tabIndicator`, `preSendWarnPercent`, `modelHintPercent`,
@@ -716,7 +725,8 @@ LimitHit = {
 ```
 
 Every reading is also folded into `usageLog`, the long-term record the analytics are
-built from (last 1,344 hours — eight weeks):
+built from (the last eight weeks; the archive's `hours` store, keyed by organisation
+and hour):
 
 ```js
 HourRecord = {
@@ -735,8 +745,8 @@ A snapshot whose rise this browser can't account for carries that rise as
 `localActivity` record — the time of the last message sent or answered here, and
 the requests still streaming.
 
-Each 5-hour window gets one entry in `sessionWindows` (last 300), recognised by its
-reset time:
+Each 5-hour window gets one entry in `sessionWindows` (the last eight weeks; the
+archive's `windows` store), recognised by its reset time:
 
 ```js
 SessionWindow = {
@@ -927,7 +937,7 @@ first run of this one empties that list once (`capturesScrubbed`).
 - Thread length is a character count divided by four, not a real token count. It
   covers message text and pasted/extracted attachments on the active branch; images,
   PDFs, project knowledge, and tool results aren't counted, so treat it as a floor.
-- The 24-hour chart only reaches back as far as the stored history: 500 readings,
+- The 24-hour chart only reaches back as far as the history handed to it: 500 readings,
   which is about a day at the default interval and less if per-message cost is adding
   two readings per message. The 7-day view and the week-earlier overlay are drawn from
   the hourly log instead, so they are coarser — one point per hour, the session line
@@ -964,8 +974,11 @@ first run of this one empties that list once (`capturesScrubbed`).
   the diagnostics are in English, so an issue reads the same whoever files it.
 - The archive starts the day this version is installed. What it is seeded with reaches
   back at most eight weeks, and that part is hourly, not every reading. Only the chart
-  reads it: the heatmap, forecast and the other analytics still work from the
-  eight-week hourly log. Over the longer ranges a point stands for a stretch of time
+  reads further back than that: the heatmap, forecast and the other analytics work
+  from the eight-week hourly log, which sits in the same database. If the browser
+  won't open that database in some window, the chart and the analytics are empty
+  there (the health page says so); the latest reading, the toolbar and the alerts
+  don't depend on it. Over the longer ranges a point stands for a stretch of time
   (about 72 minutes over 30 days, 15 hours over a year), the week-earlier overlay is
   not offered, and "used elsewhere" bands are not drawn past 30 days. It lives in this
   browser profile only — nothing syncs it — and removing the extension deletes it.
