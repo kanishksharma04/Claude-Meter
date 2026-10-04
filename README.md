@@ -359,7 +359,10 @@ privacy mode (no figures in the text).
 
 - **Your own thresholds** — alert at any whole percentage from 1 to 100, up to eight of
   them, instead of a fixed pair. Add and remove them as chips in Options. When one
-  jump clears several thresholds at once, you get one alert, naming the highest.
+  jump clears several thresholds at once, you get one alert, naming the highest. Each
+  threshold is announced once per window of its limit: ClaudeMeter remembers the
+  highest one it has said (`alertedThresholds`), so a figure that dips and comes back
+  doesn't ping twice, and a new window starts again from nothing.
 - **Pace alert** — once a day, a heads-up when today is running well above a usual
   one: "You're using Claude at 2.3× your usual pace today: 84% of a session so far,
   against a usual 37% by now." Usual means what the same hours typically see on this
@@ -842,6 +845,17 @@ first run of this one empties that list once (`capturesScrubbed`).
   server error) changes nothing.
 - **Around each message** (when per-message cost is on): once as you send — skipped if
   the last reading is under 20 seconds old — and once ~1.5 s after the reply ends.
+- **One at a time.** Whatever asks for a refresh while one is already on its way
+  gets that one's result, so the alarm, the popup opening and a tab loading in the
+  same second are a single request to claude.ai. A message's "after" reading is the
+  exception: it insists on a request made after the reply ended. Each reading is then
+  dealt with start to finish before the next — stored, compared with the one before,
+  alerted on — under a lock (the Web Locks API, shared by the background worker and
+  every ClaudeMeter page), so two landing together can't both be measured against
+  the same predecessor, and one of them can't vanish from the history. A reading
+  older than the one in hand is set aside, as is a failure that a newer reading has
+  already overtaken. Every other "add to a list" write, and every settings change,
+  takes a lock of its own: two switches flipped at once in two windows both stick.
 - Failed refreshes never wipe the UI — the popup keeps showing the last known-good
   snapshot with an inline "Couldn't refresh — showing data from X ago" warning. That
   includes an answer that arrives but has no reading in it: `UNPARSEABLE_RESPONSE`

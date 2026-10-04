@@ -24,6 +24,8 @@ import {
   swapOrgState,
   setSnoozeUntil,
   setDemoState,
+  updateSettings,
+  withLock,
 } from "../lib/storage.js";
 import { fetchUsageSnapshot, fetchOrgs, fetchOtherOrgs, UsageApiError } from "../lib/usage-api.js";
 import { extraOrgs, orgIdFromUsageUrl } from "../lib/orgs.js";
@@ -55,7 +57,7 @@ import { formatDuration, formatClock } from "../lib/time-format.js";
 import { SNOOZE_OPTIONS, DEFAULT_SNOOZE, snoozeEnd, isSnoozed } from "../lib/snooze.js";
 import { describeSpike } from "../lib/spikes.js";
 import { tokensOf } from "../lib/value.js";
-import { crossedThreshold } from "../lib/thresholds.js";
+import { crossedThreshold, alreadyAlerted, noteAlerted } from "../lib/thresholds.js";
 import { paceAlert, describePace } from "../lib/pace.js";
 import { resetsToAnnounce, nextResetCheck, describeReset } from "../lib/reset-alert.js";
 import { deliverWebhooks } from "../lib/webhooks.js";
@@ -247,12 +249,16 @@ async function threadChars(conversationId) {
   return sizes[conversationId] ?? 0;
 }
 
-async function setThreadChars(conversationId, chars) {
-  if (!conversationId) return;
-  const { threadChars: sizes = {} } = await chrome.storage.session.get("threadChars");
-  delete sizes[conversationId]; // re-insert, so the least recently touched chat is the one dropped
-  const entries = [...Object.entries(sizes), [conversationId, chars]].slice(-MAX_TRACKED_THREADS);
-  await chrome.storage.session.set({ threadChars: Object.fromEntries(entries) });
+/** `change` is given the size on record and returns the new one, with nothing else writing in between. */
+function setThreadChars(conversationId, change) {
+  if (!conversationId) return Promise.resolve();
+  return withLock("threadChars", async () => {
+    const { threadChars: sizes = {} } = await chrome.storage.session.get("threadChars");
+    const chars = typeof change === "function" ? change(sizes[conversationId] ?? 0) : change;
+    delete sizes[conversationId]; // re-insert, so the least recently touched chat is the one dropped
+    const entries = [...Object.entries(sizes), [conversationId, chars]].slice(-MAX_TRACKED_THREADS);
+    await chrome.storage.session.set({ threadChars: Object.fromEntries(entries) });
+  });
 }
 
 async function recordMessageStart(event) {
@@ -282,11 +288,12 @@ async function recordMessageEnd(event) {
 
   // The thread is now longer by this exchange, whatever the next reading says.
   const exchanged = (pending.promptChars ?? 0) + (event.replyChars ?? 0);
-  await setThreadChars(pending.conversationId, (await threadChars(pending.conversationId)) + exchanged);
+  await setThreadChars(pending.conversationId, (chars) => chars + exchanged);
 
   if (await backingOff()) return;
   await new Promise((resolve) => setTimeout(resolve, AFTER_SETTLE_MS));
-  const result = await refreshUsage();
+  // A refresh already on its way may have asked before this reply's cost had landed: it won't do.
+  const result = await refreshUsage({ notBefore: Date.now() });
   if (!result.ok) return;
 
   const cost = computeMessageCost(pending.before, result.snapshot);
@@ -312,7 +319,7 @@ async function recordMessageEnd(event) {
 async function recordLimitHit(event) {
   // Refresh first: a hit usually means the numbers we hold are behind, and the
   // fresh reading can supply a reset time the response didn't carry.
-  const result = await refreshUsage();
+  const result = await refreshUsage({ notBefore: Date.now() });
   const snapshot = result.ok ? result.snapshot : (await getAll()).latestSnapshot;
 
   const hit = {
@@ -331,7 +338,38 @@ async function recordLimitHit(event) {
 
 // ------------------------------------------------------------------ fetch --
 
-async function refreshUsage() {
+// Plenty of things ask for a refresh — the alarm, the popup opening, a claude.ai
+// tab loading, a message being sent, the address bar — and often at the same
+// moment. One request to claude.ai answers them all: whoever asks while a
+// refresh is on its way gets that refresh's result.
+
+/** The refresh on its way, if there is one: `{ startedAt, promise }`. */
+let refreshInFlight = null;
+/** Goes up when the main organisation changes, so a reading fetched for the old one is known for what it is. */
+let orgGeneration = 0;
+
+/**
+ * @param {object} [options]
+ * @param {number} [options.notBefore] - the reading must have been asked for at or after this moment. Whoever
+ *   needs to see something that has only just happened (a reply's cost, a limit running out) passes the
+ *   present; a refresh that set off earlier is waited for and then followed by a new one.
+ * @returns {Promise<{ ok: true, snapshot: object } | { ok: false, error: { code: string, message: string } }>}
+ */
+function refreshUsage({ notBefore = 0 } = {}) {
+  if (refreshInFlight) {
+    if (refreshInFlight.startedAt >= notBefore) return refreshInFlight.promise;
+    return refreshInFlight.promise.then(() => refreshUsage({ notBefore }));
+  }
+  const startedAt = Date.now();
+  const promise = fetchAndApply(startedAt).finally(() => {
+    if (refreshInFlight?.promise === promise) refreshInFlight = null;
+  });
+  refreshInFlight = { startedAt, promise };
+  return promise;
+}
+
+async function fetchAndApply(startedAt) {
+  const generation = orgGeneration;
   try {
     if ((await getSettings()).demoMode) return await refreshDemo();
     refreshApiSpend().catch((err) => console.warn(LOG_PREFIX, "api spend refresh failed", err));
@@ -339,15 +377,22 @@ async function refreshUsage() {
     refreshClaudeCode().catch((err) => console.warn(LOG_PREFIX, "claude code refresh failed", err));
 
     const snapshot = await fetchUsageSnapshot({ primaryOrg: (await getSettings()).primaryOrg });
-    await applySnapshot(snapshot);
+    const applied = await applySnapshot(snapshot, { generation });
     await refreshOtherOrgs();
-    console.log(LOG_PREFIX, "refreshed usage snapshot");
+    console.log(LOG_PREFIX, applied ? "refreshed usage snapshot" : "a newer reading was already in hand");
     return { ok: true, snapshot };
   } catch (err) {
     const code = err instanceof UsageApiError ? err.code : "UNKNOWN_ERROR";
     const message = err?.message ?? String(err);
-    await setLastError({ code, message, timestamp: Date.now() });
-    await scheduleRefresh({ ok: false, code });
+    // A failure is only news if nothing has succeeded since it was asked for: a reading that
+    // landed in the meantime (the page's own, say) is the truth, and this is already out of date.
+    const overtaken = await withLock("reading", async () => {
+      const { latestSnapshot } = await chrome.storage.local.get("latestSnapshot");
+      if (generation !== orgGeneration || latestSnapshot?.fetchedAt > startedAt) return true;
+      await setLastError({ code, message, timestamp: Date.now() });
+      return false;
+    });
+    if (!overtaken) await scheduleRefresh({ ok: false, code });
     console.warn(LOG_PREFIX, "refresh failed:", code, message);
     return { ok: false, error: { code, message } };
   }
@@ -375,25 +420,43 @@ async function applyDemoMode(on) {
   await refreshUsage();
 }
 
-/** Everything that has to happen whenever a new reading lands, whichever way it arrived. */
-async function applySnapshot(snapshot) {
-  const { latestSnapshot: previous = null } = await chrome.storage.local.get("latestSnapshot");
-  await archiveSnapshot(await setLatestSnapshot(snapshot));
-  if (snapshot.extraUsage) await setExtraUsage(snapshot.extraUsage, snapshot.fetchedAt);
-  await noteFullBuckets(snapshot);
-  await updateToolbar(snapshot);
-  await updateModelHint();
+/** A stored reading stamped further ahead than this is the clock having been put back, not a newer reading. */
+const CLOCK_SLACK_MS = 60_000;
 
-  // Alerts, each comparing this reading with what came before it.
-  await maybeNotify(previous, snapshot);
-  await announceResets(previous, snapshot);
-  await watchForSpike(snapshot);
-  await watchPace();
-  await scheduleResetCheck(snapshot);
-  // This reading may have brought a new session window; Claude Code's figures are counted in the same one.
-  await tellCompanionWindow();
-  await tellCompanionPlan();
-  await scheduleRefresh({ ok: true, changed: usageChanged(previous, snapshot), at: snapshot.fetchedAt });
+/**
+ * Everything that has to happen whenever a new reading lands, whichever way it
+ * arrived. One reading at a time, start to finish: each is compared with the
+ * one before it (what rose, what was crossed, what reset), and two at once
+ * would both be compared with the same one and each say so.
+ *
+ * @returns {Promise<boolean>} false when the reading was set aside — an older one than is already in hand
+ *   (two were on their way and this one lost), or one fetched for an organisation that is no longer the main one
+ */
+function applySnapshot(snapshot, { generation = orgGeneration } = {}) {
+  return withLock("reading", async () => {
+    if (generation !== orgGeneration) return false;
+    const { latestSnapshot: previous = null } = await chrome.storage.local.get("latestSnapshot");
+    const overtaken = previous && snapshot.fetchedAt <= previous.fetchedAt && previous.fetchedAt <= Date.now() + CLOCK_SLACK_MS;
+    if (overtaken) return false;
+
+    await archiveSnapshot(await setLatestSnapshot(snapshot));
+    if (snapshot.extraUsage) await setExtraUsage(snapshot.extraUsage, snapshot.fetchedAt);
+    await noteFullBuckets(snapshot);
+    await updateToolbar(snapshot);
+    await updateModelHint();
+
+    // Alerts, each comparing this reading with what came before it.
+    await maybeNotify(previous, snapshot);
+    await announceResets(previous, snapshot);
+    await watchForSpike(snapshot);
+    await watchPace();
+    await scheduleResetCheck(snapshot);
+    // This reading may have brought a new session window; Claude Code's figures are counted in the same one.
+    await tellCompanionWindow();
+    await tellCompanionPlan();
+    await scheduleRefresh({ ok: true, changed: usageChanged(previous, snapshot), at: snapshot.fetchedAt });
+    return true;
+  });
 }
 
 // ---------------------------------------------------------------- archive --
@@ -549,11 +612,15 @@ async function switchMainOrg(toId) {
   const target = toId ?? orgList.find((org) => org.chat)?.id ?? orgList[0]?.id;
   if (!orgCache || !target || orgCache.orgId === target) return;
 
-  await swapOrgState(orgCache.orgId, target);
-  await setOrgCache(null); // looked up afresh, as the new choice
+  // From here a reading fetched for the old organisation is not this one's, and is set aside when it lands.
+  orgGeneration += 1;
+  await withLock("reading", async () => {
+    await swapOrgState(orgCache.orgId, target);
+    await setOrgCache(null); // looked up afresh, as the new choice
+  });
   otherOrgsReadAt = 0;
   await updateToolbar((await getAll()).latestSnapshot);
-  await refreshUsage();
+  await refreshUsage({ notBefore: Date.now() });
 }
 
 // --------------------------------------------------------------- api spend --
@@ -780,9 +847,8 @@ async function updateToolbar(snapshot) {
 }
 
 async function togglePrivacyMode() {
-  const { privacyMode } = await getSettings();
-  await setSettings({ privacyMode: !privacyMode });
-  return !privacyMode;
+  const { privacyMode } = await updateSettings((settings) => ({ privacyMode: !settings.privacyMode }));
+  return privacyMode;
 }
 
 // ------------------------------------------------------------ notifications --
@@ -927,18 +993,24 @@ async function maybeNotify(previousSnapshot, snapshot) {
   if (!previousSnapshot) return;
 
   const previousByLabel = new Map(bucketsOf(previousSnapshot).map((b) => [b.label, b.percentUsed]));
+  // What has been said already, by limit: a figure that dips and comes back must not announce the same crossing twice.
+  const { alertedThresholds = {} } = await chrome.storage.local.get("alertedThresholds");
+  let alerted = alertedThresholds;
 
   for (const bucket of bucketsOf(snapshot)) {
     const before = previousByLabel.get(bucket.label) ?? 0;
     const crossed = crossedThreshold(settings.notifyThresholds, before, bucket.percentUsed);
-    if (crossed == null) continue;
+    if (crossed == null || alreadyAlerted(alerted, bucket, crossed, snapshot.fetchedAt)) continue;
 
-    await sendAlert({
+    const sent = await sendAlert({
       id: `${bucket.label}-${crossed}`,
       message: `${bucket.subject ?? `${bucket.label} usage`} just crossed ${crossed}%${bucket.of ?? ""} (now ${bucket.percentUsed}%).`,
       discreet: "A usage alert you set has been reached.",
     });
+    // Only an alert that went out counts as said: one that was snoozed away can still come later.
+    if (sent) alerted = noteAlerted(alerted, bucket, crossed, snapshot.fetchedAt);
   }
+  if (alerted !== alertedThresholds) await chrome.storage.local.set({ alertedThresholds: alerted });
 }
 
 /** Logs a sudden jump in any limit and, if alerts are on, says so. */
@@ -1247,7 +1319,7 @@ async function wakeRefresh() {
   const signedOut = pace?.mode === "backoff" && pace.errorCode === "NOT_LOGGED_IN";
   if (pace?.mode !== "slow" && !signedOut) return;
   await new Promise((resolve) => setTimeout(resolve, AFTER_SETTLE_MS)); // the same wait a message's "after" reading gets
-  await refreshUsage();
+  await refreshUsage({ notBefore: Date.now() });
 }
 
 /**

@@ -40,3 +40,37 @@ export function removeThreshold(list, value) {
 export function crossedThreshold(list, before, after) {
   return normalizeThresholds(list).findLast((threshold) => before < threshold && after >= threshold) ?? null;
 }
+
+// ------------------------------------------------------------ said already --
+// A crossing is "below before, at or above now", which is true once — unless
+// the figure dips and comes back (the endpoint does revise one down now and
+// then), or the same reading is looked at twice. So what has been said is
+// remembered: for each limit, the highest threshold announced in its current
+// window. A new window starts again from nothing.
+//
+//   Alerted = { [label]: { window: number | string, threshold: number } }
+
+/** Reset times for one window wobble by minutes; two windows of any limit are hours apart. */
+const SAME_WINDOW_MS = 60 * 60 * 1000;
+
+/** What identifies a limit's current window: its reset time, or — for one with none, the monthly extra-usage cap — the calendar month. */
+export function alertWindow(bucket, now = Date.now()) {
+  if (bucket?.resetsAt != null) return bucket.resetsAt;
+  const date = new Date(now);
+  return `${date.getFullYear()}-${date.getMonth() + 1}`;
+}
+
+function sameWindow(a, b) {
+  return typeof a === "number" && typeof b === "number" ? Math.abs(a - b) <= SAME_WINDOW_MS : a === b;
+}
+
+/** Has this threshold, or a higher one, been announced for this limit in the window it is in now? */
+export function alreadyAlerted(alerted, bucket, threshold, now = Date.now()) {
+  const last = alerted?.[bucket.label];
+  return Boolean(last) && sameWindow(last.window, alertWindow(bucket, now)) && last.threshold >= threshold;
+}
+
+/** The record with one more announcement in it. */
+export function noteAlerted(alerted, bucket, threshold, now = Date.now()) {
+  return { ...(alerted ?? {}), [bucket.label]: { window: alertWindow(bucket, now), threshold } };
+}

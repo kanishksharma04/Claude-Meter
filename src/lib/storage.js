@@ -15,6 +15,42 @@ import { foldExtraUsage } from "./extra-usage.js";
 import { DEFAULT_WEBHOOKS } from "./webhooks.js";
 import { DEFAULT_QUIET_HOURS, normalizeQuietHours } from "./quiet-hours.js";
 
+// ------------------------------------------------------------------- locks --
+// chrome.storage has no transactions: every "add one to the list" here is a
+// read followed by a write, and two of them at once — a reading from the alarm
+// and one from the page, a toggle in the popup and one in Options — each read
+// the same list and the later write drops what the earlier one added. So each
+// of these runs under a named lock, one at a time.
+//
+// The Web Locks API does that across every page of the extension and its
+// background worker at once, and lets go by itself if the page holding a lock
+// goes away. Locks are not re-entrant: nothing here takes a lock it may
+// already hold. The order, where two are held, is always "reading" first (the
+// service worker, around everything a new reading sets off) and then the lock
+// of the one key being written.
+
+const queues = new Map();
+
+/** Where there are no Web Locks (Node, an old browser): one at a time within this page, which is all that can be promised there. */
+function queued(name, work) {
+  const run = (queues.get(name) ?? Promise.resolve()).then(async () => work());
+  queues.set(name, run.catch(() => {}));
+  return run;
+}
+
+/**
+ * Runs `work` when nothing else holding the lock `name` is running, and resolves to what it returns.
+ * @template T
+ * @param {string} name
+ * @param {() => T | Promise<T>} work
+ * @returns {Promise<T>}
+ */
+export function withLock(name, work) {
+  const locks = globalThis.navigator?.locks;
+  // `async`, so that work which throws straight away is a rejection like any other and the lock is let go.
+  return locks?.request ? locks.request(`claudemeter:${name}`, async () => work()) : queued(name, work);
+}
+
 export const MAX_DEBUG_CAPTURES = 20;
 // Enough for the dashboard chart to cover about a day at the default refresh interval,
 // and for the sums that compare one reading with the last. Every reading is also
@@ -164,23 +200,25 @@ export async function setDemoState(demoState) {
  * history, and folds it into the long-term records: the hourly usage log and
  * the list of session windows.
  */
-export async function setLatestSnapshot(reading) {
-  const stored = await chrome.storage.local.get(["history", "usageLog", "sessionWindows", "localActivity"]);
-  const history = stored.history ?? [];
-  // Mark the reading with whatever part of its rise this browser had no hand in.
-  const elsewhere = elsewherePoints(history.at(-1), reading, stored.localActivity);
-  const snapshot = elsewhere > 0 ? { ...reading, elsewhere } : reading;
-  // First run with either record: seed it from whatever history is already there.
-  const usageLog = stored.usageLog ?? buildUsageLog(history);
-  const sessionWindows = stored.sessionWindows ?? buildWindows(history);
-  await chrome.storage.local.set({
-    latestSnapshot: snapshot,
-    history: [...history, snapshot].slice(-MAX_HISTORY),
-    usageLog: foldSnapshot(usageLog, history.at(-1) ?? null, snapshot),
-    sessionWindows: foldWindow(sessionWindows, snapshot),
-    lastError: null,
+export function setLatestSnapshot(reading) {
+  return withLock("history", async () => {
+    const stored = await chrome.storage.local.get(["history", "usageLog", "sessionWindows", "localActivity"]);
+    const history = stored.history ?? [];
+    // Mark the reading with whatever part of its rise this browser had no hand in.
+    const elsewhere = elsewherePoints(history.at(-1), reading, stored.localActivity);
+    const snapshot = elsewhere > 0 ? { ...reading, elsewhere } : reading;
+    // First run with either record: seed it from whatever history is already there.
+    const usageLog = stored.usageLog ?? buildUsageLog(history);
+    const sessionWindows = stored.sessionWindows ?? buildWindows(history);
+    await chrome.storage.local.set({
+      latestSnapshot: snapshot,
+      history: [...history, snapshot].slice(-MAX_HISTORY),
+      usageLog: foldSnapshot(usageLog, history.at(-1) ?? null, snapshot),
+      sessionWindows: foldWindow(sessionWindows, snapshot),
+      lastError: null,
+    });
+    return snapshot;
   });
-  return snapshot;
 }
 
 export async function setLastError(errorInfo) {
@@ -223,8 +261,10 @@ const ORG_STATE_KEYS = [
   "lastError",
   "paceAlertDay",
   "digestDay",
+  "alertedThresholds",
 ];
 
+/** The caller holds the "reading" lock, so no reading lands half way through the exchange. */
 export async function swapOrgState(fromId, toId) {
   if (!fromId || !toId || fromId === toId) return;
   const stored = await chrome.storage.local.get([...ORG_STATE_KEYS, "orgState"]);
@@ -255,72 +295,104 @@ export async function getSettings() {
   return withDefaults(settings);
 }
 
-export async function setSettings(partial) {
-  const current = await getSettings();
-  const next = { ...current, ...partial };
-  await chrome.storage.local.set({ settings: next });
-  return next;
+/**
+ * Changes some settings and resolves to all of them. Two changes made at once —
+ * from two windows, or a window and a keyboard shortcut — both take effect.
+ */
+export function setSettings(partial) {
+  return updateSettings(() => partial);
 }
 
-export async function pushDebugCapture(capture) {
-  const { __debug_captures = [] } = await chrome.storage.local.get("__debug_captures");
-  const next = [capture, ...__debug_captures].slice(0, MAX_DEBUG_CAPTURES);
-  await chrome.storage.local.set({ __debug_captures: next });
-  return next;
+/**
+ * The same, for a change that depends on what is there now (flip a switch, add
+ * to a list): `change` is given the current settings and returns the part to
+ * replace, and nothing else can write in between.
+ * @param {(settings: object) => object} change
+ */
+export function updateSettings(change) {
+  return withLock("settings", async () => {
+    const current = await getSettings();
+    const next = { ...current, ...change(current) };
+    await chrome.storage.local.set({ settings: next });
+    return next;
+  });
+}
+
+export function pushDebugCapture(capture) {
+  return withLock("__debug_captures", async () => {
+    const { __debug_captures = [] } = await chrome.storage.local.get("__debug_captures");
+    const next = [capture, ...__debug_captures].slice(0, MAX_DEBUG_CAPTURES);
+    await chrome.storage.local.set({ __debug_captures: next });
+    return next;
+  });
 }
 
 /** Writes only when the hint actually changed, so open tabs don't re-render on every refresh. */
-export async function setModelHint(hint) {
-  const { modelHint = null } = await chrome.storage.local.get("modelHint");
-  if (JSON.stringify(modelHint) !== JSON.stringify(hint)) {
-    await chrome.storage.local.set({ modelHint: hint });
-  }
+export function setModelHint(hint) {
+  return withLock("modelHint", async () => {
+    const { modelHint = null } = await chrome.storage.local.get("modelHint");
+    if (JSON.stringify(modelHint) !== JSON.stringify(hint)) {
+      await chrome.storage.local.set({ modelHint: hint });
+    }
+  });
 }
 
 /** Remember the "before" reading for a message whose reply is still streaming. */
-export async function setPendingMessage(requestId, pending) {
-  const { pendingMessages } = await chrome.storage.local.get("pendingMessages");
-  const next = { ...prunePending(pendingMessages), [requestId]: pending };
-  await chrome.storage.local.set({ pendingMessages: next });
+export function setPendingMessage(requestId, pending) {
+  return withLock("pendingMessages", async () => {
+    const { pendingMessages } = await chrome.storage.local.get("pendingMessages");
+    const next = { ...prunePending(pendingMessages), [requestId]: pending };
+    await chrome.storage.local.set({ pendingMessages: next });
+  });
 }
 
 /** Removes and returns a pending message, plus whether other replies were in flight alongside it. */
-export async function takePendingMessage(requestId) {
-  const { pendingMessages = {} } = await chrome.storage.local.get("pendingMessages");
-  const { [requestId]: pending, ...rest } = pendingMessages;
-  if (pending) await chrome.storage.local.set({ pendingMessages: rest });
-  return { pending: pending ?? null, othersInFlight: Object.keys(prunePending(rest)).length > 0 };
+export function takePendingMessage(requestId) {
+  return withLock("pendingMessages", async () => {
+    const { pendingMessages = {} } = await chrome.storage.local.get("pendingMessages");
+    const { [requestId]: pending, ...rest } = pendingMessages;
+    if (pending) await chrome.storage.local.set({ pendingMessages: rest });
+    return { pending: pending ?? null, othersInFlight: Object.keys(prunePending(rest)).length > 0 };
+  });
 }
 
-export async function pushMessageCost(entry) {
-  const { messageLog } = await chrome.storage.local.get("messageLog");
-  const next = appendMessage(messageLog, entry);
-  await chrome.storage.local.set({ messageLog: next });
-  return next;
+export function pushMessageCost(entry) {
+  return withLock("messageLog", async () => {
+    const { messageLog } = await chrome.storage.local.get("messageLog");
+    const next = appendMessage(messageLog, entry);
+    await chrome.storage.local.set({ messageLog: next });
+    return next;
+  });
 }
 
-export async function pushLimitHit(hit) {
-  const { limitHits } = await chrome.storage.local.get("limitHits");
-  const next = addLimitHit(limitHits, hit);
-  await chrome.storage.local.set({ limitHits: next });
-  return next;
+export function pushLimitHit(hit) {
+  return withLock("limitHits", async () => {
+    const { limitHits } = await chrome.storage.local.get("limitHits");
+    const next = addLimitHit(limitHits, hit);
+    await chrome.storage.local.set({ limitHits: next });
+    return next;
+  });
 }
 
 /** Stores the latest extra-usage reading and folds it into the day-by-day record of the spend. */
-export async function setExtraUsage(reading, at = Date.now()) {
-  const { extraUsageLog = [] } = await chrome.storage.local.get("extraUsageLog");
-  await chrome.storage.local.set({
-    extraUsage: { ...reading, fetchedAt: at },
-    extraUsageLog: foldExtraUsage(extraUsageLog, reading, at),
+export function setExtraUsage(reading, at = Date.now()) {
+  return withLock("extraUsageLog", async () => {
+    const { extraUsageLog = [] } = await chrome.storage.local.get("extraUsageLog");
+    await chrome.storage.local.set({
+      extraUsage: { ...reading, fetchedAt: at },
+      extraUsageLog: foldExtraUsage(extraUsageLog, reading, at),
+    });
   });
 }
 
 /** Keeps the outcome of the latest delivery to each webhook, for Options to show. */
-export async function recordWebhookResults(results, at = Date.now()) {
-  if (results.length === 0) return;
-  const { webhookStatus = {} } = await chrome.storage.local.get("webhookStatus");
-  for (const { service, ok, detail } of results) webhookStatus[service] = { at, ok, detail };
-  await chrome.storage.local.set({ webhookStatus });
+export function recordWebhookResults(results, at = Date.now()) {
+  return withLock("webhookStatus", async () => {
+    if (results.length === 0) return;
+    const { webhookStatus = {} } = await chrome.storage.local.get("webhookStatus");
+    for (const { service, ok, detail } of results) webhookStatus[service] = { at, ok, detail };
+    await chrome.storage.local.set({ webhookStatus });
+  });
 }
 
 /**
@@ -353,41 +425,51 @@ export async function setClaudeCode(summary, status) {
 }
 
 /** Remembers that a message was just sent, or its reply just ended, in this browser (lib/attribution.js). */
-export async function noteLocalActivity(event) {
-  const { localActivity } = await chrome.storage.local.get("localActivity");
-  await chrome.storage.local.set({ localActivity: noteActivity(localActivity, event) });
+export function noteLocalActivity(event) {
+  return withLock("localActivity", async () => {
+    const { localActivity } = await chrome.storage.local.get("localActivity");
+    await chrome.storage.local.set({ localActivity: noteActivity(localActivity, event) });
+  });
 }
 
 /** Logs a lockout for any limit this snapshot shows as full and the log doesn't know about yet. */
-export async function noteFullBuckets(snapshot) {
-  const { limitHits = [] } = await chrome.storage.local.get("limitHits");
-  const next = observeFullBuckets(limitHits, snapshot);
-  if (next !== limitHits) await chrome.storage.local.set({ limitHits: next });
+export function noteFullBuckets(snapshot) {
+  return withLock("limitHits", async () => {
+    const { limitHits = [] } = await chrome.storage.local.get("limitHits");
+    const next = observeFullBuckets(limitHits, snapshot);
+    if (next !== limitHits) await chrome.storage.local.set({ limitHits: next });
+  });
 }
 
 /**
  * Checks the reading that just landed against the few before it and logs a
  * spike if it reveals one. Resolves to the spike, or null.
  */
-export async function recordSpike(snapshot, percent) {
-  const { history = [], spikes = [] } = await chrome.storage.local.get(["history", "spikes"]);
-  const spike = detectSpike(history, snapshot, { percent, since: spikes.at(-1)?.at ?? 0 });
-  if (spike) await chrome.storage.local.set({ spikes: addSpike(spikes, spike) });
-  return spike;
+export function recordSpike(snapshot, percent) {
+  return withLock("spikes", async () => {
+    const { history = [], spikes = [] } = await chrome.storage.local.get(["history", "spikes"]);
+    const spike = detectSpike(history, snapshot, { percent, since: spikes.at(-1)?.at ?? 0 });
+    if (spike) await chrome.storage.local.set({ spikes: addSpike(spikes, spike) });
+    return spike;
+  });
 }
 
 /** Pins a note to a moment on the chart. Resolves to whether it was added (empty text isn't). */
-export async function addNote(text, at = Date.now()) {
-  const { annotations = [] } = await chrome.storage.local.get("annotations");
-  const next = addAnnotation(annotations, { at, text });
-  if (next === annotations) return false;
-  await chrome.storage.local.set({ annotations: next });
-  return true;
+export function addNote(text, at = Date.now()) {
+  return withLock("annotations", async () => {
+    const { annotations = [] } = await chrome.storage.local.get("annotations");
+    const next = addAnnotation(annotations, { at, text });
+    if (next === annotations) return false;
+    await chrome.storage.local.set({ annotations: next });
+    return true;
+  });
 }
 
-export async function removeNote(id) {
-  const { annotations } = await chrome.storage.local.get("annotations");
-  await chrome.storage.local.set({ annotations: removeAnnotation(annotations, id) });
+export function removeNote(id) {
+  return withLock("annotations", async () => {
+    const { annotations } = await chrome.storage.local.get("annotations");
+    await chrome.storage.local.set({ annotations: removeAnnotation(annotations, id) });
+  });
 }
 
 /**
@@ -395,10 +477,12 @@ export async function removeNote(id) {
  * logsToRestore() in lib/backup.js). The readings go to the archive separately.
  * @returns {Promise<string[]>} the keys written
  */
-export async function restoreLogs(logs) {
-  const restored = logsToRestore(await chrome.storage.local.get(LOG_KEYS), logs);
-  if (Object.keys(restored).length > 0) await chrome.storage.local.set(restored);
-  return Object.keys(restored);
+export function restoreLogs(logs) {
+  return withLock("reading", async () => {
+    const restored = logsToRestore(await chrome.storage.local.get(LOG_KEYS), logs);
+    if (Object.keys(restored).length > 0) await chrome.storage.local.set(restored);
+    return Object.keys(restored);
+  });
 }
 
 /** Pause alerts until the given time; 0 resumes them. */
@@ -410,31 +494,34 @@ export async function clearDebugCaptures() {
   await chrome.storage.local.set({ __debug_captures: [] });
 }
 
-export async function clearAllData() {
-  await chrome.storage.local.set({
-    latestSnapshot: null,
-    history: [],
-    __debug_captures: [],
-    orgCache: null,
-    lastError: null,
-    modelHint: null,
-    messageLog: [],
-    pendingMessages: {},
-    limitHits: [],
-    usageLog: [],
-    sessionWindows: [],
-    annotations: [],
-    spikes: [],
-    localActivity: null,
-    extraUsage: null,
-    extraUsageLog: [],
-    claudeCode: null,
-    claudeCodeStatus: null,
-    apiSpend: null,
-    apiSpendStatus: null,
-    orgList: [],
-    orgSnapshots: [],
-    orgState: {},
+export function clearAllData() {
+  return withLock("reading", async () => {
+    await chrome.storage.local.set({
+      latestSnapshot: null,
+      history: [],
+      __debug_captures: [],
+      orgCache: null,
+      lastError: null,
+      modelHint: null,
+      messageLog: [],
+      pendingMessages: {},
+      limitHits: [],
+      usageLog: [],
+      sessionWindows: [],
+      annotations: [],
+      spikes: [],
+      localActivity: null,
+      alertedThresholds: {},
+      extraUsage: null,
+      extraUsageLog: [],
+      claudeCode: null,
+      claudeCodeStatus: null,
+      apiSpend: null,
+      apiSpendStatus: null,
+      orgList: [],
+      orgSnapshots: [],
+      orgState: {},
+    });
   });
 }
 

@@ -2,6 +2,7 @@ import {
   getAll,
   getSettings,
   setSettings,
+  updateSettings,
   setSnoozeUntil,
   getAdminKey,
   setAdminKey,
@@ -580,8 +581,7 @@ async function renderWebhooks() {
 }
 
 async function saveWebhook(service, change) {
-  const { webhooks } = await getSettings();
-  await setSettings({ webhooks: { ...webhooks, [service]: { ...webhooks[service], ...change } } });
+  await updateSettings(({ webhooks }) => ({ webhooks: { ...webhooks, [service]: { ...webhooks[service], ...change } } }));
 }
 
 webhookList.addEventListener("change", async (event) => {
@@ -967,8 +967,7 @@ for (const input of [warnAtInput, dangerAtInput]) {
 
 for (const input of colorInputs) {
   input.addEventListener("change", async () => {
-    const { severityColors: current } = await getSettings();
-    renderSeverity(await setSettings({ severityColors: { ...current, [input.dataset.level]: input.value } }));
+    renderSeverity(await updateSettings(({ severityColors }) => ({ severityColors: { ...severityColors, [input.dataset.level]: input.value } })));
   });
 }
 
